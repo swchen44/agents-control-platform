@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "name": "ops-bug-to-codex",
+      "match": { "assignee": ["swchen.tw", "swchen"], "keywords_any": ["bug", "error", "crash", "regression"] },
+      "action": {
+        "agent": "codex",
+        "skills": ["jira-bugfix"],
+        "repo": "git@github.com:example/ops.git",
+        "model": null,
+        "prompt_template": "You are fixing a production bug from Jira {key}.\nTitle: {summary}\n\nDetails:\n{description}\n\nReproduce, fix, and write a regression test. Do not push."
+      }
+    },
+    {
+      "name": "docs-to-claude",
+      "match": { "keywords_any": ["docs", "documentation", "readme"] },
+      "action": {
+        "agent": "claude",
+        "skills": ["jira-bugfix"],
+        "prompt_template": "Update documentation for Jira {key}: {summary}\n\n{description}"
+      }
+    }
+  ]
+}
