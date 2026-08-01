@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+# 實驗執行輸出(可重生;正典事件流已提升到 fixtures/)
+examples/jira-agent-poc/runtime/
+examples/jira-agent-poc/runtime_recovery/
+examples/jira-agent-poc/runtime_selftest/
