@@ -166,6 +166,15 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 - **待使用者決策**:正式實作 repo(本 repo public vs 新 private)、PoC 元件
   直接演進 vs 另起爐灶、`--bare`+公司 API 合約情境切換時點。
 
+## 6.7 路線策略定案(使用者決策 2026-08-03)
+
+**short term 用 B(OpenHands+ACP+headless CLI+Jira)先做出可執行的;
+long term 用 C(RawCLIAgent in OpenHands SDK,event 補到 A 級細粒度);
+A(jira-agent-poc)留作對照 harness 不下場。**
+完整 GAP/存活率/可行性分析:`research/2026-08-abc-roadmap-analysis.md`。
+B 期三守則:消費端只依賴 OpenHands event stream+L2 封套、agent 設定獨立
+YAML 區塊、A 對照當品質閘。C 動工前先做 SDK Agent 基類 spike(半天)。
+
 ## 7. 建議路線(report 定案)
 
 **主線 A(raw 一級)+ 可選後端 B(OpenHands 對照)+ C 只做差異化層。**
