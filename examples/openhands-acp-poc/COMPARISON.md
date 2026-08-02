@@ -60,3 +60,21 @@ PASS**(68s、14 事件、file probe 過)。對照數據點待額度重置後補�
    同一 claude session store 的 2×2 矩陣間接背書,非 B 路直接觀測。
 5. 待補:codex 對照數據點(quota 重置後)、B 路成本落地(conversation_stats 持久化)、
    agent-server 模式。
+
+## 5. 「把 A-raw 優點改造進 OpenHands」的可行性帳(2026-08-03)
+
+| A-raw 優點(實測) | 移植到 OpenHands | 帳 |
+|---|---|---|
+| 模型/成本控制(haiku 省 8 倍) | ✅ 便宜可得:`acp_model` SDK 原生支援 | 幾行碼 |
+| 差異化層(grader/recovery 迴路/escalation/transcript) | ✅ 已證可移植:不綁 runtime,同 grader 已跨 A/B 用 | 一兩天 |
+| 錯誤結構化取證 | ✅ B 本來就好(`ConversationErrorEvent`) | 免費 |
+| 細粒度觀測(248 vs 14,watchdog 心跳) | ⚠️ **結構性瓶頸**:細事件在 adapter 內部即丟棄,ACP 協定無承載欄位;要補只能 fork adapter(TS)並長期跟上游 | 高且持續 |
+| 控制窗口(mid-task 精準 kill) | ⚠️ 同源:ACP 只有 turn 級 `session/cancel`,步驟間隙外部不可見 | 高且持續 |
+| 零依賴 | ❌ 定義上不可得(SDK+adapter+CLI 三層版本鏈) | — |
+
+**判讀**:便宜的(模型控制/差異化層)拿了就是;A 核心的細觀測/細控制卡在 **ACP 協定
+資訊瓶頸**,fork adapter ≈ 回到自維護 driver 的老路且維護面更大(omnara 教訓)。
+**合理形態是分工而非改造**:OpenHands 當可選 backend(語意層夠用的例行任務,
+agent-server 形態另附併發/隔離);A-raw 留給需秒級觀測/精準控制的任務;差異化層
+共用(已證可行)。**重算此帳的訊號**:ACP spec 出現 progress/細粒度 notification
+擴充,或官方 adapter 開始轉發細事件。

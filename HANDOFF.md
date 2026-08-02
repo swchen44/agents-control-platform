@@ -135,6 +135,14 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
   設計(未接線)。
 - **未來不排除直接拿 OpenHands 修改作基底**(他們把坑都走過一遍)——**持續觀察,
   暫不決策**;Driver 介面保持可插拔以保留此選項。
+- **改造可行性帳已算(2026-08-03,COMPARISON.md §5)**:模型控制/差異化層便宜可移植;
+  細觀測/控制窗口卡 ACP 協定瓶頸(fork adapter = 更大維護面)——合理形態是**分工**
+  (OpenHands 管例行任務 backend,A-raw 管需細觀測的任務,差異化層共用),非全面改造。
+  重算訊號:ACP spec 出細粒度 notification 或官方 adapter 轉發細事件。
+- **backlog 四項的目的**:agent-server 對照=併發/隔離/程式化核准的地基省多少;
+  B 成本落地=同模型基準的真實 overhead(現 $0.45 vs $0.053 不同基準不可比);
+  真實 Jira 接入=研究轉產品分水嶺(需使用者提供測試 instance);
+  長跑 resume=生產級 crash-safe 宣稱前的最後硬證據(高 token 成本,需防睡環境)。
 
 ## 7. 建議路線(report 定案)
 
