@@ -115,7 +115,9 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 4. **OpenHands ACP 對照**:✅ **claude 側完成(2026-08-03)**——SDK in-process headless
    跑通、本機登入免 key、同任務同 grader 對照 **A 248 vs B 14 事件**;
    詳 `examples/openhands-acp-poc/{PLAN,COMPARISON}.md`。
-   **剩**:codex 對照點(quota 8/31 重置後補)、B 路 resume 實跑、agent-server 模式。
+   **B 路 resume 亦已實跑(2026-08-03)**:SIGKILL adapter → session/load 重接同
+   session(兩輪 4/4);⚠️ adapter 批次執行無中途 kill 窗口(粗粒度影響控制面)。
+   **剩**:codex 對照點(quota 8/31 重置後補)、agent-server 模式、B 路成本落地。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket 升級迴路**:✅ **已實作 + live 驗證(2026-08-02)**——
    `arcp_poc/escalation.py`(事件驅動,盯 denial 不偵測卡住)+ 真實 denial fixture 回歸

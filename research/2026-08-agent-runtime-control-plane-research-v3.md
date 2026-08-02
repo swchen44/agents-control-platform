@@ -516,7 +516,9 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
    watchdog 原料,B 是工具呼叫級語意層;詳 `COMPARISON.md`(各格標證據級別)。
    codex 側:adapter 冒煙 PASS,對照數據點被 ChatGPT quota 擋下(8/31 重置後補)。
    陷阱實錄:litellm rust-wheel(鎖 1.93.0 解)、npx 首跑下載 > SDK 90s timeout(要預熱)、
-   quota 跨路線共用。B 路 resume(`acp_resume_session_id`)仍未實跑。
+   quota 跨路線共用。**B 路 resume 亦已實跑**:adapter SIGKILL → `acp_resume_session_id`
+   → session/load 重接同 session(SDK truly_resumed 旗標,兩輪 4/4);⚠️ 並發現
+   adapter 批次執行**無中途 kill 窗口**——B 的粗粒度不只影響觀測,也影響控制面。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket 升級迴路** — ✅ **已實作並 live 驗證(2026-08-02)**:
    `arcp_poc/escalation.py` + `escalation_demo.py`。依 §9.3-3 實測改為**事件驅動**

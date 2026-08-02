@@ -65,10 +65,13 @@
 - [ ] research v3 §6.4 / §9.3-4 由「分析推論」升級為「實跑對照」
 - [ ] HANDOFF / 兩層 README 更新
 
-**Phase 5 — Stretch(另行決策後才做)**
-- [ ] crash→resume via `acp_resume_session_id`(對照 A 的 recovery 矩陣)
+**Phase 5 — Stretch**
+- [x] crash→resume via `acp_resume_session_id` ✅ 2026-08-03(`resume_acp_test.py`
+      兩輪 4/4:SIGKILL adapter → session/load 重接同 session,SDK truly_resumed
+      旗標背書。⚠️ 附帶發現:adapter 批次執行無中途 kill 窗口——粗粒度也影響控制面)
 - [ ] agent-server 模式(REST/WS)對照
 - [ ] denial→approval 事件對照(vs A 的 escalation)
+- [ ] codex 對照數據點(ChatGPT quota 8/31 重置後:`compare_run.py a-codex b-codex`)
 
 ## 4. 自我驗證判準
 

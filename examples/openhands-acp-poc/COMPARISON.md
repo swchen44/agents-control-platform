@@ -41,7 +41,8 @@ PASS**(68s、14 事件、file probe 過)。對照數據點待額度重置後補�
 | Auth | CLI 本機登入 | **同樣吃本機登入,免 API key**(claude+codex 皆驗證) | 實測 |
 | 模型控制 | `--model` 直接指定(haiku 省 8 倍) | `acp_model` 需額外設定,預設吃 adapter 預設 | 實測(A)/分析(B) |
 | 終止語意 | 事件+exit code+grader(已釘陷阱) | Conversation.run() 返回 + ConversationErrorEvent(結構化錯誤,如 quota) | 實測 |
-| Recovery | 三段梯度全實測(2×2×2 + workspace 搬家) | `session/load` + `acp_resume_session_id`(SDK 碼在,**未實跑**);transcript 渲染器未接線 | 歷史實測(A)/分析(B) |
+| Recovery | 三段梯度全實測(2×2×2 + workspace 搬家) | **`session/load` 重接已實跑**(2026-08-03,`resume_acp_test.py`):adapter SIGKILL 後 `acp_resume_session_id` 重接同 session(SDK `truly_resumed` 旗標 + 同 id,兩輪皆過);transcript 渲染器未接線 | 實測(兩路) |
+| 控制窗口 | 事件+檔案系統雙觸發,kill 可精準投放(矩陣證明) | ⚠️ **中途干預無窗口**:adapter 把五步批次瞬間執行(step1 出現即殺仍五檔全在),外部看不到步驟間隙——粗粒度不只影響觀測,也影響控制 | 實測 |
 | 錯誤面 | stderr 落 journal 自己判讀 | ConversationErrorEvent 帶 code/detail(quota 錯誤即由此精準捕獲) | 實測 |
 | 依賴/版本面 | CLI schema 漂移(fixtures 回歸護欄) | SDK 1.39.1 + adapter pin(claude-agent-acp 已落後 npm 20 版)+ CLI 三層漂移 | 實測 |
 
@@ -53,5 +54,9 @@ PASS**(68s、14 事件、file probe 過)。對照數據點待額度重置後補�
    零依賴。B 的 14 事件語意層適合「要乾淨統一介面、不在乎秒級觀測」的場景。
 3. **可插拔架構的正確性獲證**:同一 grader 判準跨 A/B 直接可用——差異化層
   (grader/recovery loop/escalation)確實獨立於 runtime 選擇。
-4. 待補:B 路 resume 實跑(`acp_resume_session_id`)、codex 對照數據點(quota 重置後)、
-   B 路成本落地(conversation_stats 持久化)。
+4. **B 路 resume 已實跑(2026-08-03)**:adapter SIGKILL → `acp_resume_session_id`
+   → session/load 重接同 session,續行完成(兩輪 4/4 判準)。誠實註記:兩輪 kill
+   都落在任務實質完成後(批次執行無中途窗口),「任務中途續跑」語意由 A 路
+   同一 claude session store 的 2×2 矩陣間接背書,非 B 路直接觀測。
+5. 待補:codex 對照數據點(quota 重置後)、B 路成本落地(conversation_stats 持久化)、
+   agent-server 模式。
