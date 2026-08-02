@@ -58,7 +58,11 @@ PASS**(68s、14 事件、file probe 過)。對照數據點待額度重置後補�
    → session/load 重接同 session,續行完成(兩輪 4/4 判準)。誠實註記:兩輪 kill
    都落在任務實質完成後(批次執行無中途窗口),「任務中途續跑」語意由 A 路
    同一 claude session store 的 2×2 矩陣間接背書,非 B 路直接觀測。
-5. 待補:codex 對照數據點(quota 重置後)、agent-server 模式。
+5. 待補:codex 對照數據點(quota 重置後)、agent-server **行為驗證 spike**
+   (讀碼部分已由使用者的行號級研究完成:`~/git/openhands/docs/research/
+   openhands-acp-claude-code.md`,關鍵事實見 integration 分析 §3.5——
+   多 workspace 併發原生、閒置 Evict→resume 常態化、bypassPermissions 一刀切、
+   改造點座標 `_OpenHandsACPBridge` acp_agent.py:1041)。
    (B 路成本落地已撤——使用者決策 2026-08-03:A/B 未來同款 model,基準問題消失。)
 
 ## 5. 「把 A-raw 優點改造進 OpenHands」的可行性帳(2026-08-03)

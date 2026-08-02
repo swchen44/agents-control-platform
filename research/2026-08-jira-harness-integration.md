@@ -64,6 +64,40 @@ v5 §2.2 留了四個「AionUi/ACP 對照 spike(P4,1-2 天)」要驗的問題—
 我們的「筆電睡眠凍結計時器」「npx 預熱」「quota 跨路線共用」「codex 工具粒度
 變異」它沒有——兩份清單應合併維護。
 
+## 3.5 使用者的 agent-server 讀碼研究(2026-08-02)帶來的增量
+
+使用者另有一份行號級讀碼研究(`~/git/openhands/docs/research/
+openhands-acp-claude-code.md`,對象為本機 clone,內容為開源碼分析無內部資訊),
+把 ARCP backlog「agent-server 模式對照」的**讀碼部分做完了大半**。關鍵事實:
+
+1. **多 workspace 併發原生支援**:單一 agent-server 管 N conversation(dict
+   UUID→EventService),每個 ACP conversation 一個獨立 adapter 子行程;workspace
+   是 per-conversation 參數(`new_session(cwd=…)` 綁定)。→ v5 §2.2 第四問有
+   架構級答案,待行為實測。
+2. **Resume 是常態機制不只是 recovery**:conversation 閒置 20 分鐘 Evict
+   (殺子行程、存 `base_state.json`),再存取 rehydrate + `load_session`。
+   ARCP 實測驗證的重接路徑正是其日常回收路徑——可靠性的間接背書再加一層。
+3. **cwd 變更即放棄 resume**:`acp_session_id` 持久化時記錄建立時 cwd,不符即
+   開新 session——ARCP workspace 搬家實測到的陷阱,OpenHands 在 client 層繞開。
+4. **權限一刀切**:ACP 握手後 `set_session_mode("bypassPermissions")`(codex 用
+   agent-full-access)。B 路權限治理完全押在 workspace 隔離,無 A 路 permission
+   matrix 的細粒度——v5 權限設計(D6 專案隔離)的重要輸入。
+5. **「免 API key」機制解釋**:桌面版刻意沿用本機 `~/.claude` 憑證
+   (`acp_isolate_data_dir` 預設關);多實例搶 `~/.claude` 狀態(config/快取/鎖檔)
+   時要開此開關 + 憑證注入優先序 secret_registry > os.environ。→ v5 部署清單應加。
+6. **skill 注入正解與 v5 吻合**:`ACPAgentProfile` 無 skill 欄位;per-workspace
+   `.claude/skills/`(原生)或 `.openhands/skills/`(prompt suffix,首輪注入一次)
+   才是差異化路徑——v5 `inject_as: claude_skills` 設計正確。
+7. **改造點行號級定位**(補 COMPARISON §5 可行性帳):細粒度瓶頸在 adapter 的
+   `session_update` 通知種類(token/thought/tool call/usage 四類);OpenHands 側
+   橋接在 `_OpenHandsACPBridge`(acp_agent.py:1041)。fork 評估有了確切座標。
+8. 部署細節:uvx 現拉(首啟數分鐘,ready timeout 10 分)、`X-Session-API-Key`
+   驗證、WS `/sockets/events/{id}`、startup 90s / prompt idle 1800s 硬限。
+
+**backlog 修訂**:「agent-server 模式對照」從「讀碼+實測」縮為**行為驗證 spike**
+(併發 N conversation 實跑、閒置 Evict→rehydrate 實測、與 Jira pipeline 的
+併發閘門 D10 對接評估);v5 P4 spike 進一步縮到只剩「執行中權限閘門 UX」一項。
+
 ## 4. 架構修訂:ARCP roadmap 對齊 v5 的 P0-P4
 
 v5 的雙層迴圈(outer=ticket 生命週期/Graph、inner=workspace+skill/Harness+Loop)
