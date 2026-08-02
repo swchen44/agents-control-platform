@@ -30,6 +30,7 @@ that neither raw CLI nor "OpenHands-for-ACP" gives you for free.
 | `skills/jira-bugfix/SKILL.md` | example AgentSkills skill |
 | `fixtures/*.jsonl` | **real** captured event streams from claude 2.1.206 / codex-cli 0.142.5 |
 | `recovery_test.py` | crash-recovery matrix test: controlled kill → `--resume` → deterministic grading (report §9.3-1) |
+| `permission_matrix.py` | headless permission-mode behavior matrix: 6 modes × Write/Bash probes (report §9.3-3) |
 
 ## Run
 
@@ -63,8 +64,8 @@ python3 recovery_test.py --resume-mode transcript --case midtool:SIGKILL
   reattaches the SAME session, remembers progress, does NOT redo finished steps
   (mtimes unchanged), finishes the task. Streams saved as
   `fixtures/claude_p_{crash,resume}_real.jsonl` (replay-validated).
-- **Crash→resume matrix (codex): 3/4 phases PASS** (early×both signals +
-  midtool×SIGKILL; midtool×SIGTERM lacks a clean datapoint — host slept mid-run).
+- **Crash→resume matrix (codex): full 2x2 PASS** (midtool×SIGTERM re-measured
+  2/2 clean on 2026-08-02 after the host-sleep artifacts were identified).
   The thread id harvested from `thread.started` is enough to
   `codex exec resume <id>`. Traps pinned along the way: SIGTERM → graceful
   **rc=0** (a killed run grades as DONE unless you use an evidence-based

@@ -20,7 +20,7 @@
 - `claude -p` 與 `codex exec` 的真實事件 schema 已抓取並正規化(見 §6),兩者**終止語意不對稱**(claude 有明確 `result` 事件;`codex exec` 靠 `turn.completed`+process exit)——這正是統一層要吸收的差異。
 - `claude -p` 有 `--session-id <uuid>`,可**預先指定 session id**,是 supervisor 端 resume 的關鍵(不必等 CLI 回傳才知道 id)。
 - **Crash recovery 基線已實測可行(2026-08-01)**:`claude -p` 以預指定 session-id 啟動,在「尚無任何產出」與「工具執行中」兩時機分別以 SIGTERM/SIGKILL 殺掉(2×2 矩陣),`--resume <id>` **4/4 全部成功重接**——事件流帶同一 session id、agent 記得進度、**不重工**(crash 前已建檔案 mtime 不變)、任務補完;單 case 成本 $0.03-0.07(haiku)。改用 killpg(殺整個 process group)複驗仍 4/4。見 §9.3-1 與 `examples/jira-agent-poc/recovery_test.py`。
-- **codex crash recovery 亦實測可行(2026-08-02)**:thread id 無法預指定,但從 `thread.started` 事件**事後擷取**來得及(連 turn.started 時殺都擷取得到)→ `codex exec resume <id>` 重接成功(early×SIGTERM/SIGKILL + midtool×SIGKILL 皆過;midtool×SIGTERM 因實驗機睡眠污染尚無乾淨數據點)。同輪釘住的陷阱:**⚠️ codex 收 SIGTERM 會優雅退場 rc=0**,「事件 OR exit code」雙判據會把中斷的 run 誤判 DONE——exit code 不能當完成證據,證據型停止(§9.3-2)從加分項升級為必要;resume 子命令**不吃 `--sandbox`**(rc=2,要 `-c sandbox_mode="..."`,driver 已修);kill 必須 **killpg** 否則 codex 的 zsh 子程序孤兒續跑、任務在 supervisor 背後被偷偷做完;codex 工具粒度/指令服從度變異大(同 prompt 有時單指令打包五步、有時逐步、有時無視 sleep),**事件流不可當進度真值,要以檔案系統/工作區真值為準**。
+- **codex crash recovery 亦實測可行(2026-08-02)**:thread id 無法預指定,但從 `thread.started` 事件**事後擷取**來得及(連 turn.started 時殺都擷取得到)→ `codex exec resume <id>` 重接成功(2×2 全時機皆過;midtool×SIGTERM 於睡眠 artifact 釐清後補測 2/2 乾淨 PASS)。同輪釘住的陷阱:**⚠️ codex 收 SIGTERM 會優雅退場 rc=0**,「事件 OR exit code」雙判據會把中斷的 run 誤判 DONE——exit code 不能當完成證據,證據型停止(§9.3-2)從加分項升級為必要;resume 子命令**不吃 `--sandbox`**(rc=2,要 `-c sandbox_mode="..."`,driver 已修);kill 必須 **killpg** 否則 codex 的 zsh 子程序孤兒續跑、任務在 supervisor 背後被偷偷做完;codex 工具粒度/指令服從度變異大(同 prompt 有時單指令打包五步、有時逐步、有時無視 sleep),**事件流不可當進度真值,要以檔案系統/工作區真值為準**。
 - `opencode acp` 子命令本機存在,OpenCode 的 ACP 路徑可行(先前 v2 只能推論)。
 - PoC 已跑通:Jira issue → rule 命中 → 建 workspace + 裝 skill → 監督 `claude -p` / `codex exec` → 統一 trace 到 `done`。
 
@@ -289,7 +289,7 @@ runtime/
 | 上手 / MVP 時間 | 短(PoC 已跑通) | 中(要起 agent-server、學 API) | 長 |
 | 控制粒度 | 高(直接掌 PID、stdin/out、flags) | 中(agent-server 提供,但 ACP 外部 agent 是黑箱) | 最高 |
 | Trace 完整度 | 高(直接吃原生 stream-json/JSONL) | 中(吃 agent-server 正規化事件;ACPToolCallEvent 夠用但較淺) | 最高 |
-| Crash recovery | ✅ **claude+codex resume 基線已實測**(§9.3-1;claude 2×2 全過、codex 3/4 時機過、SIGTERM-rc=0 陷阱已釘);worktree/長跑陷阱待驗 | ✅ 自家 conversation event-sourced/crash-safe;⚠️ ACP 外部 agent 只存自己側引用 | ⬜ 要自己做(但可做最好) |
+| Crash recovery | ✅ **claude+codex resume 基線已實測**(§9.3-1;兩者 2×2 矩陣全過、SIGTERM-rc=0 陷阱已釘、降級 transcript 路徑亦驗證);worktree/長跑陷阱待驗 | ✅ 自家 conversation event-sourced/crash-safe;⚠️ ACP 外部 agent 只存自己側引用 | ⬜ 要自己做(但可做最好) |
 | 執行中人工核准 | ⬜ 要自己補(hook/SDK 路徑) | ✅ `confirmation_policy` + `respond_to_confirmation`(但純 headless CLI 強制 always-approve) | ⬜ 要自己做 |
 | 依賴風險 | CLI schema 變(claude/codex 各自) | OpenHands 版本收斂快 + ACP 協定演化 + CLI schema | 只有 CLI schema |
 | 差異化空間 | 中(你掌控全鏈) | 低(跟著 OpenHands 走) | 高(git checkpoint 等) |
@@ -477,14 +477,33 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
    實驗過程另釘住 SIGTERM-rc=0 誤判、resume argv、killpg、事件粒度不可靠四陷阱
    (見執行摘要第 3 點),並發現**實驗機系統睡眠會凍結 supervisor 計時器**產生
    假 stall/假 hang——live 監督要防睡(caffeinate 只擋 idle sleep)或跑在 server。
-   **尚未做**:codex midtool×SIGTERM 乾淨數據點、worktree 情境(issue #48835)、
+   codex midtool×SIGTERM 已於 2026-08-02 補測 2/2 乾淨 PASS(2×2 補齊)。
+   **尚未做**:worktree 情境(issue #48835)、
    長跑/大 context 下的 resume、supervisor 內建 FAILED→自動 resume 迴路。
 2. **證據型停止** — ✅ **已實作(2026-08-02)**:`arcp_poc/grader.py`
    (`FileChecklistGrader` / `CommandGrader` / `AllOf`,Verdict 附理由入 journal),
    supervisor 掛 `grader` 後 DONE 需過證據——**證據不過即覆寫 FAILED**(sticky 終端
    狀態唯一被批准的例外:證據高於自稱)。selftest 14/14 含「DONE 流 + 證據缺 → FAILED」;
    recovery_test 的 C3 判準已 dogfood 此 grader。直接封堵 SIGTERM-rc=0 假完成(§6.4)。
-3. **Claude permission 行為矩陣**(v2 §2.3 第 5 點:文件描述 0-3 被推翻)——各 permission-mode × 未核准 tool call 的實際行為實測。
+3. **Claude permission 行為矩陣** — ✅ **已實測(2026-08-02,claude 2.1.206,`permission_matrix.py`)**:
+   6 mode × 雙探針(Write 建檔 / Bash touch),無 allowedTools,headless `-p`:
+
+   | mode | Write | Bash(touch) | 行為 |
+   |---|---|---|---|
+   | acceptEdits | ✅ | ✅ | 兩者皆放行(11s) |
+   | bypassPermissions | ✅ | ✅ | 兩者皆放行(11s) |
+   | auto | ❌ | ❌ | 立即拒,agent 續跑並自報 denied(11s) |
+   | manual | ❌ | ❌ | 同上(13s) |
+   | dontAsk | ❌ | ❌ | 同上(10s) |
+   | plan | ❌ | ❌ | 只產計畫不動檔(76s) |
+
+   釘死的事實:① mode 詞彙已換代(v2 記的 default/… 已不存在,現為
+   acceptEdits/auto/bypassPermissions/manual/dontAsk/plan)——v2 §2.3-5 被推翻的根源。
+   ② **acceptEdits 實際範圍比名稱寬**:連 Bash `touch` 都放行(已用
+   `--setting-sources project` 隔離使用者設定複驗,非 allowlist 干擾;完整邊界未測)。
+   ③ **headless 下沒有任何 mode 會掛住等核准**(無一到 120s timeout):拒絕是立即的,
+   agent 收到 denial 後續跑——supervisor 的 waiting-permission 偵測應該**盯事件流中的
+   denial,不是偵測卡住**。④ auto/manual/dontAsk 在無 allowlist 時全拒(auto ≠ 自動接受)。
 4. **OpenHands ACP 對照**:加 `OpenHandsACPDriver`,同一 Jira 任務在 A 與 B 各跑一次,比 trace 粒度、recovery、approval、維護感受。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket** 的升級迴路(FR-C4/L5)端到端。
@@ -515,7 +534,7 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
 
 ## C. 研究限制
 
-1. Live 實測已覆蓋 trivial prompt happy path 與 **claude/codex crash→resume 基線**(§9.3-1);**permission/長跑/worktree 情境**仍需 §9.3 的 PoC 實驗。部分 codex 數據點(midtool×SIGTERM)被實驗機系統睡眠污染,尚待乾淨複測;codex 會載入使用者 plugin(如 superpowers)造成行為變異,對照實驗宜 `--ignore-user-config`(未實測)。
+1. Live 實測已覆蓋 trivial prompt happy path 與 **claude/codex crash→resume 基線**(§9.3-1,兩者 2×2 皆補齊)+ transcript 降級路徑;**長跑/worktree 情境**仍需 §9.3 的 PoC 實驗。codex 會載入使用者 plugin(如 superpowers)造成行為變異,對照實驗宜 `--ignore-user-config`(未實測)。
 2. OpenHands automation sidecar 的泛用 webhook 支援未從原始碼證實(不影響建議,因 watcher 取代其角色)。
 3. opencode via ACP、claude permission 矩陣為待實測項。
 4. 全部為 2026-08-01 快照;claude/codex/OpenHands 皆快速演化,driver 需版本化 + 協定回歸測試。

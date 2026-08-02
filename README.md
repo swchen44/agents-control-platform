@@ -37,7 +37,7 @@ ARCP 的路線:**自寫輕量 supervisor(raw subprocess)為一級公民**,OpenHa
   `--resume <id>` 重接。2×2 矩陣(思考中/工具執行中 × SIGTERM/SIGKILL)**4/4 PASS**:
   同 session、記得進度、**不重工**(crash 前檔案 mtime 不變)、任務補完。
 - codex **不能預指定**,但從 `thread.started` 事件**事後擷取** thread id 來得及 →
-  `codex exec resume <id>` 重接成功(3/4 時機實證,含最嚴苛的「工具執行中 SIGKILL」)。
+  `codex exec resume <id>` 重接成功(2×2 矩陣全時機實證,含最嚴苛的「工具執行中 SIGKILL」)。
 
 **過程踩出來的陷阱(每一條都有事件流佐證):**
 
@@ -96,7 +96,8 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
 - [x] **證據型停止**:確定性 grader 決定 DONE,證據不過覆寫 FAILED(`arcp_poc/grader.py`)
 - [x] journal → transcript 降級 resume:session store 遺失時從 journal 渲染
       transcript 開新 session 續跑,live 驗證不重工(`--resume-mode transcript`)
-- [ ] Claude permission 行為矩陣實測
+- [x] Claude permission 行為矩陣:6 mode × 雙探針實測——headless 下拒絕即時、
+      **沒有 mode 會掛住等核准**;acceptEdits 實際範圍比名稱寬(`permission_matrix.py`)
 - [ ] worktree 情境 resume(claude issue #48835)
 - [ ] supervisor 內建 FAILED → 自動 resume 迴路
 - [ ] waiting-permission → Jira ticket 升級迴路端到端

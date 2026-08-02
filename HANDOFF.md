@@ -62,8 +62,8 @@ report §4 的三方優缺點表,**只有 A 欄是實測撐,B/C 是原始碼+文
   任務補完;SIGKILL 斷在 thinking 中 session 檔也不壞。單 case $0.03-0.07(haiku)。
   crash+resume 真實流:`fixtures/claude_p_{crash,resume}_real.jsonl`(replay 回歸驗證過)。
 - **codex crash→resume 亦實測可行(2026-08-02)**:thread id 從 `thread.started` **事後擷取**
-  來得及 → `codex exec resume <id>` 重接成功(early×2 + midtool×SIGKILL 過;midtool×SIGTERM
-  被實驗機睡眠污染,無乾淨數據點)。fixtures:`codex_exec_{crash,resume}_real.jsonl`。
+  來得及 → `codex exec resume <id>` 重接成功(2×2 全時機過;midtool×SIGTERM 於
+  2026-08-02 補測 2/2 乾淨 PASS)。fixtures:`codex_exec_{crash,resume}_real.jsonl`。
 - **本輪新釘死的陷阱**:① codex 收 SIGTERM 優雅退場 **rc=0** →「事件 OR exit code」雙判據
   會把中斷 run 誤判 DONE,完成與否只能靠證據型 grader(§6-2 因此升級為必要);
   ② `codex exec resume` **不吃 `--sandbox`**(rc=2),要 `-c sandbox_mode="..."`(driver 已修);
@@ -93,13 +93,16 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 ## 6. 下一步(report §9.3 的 PoC 實驗清單,尚未做)
 
 1. **Crash recovery 實測**:✅ **claude 基線完成(2026-08-01,4/4)**、
-   ✅ **codex 基線完成(2026-08-02,3/4 時機,含最嚴苛 midtool×SIGKILL)**——皆 `recovery_test.py`。
-   **剩**:codex midtool×SIGTERM 乾淨數據點(遇機器睡眠污染)、worktree 情境(issue #48835)、
+   ✅ **codex 基線完成(2026-08-02,2×2 全時機,SIGTERM 補測 2/2)**——皆 `recovery_test.py`。
+   **剩**:worktree 情境(issue #48835)、
    長跑/大 context resume、supervisor 內建「FAILED→自動 resume」迴路。
 2. **證據型停止**:✅ **已實作(2026-08-02)**——`arcp_poc/grader.py` + supervisor 整合,
    DONE 需過證據、不過覆寫 FAILED(證據高於自稱);selftest 14/14。
    (背景:實測證實 codex SIGTERM 退場 rc=0,exit code 不能證明任務完成,§4。)
-3. **Claude permission 行為矩陣**(v2 §2.3 第 5 點文件描述被 0-3 推翻,需實測)。
+3. **Claude permission 行為矩陣**:✅ **已實測(2026-08-02,`permission_matrix.py`)**——
+   acceptEdits/bypass 放行雙探針(acceptEdits 連 Bash touch 都放,已隔離設定複驗);
+   auto/manual/dontAsk 全拒;plan 只計畫。**headless 無任何 mode 掛住等核准**,
+   拒絕即時 → waiting-permission 偵測要盯 denial 事件,不是偵測卡住。詳 v3 §9.3-3。
 4. **OpenHands ACP 對照**:實作 `OpenHandsACPDriver` + 起 agent-server,同一 Jira 任務
    在 A/B 各跑一次,比 trace 粒度/控制/recovery/setup 成本(使用者目前選擇先不做)。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
