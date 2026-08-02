@@ -153,11 +153,14 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 `jira-harness-design-doc`)。**這份文件是正式實作的 requirement/design source**,
 其 §8 是下次 design/code session 的起手 prompt。
 
-- 使用者另有 agent-server **行號級讀碼研究**:`~/git/openhands/docs/research/
-  openhands-acp-claude-code.md`(開源碼分析,無內部資訊)——多 workspace 併發
-  原生支援、閒置 20 分 Evict→resume 常態化、cwd 變更即放棄 resume、
-  bypassPermissions 一刀切、acp_isolate_data_dir、改造點行號座標。
-  「agent-server 對照」backlog 因此縮為行為驗證 spike。詳整合分析 §3.5。
+- 兩份使用者研究**原文已入庫 research/**(同專案可直接看,含出處標頭):
+  `2026-08-jira-agent-harness-design-v5.md`(v5 設計,**去識別化副本**,
+  原文在 Google Docs 以其為準)與
+  `2026-08-openhands-acp-claude-code-lifetime.md`(agent-server 行號級讀碼,
+  原文照收)——多 workspace 併發原生支援、閒置 20 分 Evict→resume 常態化、
+  cwd 變更即放棄 resume、bypassPermissions 一刀切、acp_isolate_data_dir、
+  改造點行號座標。「agent-server 對照」backlog 因此縮為行為驗證 spike。
+  詳整合分析 §3.5。
 - 整合分析:`research/2026-08-jira-harness-integration.md` ——
   v5 決策 × ARCP 實測證據對照(「不走 ACP」被我們的 18:1 粒度/無控制窗口/
   cwd-key 實驗證實)、該採用的設計(UNKNOWN 三態、--fork-session 第四階、

@@ -1,10 +1,11 @@
 # Jira Harness 設計文件(v5)× ARCP 實測 — 整合分析
 
 > 使用者另行完成的「Jira 驅動的 Agent Harness — 選型研究報告與設計 Prompt v5
-> (2026-08-02)」(Google Docs,含內部資訊故原文不入本 public repo;連結存於
-> session memory)。本文把該設計與本 repo 兩天的實測成果對齊:哪些決策被我們
-> 的實驗**證實**、哪些設計**比我們現有實作更完整該採用**、哪些開放問題**我們
-> 已經回答**、以及據此修訂的 roadmap。2026-08-03。
+> (2026-08-02)」——**去識別化副本已入庫**:`2026-08-jira-agent-harness-design-v5.md`
+> (原文在 Google Docs,連結存 session memory,有出入以原文為準)。本文把該設計
+> 與本 repo 兩天的實測成果對齊:哪些決策被我們的實驗**證實**、哪些設計**比我們
+> 現有實作更完整該採用**、哪些開放問題**我們已經回答**、以及據此修訂的
+> roadmap。2026-08-03。
 
 ## 0. 一句話結論
 
@@ -66,8 +67,8 @@ v5 §2.2 留了四個「AionUi/ACP 對照 spike(P4,1-2 天)」要驗的問題—
 
 ## 3.5 使用者的 agent-server 讀碼研究(2026-08-02)帶來的增量
 
-使用者另有一份行號級讀碼研究(`~/git/openhands/docs/research/
-openhands-acp-claude-code.md`,對象為本機 clone,內容為開源碼分析無內部資訊),
+使用者另有一份行號級讀碼研究——**原文已入庫**:
+`2026-08-openhands-acp-claude-code-lifetime.md`(開源碼分析,無內部資訊),
 把 ARCP backlog「agent-server 模式對照」的**讀碼部分做完了大半**。關鍵事實:
 
 1. **多 workspace 併發原生支援**:單一 agent-server 管 N conversation(dict
