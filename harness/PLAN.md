@@ -25,13 +25,14 @@
 
 ## Checklist
 
-**Phase 0 — source adapter + 認證冒煙**
-- [ ] `arcp_harness/config.py`:讀 `~/.env`(不落地、不印值)
-- [ ] `arcp_harness/ticket.py`:正規化 Ticket 模型(id/key/state/assignee/summary/labels/comments[])
-- [ ] `arcp_harness/jira_source.py`:Jira Cloud REST v3 adapter(urllib+basic auth;
-      search JQL、get issue、get comments、add comment;ADF 文字攤平/組裝)
-- [ ] `smoke_jira.py`:auth 驗證(myself)+ 列 AGT issues → PASS
-- [ ] commit+push
+**Phase 0 — source adapter + 認證冒煙** ✅ 2026-08-03
+- [x] `arcp_harness/config.py`:讀 `~/.env`(不落地、不印值、不進 os.environ)
+- [x] `arcp_harness/ticket.py`:正規化 Ticket 模型(數字 id 主鍵,v5 C3)
+- [x] `arcp_harness/jira_source.py`:Jira Cloud REST v3 adapter(urllib+basic auth;
+      /search/jql 新端點+舊端點 fallback;ADF 攤平/組裝;certifi SSL——
+      陷阱實錄:python.org macOS build 不帶系統 CA)
+- [x] `smoke_jira.py`:auth PASS(myself)+ AGT search PASS
+- [x] commit+push
 
 **Phase 1 — routing + watch + watermark(notify_only 灰度)**
 - [ ] `routes.yaml` + `arcp_harness/routing.py`:pydantic-free 驗證(stdlib),
