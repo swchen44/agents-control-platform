@@ -71,7 +71,9 @@
       旗標背書。⚠️ 附帶發現:adapter 批次執行無中途 kill 窗口——粗粒度也影響控制面)
 - [ ] agent-server 模式(REST/WS)對照
 - [ ] denial→approval 事件對照(vs A 的 escalation)
-- [ ] codex 對照數據點(ChatGPT quota 8/31 重置後:`compare_run.py a-codex b-codex`)
+- [ ] codex 對照數據點 — quota 已於 2026-08-03 探測確認鎖至 **8/31 12:09 PM**
+      (free tier;升 Plus 可提前)。屆時一鍵補跑:
+      `.venv/bin/python compare_run.py a-codex b-codex`(使用者選擇手動備忘,不排程)
 
 ## 4. 自我驗證判準
 
