@@ -1,0 +1,29 @@
+# Outer-loop routing (v5 C1/D2): 只決定「歸哪個 profile / 何時接管 / 何時交還」。
+# 禁止出現 steps:/then: 之類的步驟序列 —— loader 會直接拒絕(C1 護欄)。
+version: 1
+
+outer_loop:
+  source:
+    project: SCRUM
+    poll_interval_sec: 30
+    jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
+
+  routes:
+    # 由上而下第一個 match 勝出;when 內欄位 AND、陣列值 OR
+    - name: hands-off
+      when:
+        labels: ['no-agent']
+      on_match: ignore
+
+    - name: agent-labeled
+      when:
+        labels: ['agent']
+      profile: default
+      on_match: notify_only          # 灰度:只記 route_matched,不接管
+
+    - name: triage-keyword
+      when:
+        summary: '(?i)\b(triage|bug|fix|crash)\b'
+      profile: triage
+      on_match: notify_only
+      comments_lookback: 5

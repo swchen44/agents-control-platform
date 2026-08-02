@@ -34,16 +34,21 @@
 - [x] `smoke_jira.py`:auth PASS(myself)+ AGT search PASS
 - [x] commit+push
 
-**Phase 1 — routing + watch + watermark(notify_only 灰度)**
-- [ ] `routes.yaml` + `arcp_harness/routing.py`:pydantic-free 驗證(stdlib),
-      regex 預編譯、when 欄位 AND/陣列 OR、первый match 勝出、on_match: notify_only
-- [ ] `arcp_harness/store.py`:SQLite(WAL/IMMEDIATE)——issue_id 主鍵:
-      watermark(最後處理 comment_id)、seen 狀態、(Phase 2 起)workspace/session 對映
-- [ ] `arcp_harness/poller.py`:輪詢 JQL → 偵測 new_issue/comment_added/
-      status_changed/assignee_changed → routing → `route_matched` 事件落 journal
-- [ ] E2E 灰度驗證:在 AGT 開測試票 → poller 記到 route_matched、**不接管**;
-      重複輪詢不重放(watermark 生效)
-- [ ] commit+push
+**Phase 1 — routing + watch + watermark(notify_only 灰度)** ✅ 2026-08-03
+- [x] `routes.yaml` + `arcp_harness/routing.py`:regex 預編譯載入即炸、
+      steps:/then: 直接拒絕(C1 護欄)、when AND/陣列 OR、首個 match 勝出
+- [x] `arcp_harness/store.py`:SQLite(WAL + BEGIN IMMEDIATE)、issue_id 主鍵、
+      comment watermark、events.jsonl journal
+- [x] `arcp_harness/poller.py`:poll → diff → new_issue/comment_added/
+      status_changed/assignee_changed → routing → route_matched(只記不動)
+- [x] E2E 灰度 4/4 PASS(真實 Jira,SCRUM-1):route_matched 命中、不接管、
+      重複輪詢零重放、comment watermark 生效
+- [x] commit+push
+
+**⚠️ 環境事實(2026-08-03 實測釘住)**:帳號下 project 名稱是 AgentLifetimeBoardv1
+但 **key = SCRUM**(Jira 改名不改 key;「AGT」不存在——新 /search/jql 端點對
+不存在的 project 回空集合不報錯,別被騙)。issue type 是中文(任務=10003)。
+未來若開真正的 AGT project,改 routes.yaml 兩處即可。
 
 **Phase 2 — dispatch 到 inner loop(B route 執行)**
 - [ ] workspace provisioning:`tickets/{issue_id}/` + skills 注入(.claude/skills)

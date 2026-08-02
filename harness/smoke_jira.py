@@ -12,7 +12,7 @@ import sys
 from arcp_harness.config import jira_credentials
 from arcp_harness.jira_source import JiraCloudSource
 
-PROJECT = "AGT"
+PROJECT = "SCRUM"
 
 
 def main() -> int:

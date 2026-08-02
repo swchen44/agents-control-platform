@@ -96,9 +96,18 @@ class JiraCloudSource:
             "Accept": "application/json",
             "Content-Type": "application/json",
         })
-        with urllib.request.urlopen(req, timeout=self.timeout,
-                                    context=self._ssl) as resp:
-            payload = resp.read()
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout,
+                                        context=self._ssl) as resp:
+                payload = resp.read()
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                detail = e.read().decode()[:400]
+            except Exception:
+                pass
+            e.msg = f"{e.msg} :: {detail}"  # surface Jira's error body
+            raise
         return json.loads(payload) if payload.strip() else {}
 
     # -- API --------------------------------------------------------------- #
@@ -144,16 +153,19 @@ class JiraCloudSource:
                       body={"body": text_to_adf(text)})
 
     def create_ticket(self, project_key: str, summary: str,
-                      description: str = "",
-                      issue_type: str = "Task") -> Ticket:
+                      description: str = "", issue_type: str = "Task",
+                      labels: list[str] | None = None) -> Ticket:
         """Dev/test helper — production tickets are created by humans (v5 D6b)."""
-        issue = self._request("POST", "/rest/api/3/issue", body={
-            "fields": {
-                "project": {"key": project_key},
-                "summary": summary,
-                "description": text_to_adf(description),
-                "issuetype": {"name": issue_type},
-            }})
+        fields: dict[str, Any] = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "description": text_to_adf(description),
+            "issuetype": {"name": issue_type},
+        }
+        if labels:
+            fields["labels"] = labels
+        issue = self._request("POST", "/rest/api/3/issue",
+                              body={"fields": fields})
         return self.get_ticket(issue["id"], with_comments=False)
 
     # -- mapping ------------------------------------------------------------ #

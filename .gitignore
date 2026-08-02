@@ -7,3 +7,6 @@ examples/jira-agent-poc/runtime*/
 # OpenHands ACP PoC(路線 B)
 examples/openhands-acp-poc/.venv/
 examples/openhands-acp-poc/runtime*/
+
+# B 期 harness
+harness/runtime*/
