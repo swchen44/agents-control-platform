@@ -3,3 +3,7 @@ __pycache__/
 .DS_Store
 # 實驗執行輸出(可重生;正典事件流已提升到 fixtures/)
 examples/jira-agent-poc/runtime*/
+
+# OpenHands ACP PoC(路線 B)
+examples/openhands-acp-poc/.venv/
+examples/openhands-acp-poc/runtime*/
