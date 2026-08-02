@@ -478,7 +478,14 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
    (見執行摘要第 3 點),並發現**實驗機系統睡眠會凍結 supervisor 計時器**產生
    假 stall/假 hang——live 監督要防睡(caffeinate 只擋 idle sleep)或跑在 server。
    codex midtool×SIGTERM 已於 2026-08-02 補測 2/2 乾淨 PASS(2×2 補齊)。
-   **尚未做**:worktree 情境(issue #48835)、長跑/大 context 下的 resume。
+   **workspace 搬家情境(#48835 的資料夾一般形式)已實測(2026-08-02,
+   `workspace_recovery_test.py`,4/4 PASS)**:claude session store 綁**啟動時 cwd**
+   (`~/.claude/projects/<編碼路徑>/`),workspace `mv` 之後原生 resume 死於
+   `No conversation found with session ID`(2.1.206 實錄)——但 **transcript 降級
+   救回**:ARCP journal 跟著 journal_root 走不綁 cwd,新 session 續跑不重工。
+   梯度第二階的必要性在真實陷阱上證明。git worktree 形式同機制(worktree 路徑
+   就是不同 cwd),未另測。
+   **尚未做**:長跑/大 context 下的 resume。
 2. **證據型停止** — ✅ **已實作(2026-08-02)**:`arcp_poc/grader.py`
    (`FileChecklistGrader` / `CommandGrader` / `AllOf`,Verdict 附理由入 journal),
    supervisor 掛 `grader` 後 DONE 需過證據——**證據不過即覆寫 FAILED**(sticky 終端

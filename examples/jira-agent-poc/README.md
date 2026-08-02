@@ -35,6 +35,7 @@ that neither raw CLI nor "OpenHands-for-ACP" gives you for free.
 | `fixtures/*.jsonl` | **real** captured event streams from claude 2.1.206 / codex-cli 0.142.5 |
 | `recovery_test.py` | crash-recovery matrix test: controlled kill → `--resume` → deterministic grading (report §9.3-1) |
 | `permission_matrix.py` | headless permission-mode behavior matrix: 6 modes × Write/Bash probes (report §9.3-3) |
+| `workspace_recovery_test.py` | the #48835 trap, folder form: workspace `mv` kills native resume ("No conversation found"); the transcript rung repairs it |
 
 ## Run
 

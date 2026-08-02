@@ -100,7 +100,8 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
       **沒有 mode 會掛住等核准**;acceptEdits 實際範圍比名稱寬(`permission_matrix.py`)
 - [x] **自動 recovery 迴路**:run → grade → 梯度 resume,live 驗證硬 crash 與
       rc=0 假完成皆自動修復(`arcp_poc/recovery_loop.py` + `loop_demo.py`)
-- [ ] worktree 情境 resume(claude issue #48835)
+- [x] workspace 搬家情境 resume(#48835 一般形式):claude session 綁啟動 cwd,
+      搬家後原生 resume 必死——transcript 降級救回不重工(`workspace_recovery_test.py`)
 - [x] waiting-permission → Jira ticket 升級迴路:denial 事件驅動開票 + 結果回寫
       (含結構化 permission_denials 與 resume 指令,`arcp_poc/escalation.py`)
 
