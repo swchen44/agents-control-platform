@@ -49,13 +49,17 @@
       ——結構化但無 thinking/token 細粒度;A 路線同級任務原生流 ~128 條)
 - [x] 成本觀察:$0.45(adapter 用預設模型;模型控制=acp_model,列 Phase 3 對照項)
 
-**Phase 2 — codex via ACP,headless 冒煙**
-- [ ] 同 Phase 1(codex-acp adapter 相容性是本 phase 的實驗目的)
+**Phase 2 — codex via ACP,headless 冒煙** ✅ 2026-08-03
+- [x] codex-acp@1.1.2 相容性確認:68s、14 事件、file probe PASS,
+      **本機 ChatGPT 登入直接可用**
 
-**Phase 3 — A/B 對照實驗**
-- [ ] 循序建檔任務在 B 路線跑,A 的 `FileChecklistGrader` 驗證
-- [ ] 事件粒度對照:B 的事件流 vs A 的原生 stream(逐事件對表)
-- [ ] 產出 `COMPARISON.md`(trace 粒度/控制面/setup 成本/依賴面,全部實跑撐)
+**Phase 3 — A/B 對照實驗** ✅ 2026-08-03(codex 對照點待 quota)
+- [x] 同任務同 grader 四路對跑(`compare_run.py`,單路失敗不炸全場、逐跑落盤)
+- [x] 粒度實測:**A 248 事件 vs B 14 事件**(~18:1;A 有 thinking/token 級,
+      B 是工具呼叫級語意層)
+- [x] `COMPARISON.md` 產出(量化+質化,各格標證據級別)
+- [ ] codex 對照數據點 ⛔ **兩路皆被 ChatGPT quota 擋下**(8/31 重置後補;
+      相容性已由歷史矩陣 + 冒煙證明)。營運發現:quota 是跨路線共用資源。
 
 **Phase 4 — 文件與回寫**
 - [ ] research v3 §6.4 / §9.3-4 由「分析推論」升級為「實跑對照」
