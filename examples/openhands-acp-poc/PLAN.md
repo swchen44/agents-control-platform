@@ -32,15 +32,22 @@
 
 ## 3. 開發 Checklist
 
-**Phase 0 — 環境**
-- [ ] `.venv` 建立、`pip install -e` 本機 SDK clone
-- [ ] `python -c "from openhands.sdk import ..."` import 冒煙
-- [ ] `.gitignore` 排除 `.venv/` 與 runtime 輸出
+**Phase 0 — 環境** ✅ 2026-08-03
+- [x] `.venv` 建立、`pip install -e` 本機 SDK clone
+      (⚠️ 陷阱實錄:最新 litellm 是 python/rust 混合包,本機 rustc 差一版建不起來
+      → 依 OpenHands 自家 uv.lock 鎖 `litellm==1.93.0` 純 wheel 解決)
+- [x] import 冒煙(SDK 1.39.1,providers: claude-code/codex/gemini-cli)
+- [x] `.gitignore` 排除 `.venv/` 與 runtime 輸出
+- [x] adapter npx 預熱(⚠️ 陷阱實錄:SDK 90s startup timeout < npx 首跑下載
+      3-4 分鐘,且中斷會留下半殘 npx 快取造成 enoent → 需先 `npx -y <pkg> --version`
+      預熱;半殘快取清 `~/.npm/_npx/<hash>` 即復原)
 
-**Phase 1 — claude via ACP,headless 冒煙**
-- [ ] ACPAgent(claude-code)+ Conversation 跑 trivial 任務到完成
-- [ ] 事件流(OpenHands 事件)落地 journal
-- [ ] 完成判定與 session id 擷取方式記錄
+**Phase 1 — claude via ACP,headless 冒煙** ✅ 2026-08-03
+- [x] ACPAgent(claude-code@0.44.0)+ Conversation 跑 trivial 任務到完成
+      (20s,file probe PASS;**本機訂閱登入直接可用,免 API key**)
+- [x] 事件流落地 journal(6 事件:Message/SystemPrompt/ACPToolCall×2/Action/Observation
+      ——結構化但無 thinking/token 細粒度;A 路線同級任務原生流 ~128 條)
+- [x] 成本觀察:$0.45(adapter 用預設模型;模型控制=acp_model,列 Phase 3 對照項)
 
 **Phase 2 — codex via ACP,headless 冒煙**
 - [ ] 同 Phase 1(codex-acp adapter 相容性是本 phase 的實驗目的)
