@@ -176,7 +176,11 @@ long term 用 C(RawCLIAgent in OpenHands SDK,event 補到 A 級細粒度);
 A(jira-agent-poc)留作對照 harness 不下場。**
 完整 GAP/存活率/可行性分析:`research/2026-08-abc-roadmap-analysis.md`。
 B 期三守則:消費端只依賴 OpenHands event stream+L2 封套、agent 設定獨立
-YAML 區塊、A 對照當品質閘。C 動工前先做 SDK Agent 基類 spike(半天)。
+YAML 區塊、A 對照當品質閘。
+✅ **C 前置 spike 已完成(2026-08-03,4/4 PASS)**:`Conversation` 接受外部
+AgentBase 子類——**C 不用 fork**;真 `claude -p` 已在 OpenHands Conversation
+內跑通(`spike_rawcli_agent.py` ~80 行雛形)。C 的未知數清零,
+剩下的是純工程(drivers.py 解析知識搬入)。
 
 ## 7. 建議路線(report 定案)
 

@@ -61,8 +61,21 @@ OpenHands 側橋接 `_OpenHandsACPBridge` acp_agent.py:1041 只收四類通知):
 - C 的難點知識已在 A 期付清(fixtures、陷阱清單、梯度、雙判據失效證據);
 - A 對照零額外成本(已存在)。
 
-**唯一真正未知數**:SDK Agent 基類介面深度 → C 動工前先做半天 spike
-(讀 `Agent` 基類與 `ACPAgent.init_state/step` 契約)。
+**唯一真正未知數**:SDK Agent 基類介面深度 → ✅ **spike 已完成(2026-08-03,
+`examples/openhands-acp-poc/spike_rawcli_agent.py`,4/4 PASS)**:
+- 契約:`AgentBase` 唯一抽象方法 `step()`;`llm` 欄位用 dummy(ACPAgent 前例);
+  `init_state` 可覆寫跳過 SDK 工具解析(CLI 自帶工具)
+- **`Conversation(agent=…)` 接受外部子類——C 期確定不用 fork**,RawCLIAgent
+  活在自己的套件
+- `step()` 內 `on_event(<SDK 事件>)` 正常進 event 體系
+- **真 `claude -p` print mode 已在 OpenHands Conversation 內跑通一輪**
+  (~80 行最小雛形;正式版把 arcp_poc/drivers.py 的 stream-json 解析搬入即可)
+
+### B 期執行形態澄清(2026-08-03 問答)
+
+B 的執行單元**不是** `claude -p`:鏈為 ACPAgent → adapter 子行程(node)→
+adapter 內嵌 Claude Code(headless)。同樣無人互動,但呼叫形態與 C 不同——
+`claude -p` print mode 是 C 期才出現,粒度差(14 vs 248)的根源即在此。
 
 **已知要扛的(B 期)**:粗粒度 watchdog 降級(分鐘級任務可接受;由 A 對照
 量化)、bypassPermissions 治理押 workspace 隔離(v5 D6 專案隔離因此必要)、
