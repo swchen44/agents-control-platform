@@ -117,7 +117,9 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
    詳 `examples/openhands-acp-poc/{PLAN,COMPARISON}.md`。
    **B 路 resume 亦已實跑(2026-08-03)**:SIGKILL adapter → session/load 重接同
    session(兩輪 4/4);⚠️ adapter 批次執行無中途 kill 窗口(粗粒度影響控制面)。
-   **剩**:codex 對照點(quota 8/31 重置後補)、agent-server 模式、B 路成本落地。
+   **剩**:codex 對照點(quota 8/31 重置後補)、agent-server 模式。
+   (B 路成本落地已撤:使用者決策 2026-08-03——A/B 未來用同款 model,比較基準
+   問題消失,不再需要。)
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket 升級迴路**:✅ **已實作 + live 驗證(2026-08-02)**——
    `arcp_poc/escalation.py`(事件驅動,盯 denial 不偵測卡住)+ 真實 denial fixture 回歸
@@ -143,6 +145,21 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
   B 成本落地=同模型基準的真實 overhead(現 $0.45 vs $0.053 不同基準不可比);
   真實 Jira 接入=研究轉產品分水嶺(需使用者提供測試 instance);
   長跑 resume=生產級 crash-safe 宣稱前的最後硬證據(高 token 成本,需防睡環境)。
+
+## 6.6 Jira Harness 設計文件整合(2026-08-03,重要)
+
+使用者另行完成「Jira 驅動的 Agent Harness 選型研究與設計 v5」(Google Docs,
+**含內部資訊,原文不入本 public repo**,連結在 session memory
+`jira-harness-design-doc`)。**這份文件是正式實作的 requirement/design source**,
+其 §8 是下次 design/code session 的起手 prompt。
+
+- 整合分析:`research/2026-08-jira-harness-integration.md` ——
+  v5 決策 × ARCP 實測證據對照(「不走 ACP」被我們的 18:1 粒度/無控制窗口/
+  cwd-key 實驗證實)、該採用的設計(UNKNOWN 三態、--fork-session 第四階、
+  workspace health check、issue_id 主鍵、欄位所有權、L0-L3 trace、KPI 框架)、
+  v5 開放問題中我們已回答的三項、P0-P4 與 ARCP 現況的缺口對映。
+- **待使用者決策**:正式實作 repo(本 repo public vs 新 private)、PoC 元件
+  直接演進 vs 另起爐灶、`--bare`+公司 API 合約情境切換時點。
 
 ## 7. 建議路線(report 定案)
 
