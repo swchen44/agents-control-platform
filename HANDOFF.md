@@ -94,8 +94,10 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 
 1. **Crash recovery 實測**:✅ **claude 基線完成(2026-08-01,4/4)**、
    ✅ **codex 基線完成(2026-08-02,2×2 全時機,SIGTERM 補測 2/2)**——皆 `recovery_test.py`。
-   **剩**:worktree 情境(issue #48835)、
-   長跑/大 context resume、supervisor 內建「FAILED→自動 resume」迴路。
+   ✅ **自動 recovery 迴路完成(2026-08-02)**——`arcp_poc/recovery_loop.py` +
+   `loop_demo.py`:run→grade→梯度 resume(同 rung 不重試),live 驗證 claude 硬 crash
+   與 codex rc=0 假完成皆自動修復(`initial:failed → native:done`)。
+   **剩**:worktree 情境(issue #48835)、長跑/大 context resume。
 2. **證據型停止**:✅ **已實作(2026-08-02)**——`arcp_poc/grader.py` + supervisor 整合,
    DONE 需過證據、不過覆寫 FAILED(證據高於自稱);selftest 14/14。
    (背景:實測證實 codex SIGTERM 退場 rc=0,exit code 不能證明任務完成,§4。)

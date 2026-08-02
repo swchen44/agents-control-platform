@@ -98,8 +98,9 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
       transcript 開新 session 續跑,live 驗證不重工(`--resume-mode transcript`)
 - [x] Claude permission 行為矩陣:6 mode × 雙探針實測——headless 下拒絕即時、
       **沒有 mode 會掛住等核准**;acceptEdits 實際範圍比名稱寬(`permission_matrix.py`)
+- [x] **自動 recovery 迴路**:run → grade → 梯度 resume,live 驗證硬 crash 與
+      rc=0 假完成皆自動修復(`arcp_poc/recovery_loop.py` + `loop_demo.py`)
 - [ ] worktree 情境 resume(claude issue #48835)
-- [ ] supervisor 內建 FAILED → 自動 resume 迴路
 - [ ] waiting-permission → Jira ticket 升級迴路端到端
 
 ## License

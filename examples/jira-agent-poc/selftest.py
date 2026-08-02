@@ -117,5 +117,54 @@ check("transcript task: codex stays id-less",
       build_transcript_resume_task(
           Task(run_id="r", prompt="p", cwd="."), evs, "r2").session_id is None)
 
+print("automatic recovery loop (policy via scripted runner):")
+from arcp_poc.events import RunState as _RS  # noqa: E402
+from arcp_poc.recovery_loop import run_with_recovery  # noqa: E402
+from arcp_poc.supervisor import RunHandle  # noqa: E402
+
+
+def scripted(states, sids):
+    it = iter(zip(states, sids))
+    calls = []
+
+    def run(task, resume, observers):
+        st, sid = next(it)
+        calls.append((task.run_id, resume))
+        return RunHandle(run_id=task.run_id, agent="fake", cwd=".",
+                         session_id=sid, state=st)
+    return run, calls
+
+
+base = Task(run_id="job", prompt="do it", cwd=".", session_id="SID")
+nogr = FileChecklistGrader({})  # unused: the scripted runner decides states
+
+r, calls = scripted([_RS.DONE], ["SID"])
+res = run_with_recovery(DRIVERS["claude"], base, nogr,
+                        journal_root="/tmp/arcp-loop-check", runner=r)
+check("loop: first-try done -> single attempt",
+      res.succeeded and [a.mode for a in res.attempts] == ["initial"])
+
+r, calls = scripted([_RS.FAILED, _RS.DONE], ["SID", "SID"])
+res = run_with_recovery(DRIVERS["claude"], base, nogr,
+                        journal_root="/tmp/arcp-loop-check", runner=r)
+check("loop: crash -> native resume repairs (resume flag set)",
+      res.succeeded and [a.mode for a in res.attempts] == ["initial", "native"]
+      and calls[1][1] is True)
+
+r, calls = scripted([_RS.FAILED, _RS.DONE], [None, None])
+res = run_with_recovery(DRIVERS["codex"],
+                        Task(run_id="job2", prompt="p", cwd="."), nogr,
+                        journal_root="/tmp/arcp-loop-check", runner=r)
+check("loop: no session id -> skip native, go transcript",
+      res.succeeded
+      and [a.mode for a in res.attempts] == ["initial", "transcript"])
+
+r, calls = scripted([_RS.FAILED] * 4, ["SID"] * 4)
+res = run_with_recovery(DRIVERS["claude"], base, nogr,
+                        journal_root="/tmp/arcp-loop-check", runner=r)
+check("loop: full ladder then give up (never retries a rung)",
+      not res.succeeded and [a.mode for a in res.attempts]
+      == ["initial", "native", "transcript", "rerun"])
+
 print(f"\n{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

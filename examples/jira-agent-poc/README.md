@@ -23,6 +23,8 @@ that neither raw CLI nor "OpenHands-for-ACP" gives you for free.
 | `arcp_poc/supervisor.py` | spawn / trace / state-machine / stall-watchdog / control (pause, resume, kill); live + replay modes |
 | `arcp_poc/grader.py` | evidence-based stop: deterministic graders (files / command / all-of); DONE that fails evidence is overridden to FAILED |
 | `arcp_poc/resume_transcript.py` | recovery rung 2: render the journal into a bootstrap prompt for a FRESH session when native resume is unavailable |
+| `arcp_poc/recovery_loop.py` | the automatic loop: run → grade → escalate the recovery ladder until evidence passes (never retries a failed rung) |
+| `loop_demo.py` | live demo of the loop repairing a hard crash (claude) and the rc=0 fake-DONE (codex) end to end |
 | `arcp_poc/rules.py` | JSON rule engine (assignee / keyword → agent / skills / repo) |
 | `arcp_poc/workspace.py` | per-issue folder + AgentSkills provisioning |
 | `arcp_poc/jira_watcher.py` | poll Jira Server REST, match rules, dispatch |

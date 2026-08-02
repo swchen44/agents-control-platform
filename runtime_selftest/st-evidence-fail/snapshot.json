@@ -1,0 +1,13 @@
+{
+  "run_id": "st-evidence-fail",
+  "agent": "claude",
+  "cwd": "/var/folders/wj/3v8944vj0t714p6b5l9lmr_80000gq/T/tmpn5m_jhre",
+  "session_id": "58f7e166-f5e5-45e9-b884-d7ae82892ff6",
+  "state": "failed",
+  "pid": null,
+  "last_event_ts": 1785632482.2937868,
+  "last_event_type": "run.completed",
+  "cost_usd": 0.0199134,
+  "tokens_out": 356,
+  "result_text": "evidence FAIL: missing never_created.txt"
+}

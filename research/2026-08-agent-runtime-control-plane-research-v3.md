@@ -448,7 +448,7 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
 | Evaluation | 能重播 trace、比較版本? | ✅ events.jsonl 可 replay;⚠️ 版本比較待補 |
 | Operations | cost/延遲/失敗率/人工介入率被監控? | ⚠️ cost/state 有;聚合 dashboard 待補 |
 
-**最該優先補的兩項**(三層文最強調、ARCP 最缺):**Loop 的證據型停止**(別讓 agent 自稱 done)、**cross-CLI recovery**。→ **兩項基線皆已補上(2026-08-02)**:grader 覆寫機制(§9.3-2)與 claude/codex resume 實測(§9.3-1);仍缺的是把兩者接成「FAILED→自動 resume→再驗證據」的迴路。
+**最該優先補的兩項**(三層文最強調、ARCP 最缺):**Loop 的證據型停止**(別讓 agent 自稱 done)、**cross-CLI recovery**。→ **兩項基線皆已補上,且已接成迴路(2026-08-02)**:grader 覆寫機制(§9.3-2)+ claude/codex resume 實測(§9.3-1)+ 自動 recovery 迴路(§9.3-8,live 驗證 crash 與 rc=0 假完成皆自動修復)。
 
 ---
 
@@ -462,7 +462,7 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
 
 ## 9.2 PoC 現況(`examples/jira-agent-poc/`)
 
-已實作並實測:統一 event schema、狀態機、claude/codex raw driver(真實 schema)、supervisor(live+replay+watchdog+control)、rules 引擎、skills provision、Jira watcher(輪詢/去重/dispatch)。self-test 全過(14 項);claude/codex live 各跑通。另有 crash-recovery 矩陣 harness(`recovery_test.py`,§9.3-1)、crash/resume fixtures、證據型停止 grader(`grader.py`,§9.3-2)。
+已實作並實測:統一 event schema、狀態機、claude/codex raw driver(真實 schema)、supervisor(live+replay+watchdog+control)、rules 引擎、skills provision、Jira watcher(輪詢/去重/dispatch)。self-test 全過(22 項);claude/codex live 各跑通。另有 crash-recovery 矩陣 harness(`recovery_test.py`,§9.3-1)、crash/resume fixtures、證據型停止 grader(`grader.py`,§9.3-2)、transcript 降級 resume(§9.3-7)、自動 recovery 迴路(`recovery_loop.py`,§9.3-8)。
 
 ## 9.3 下一步 PoC 實驗清單(先於大量寫碼)
 
@@ -478,8 +478,7 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
    (見執行摘要第 3 點),並發現**實驗機系統睡眠會凍結 supervisor 計時器**產生
    假 stall/假 hang——live 監督要防睡(caffeinate 只擋 idle sleep)或跑在 server。
    codex midtool×SIGTERM 已於 2026-08-02 補測 2/2 乾淨 PASS(2×2 補齊)。
-   **尚未做**:worktree 情境(issue #48835)、
-   長跑/大 context 下的 resume、supervisor 內建 FAILED→自動 resume 迴路。
+   **尚未做**:worktree 情境(issue #48835)、長跑/大 context 下的 resume。
 2. **證據型停止** — ✅ **已實作(2026-08-02)**:`arcp_poc/grader.py`
    (`FileChecklistGrader` / `CommandGrader` / `AllOf`,Verdict 附理由入 journal),
    supervisor 掛 `grader` 後 DONE 需過證據——**證據不過即覆寫 FAILED**(sticky 終端
@@ -507,6 +506,15 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
 4. **OpenHands ACP 對照**:加 `OpenHandsACPDriver`,同一 Jira 任務在 A 與 B 各跑一次,比 trace 粒度、recovery、approval、維護感受。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket** 的升級迴路(FR-C4/L5)端到端。
+8. **自動 recovery 迴路** — ✅ **已實作並 live 驗證(2026-08-02)**:
+   `arcp_poc/recovery_loop.py`(run → grade → 依梯度升級 resume,同一 rung 不重試,
+   有重試上限;grader 必備——loop on evidence)+ `loop_demo.py`。兩個 live 場景:
+   claude midtool×SIGKILL 硬 crash → 迴路 native resume 修復 `initial:failed →
+   native:done`;**codex midtool×SIGTERM 的 rc=0 假完成被 grader 否決
+   (`evidence FAIL: missing step3/4/5`)→ 迴路自動 resume 原 thread 補完**。
+   實測釘住的最大陷阱,如今端到端自動抓到並修復。selftest 22 項含迴路策略
+   (首試即成/crash 修復/無 id 跳 native/梯度用盡放棄)。
+
 7. **journal → transcript 降級 resume** — ✅ **已實作並 live 驗證(2026-08-02)**:
    `arcp_poc/resume_transcript.py`(marker/總量 60k 砍舊留新/逐訊息 8k 截斷,設計
    抄自 OpenHands §6.4)+ `recovery_test.py --resume-mode transcript`。實測

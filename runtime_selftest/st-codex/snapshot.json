@@ -1,0 +1,13 @@
+{
+  "run_id": "st-codex",
+  "agent": "codex",
+  "cwd": ".",
+  "session_id": "019fbb83-67fa-7cf3-9f97-72bb66f83d20",
+  "state": "done",
+  "pid": null,
+  "last_event_ts": 1785632482.2369459,
+  "last_event_type": "run.completed",
+  "cost_usd": 0.0,
+  "tokens_out": 68,
+  "result_text": null
+}
