@@ -21,6 +21,9 @@ headless 啟動 agent → 監控狀態。專案暫名 **ARCP**(Agent Runtime / C
 - **可跑 PoC**:`examples/jira-agent-poc/`(~770 行、零依賴、已實測跑通)
 - **Crash-recovery 矩陣 harness**:`examples/jira-agent-poc/recovery_test.py`
   (2026-08-01 實測 4/4 PASS,詳 §4 與 §6-1)
+- **OpenHands ACP PoC(路線 B)**:`examples/openhands-acp-poc/`
+  (PLAN.md 計畫+checklist、smoke_acp.py、compare_run.py、COMPARISON.md;
+  原 jira-agent-poc 留存不動)
 
 ## 2. 已敲定的決策(前一段對話,勿再問)
 
@@ -40,7 +43,7 @@ headless 啟動 agent → 監控狀態。專案暫名 **ARCP**(Agent Runtime / C
 | 路線 | research 有寫 | PoC 能跑 / 跑過 |
 |---|---|---|
 | **A. Raw**(自寫 supervisor 包 claude -p / codex exec) | ✅ | ✅ **真的跑過**:claude+codex live + replay + 7/7 self-test + claude/codex crash→resume 矩陣 |
-| **B. OpenHands ACP**(agent-server 當底層) | ✅ | ❌ 只有註解 stub(`OpenHandsACPNote`),沒接沒跑 |
+| **B. OpenHands ACP** | ✅ | ✅ **SDK in-process 已實跑**(2026-08-03,`examples/openhands-acp-poc/`):claude 全綠、codex 冒煙綠(對照點待 quota);agent-server 模式仍未跑 |
 | **C. 從零寫完整 runtime** | ✅ | ⚠️ PoC 本體就是 C 的 MVP(= A);recovery/REST/dashboard 未做 |
 
 **關鍵澄清**:A 與 C 在 PoC 裡是同一份程式碼(C 只是 A 補上 recovery/REST/dashboard)。
@@ -109,8 +112,10 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
    acceptEdits/bypass 放行雙探針(acceptEdits 連 Bash touch 都放,已隔離設定複驗);
    auto/manual/dontAsk 全拒;plan 只計畫。**headless 無任何 mode 掛住等核准**,
    拒絕即時 → waiting-permission 偵測要盯 denial 事件,不是偵測卡住。詳 v3 §9.3-3。
-4. **OpenHands ACP 對照**:實作 `OpenHandsACPDriver` + 起 agent-server,同一 Jira 任務
-   在 A/B 各跑一次,比 trace 粒度/控制/recovery/setup 成本(使用者目前選擇先不做)。
+4. **OpenHands ACP 對照**:✅ **claude 側完成(2026-08-03)**——SDK in-process headless
+   跑通、本機登入免 key、同任務同 grader 對照 **A 248 vs B 14 事件**;
+   詳 `examples/openhands-acp-poc/{PLAN,COMPARISON}.md`。
+   **剩**:codex 對照點(quota 8/31 重置後補)、B 路 resume 實跑、agent-server 模式。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket 升級迴路**:✅ **已實作 + live 驗證(2026-08-02)**——
    `arcp_poc/escalation.py`(事件驅動,盯 denial 不偵測卡住)+ 真實 denial fixture 回歸

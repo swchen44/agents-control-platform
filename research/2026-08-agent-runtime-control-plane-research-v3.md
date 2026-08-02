@@ -279,7 +279,7 @@ runtime/
 
 > 你明確說「這三種目前不知優缺點和維護成本」。以下逐條攤開。維護成本以「誰的變更會逼你改碼」為判準。
 
-> ⚠️ **證據級別**:下表只有 **A 欄是實跑出來的**(PoC live 跑通 claude+codex,見 §5.3)。**B(OpenHands ACP)與 C(從零寫完整 runtime)兩欄是原始碼 + 官方文件的分析推論,尚未做實跑對照。** C 的最小可跑版其實就是 A(PoC),差別在 recovery/REST/dashboard 尚未實作。要把 B 升級成實跑對照,見 §9.3 第 4 項(需起 agent-server + 實作 `OpenHandsACPDriver`)。
+> ⚠️ **證據級別(2026-08-03 更新)**:**A 欄實跑**(PoC live,§5.3);**B 欄 claude 側已實跑對照**(`examples/openhands-acp-poc/COMPARISON.md`:headless 可行、auth 零設定、事件粒度 14 vs A 的 248;codex 側冒煙過、對照待 quota),recovery/approval 子項仍為分析;**C 欄仍是分析推論**。 C 的最小可跑版其實就是 A(PoC),差別在 recovery/REST/dashboard 尚未實作。要把 B 升級成實跑對照,見 §9.3 第 4 項(需起 agent-server + 實作 `OpenHandsACPDriver`)。
 
 ## 4.1 對照總表
 
@@ -510,7 +510,13 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
    ③ **headless 下沒有任何 mode 會掛住等核准**(無一到 120s timeout):拒絕是立即的,
    agent 收到 denial 後續跑——supervisor 的 waiting-permission 偵測應該**盯事件流中的
    denial,不是偵測卡住**。④ auto/manual/dontAsk 在無 allowlist 時全拒(auto ≠ 自動接受)。
-4. **OpenHands ACP 對照**:加 `OpenHandsACPDriver`,同一 Jira 任務在 A 與 B 各跑一次,比 trace 粒度、recovery、approval、維護感受。
+4. **OpenHands ACP 對照** — ✅ **claude 側已實跑(2026-08-03,`examples/openhands-acp-poc/`)**:
+   SDK in-process(ACPAgent + adapter npx pin)headless 跑通,**本機訂閱登入免 API key**;
+   同任務同 grader 對照:**A 248 事件 vs B 14 事件(~18:1)**——A 有 thinking/token 級
+   watchdog 原料,B 是工具呼叫級語意層;詳 `COMPARISON.md`(各格標證據級別)。
+   codex 側:adapter 冒煙 PASS,對照數據點被 ChatGPT quota 擋下(8/31 重置後補)。
+   陷阱實錄:litellm rust-wheel(鎖 1.93.0 解)、npx 首跑下載 > SDK 90s timeout(要預熱)、
+   quota 跨路線共用。B 路 resume(`acp_resume_session_id`)仍未實跑。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket 升級迴路** — ✅ **已實作並 live 驗證(2026-08-02)**:
    `arcp_poc/escalation.py` + `escalation_demo.py`。依 §9.3-3 實測改為**事件驅動**

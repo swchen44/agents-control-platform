@@ -26,6 +26,7 @@ ARCP 的路線:**自寫輕量 supervisor(raw subprocess)為一級公民**,OpenHa
 | `research/` | 研究報告(v3 最新):需求規格、開工級設計、三路線對照、**全部實測釘死的事實** |
 | `examples/jira-agent-poc/` | **可跑 PoC**(~800 行、零依賴):Jira watcher → rule 引擎 → workspace+skills → 監督 CLI → 統一 trace |
 | `examples/jira-agent-poc/recovery_test.py` | **crash→resume 矩陣實驗 harness**:受控 kill × 信號矩陣 + 確定性判準 |
+| `examples/openhands-acp-poc/` | **路線 B PoC**:OpenHands SDK 包 claude/codex headless(ACP adapter),含 A/B 實跑對照 `COMPARISON.md` |
 | `examples/jira-agent-poc/fixtures/` | claude / codex 的**真實事件流**(含 crash+resume 黃金樣本對),協定回歸測試用 |
 | `HANDOFF.md` | 零上下文接手文件:已敲定決策、實測事實、下一步清單 |
 
@@ -102,6 +103,8 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
       rc=0 假完成皆自動修復(`arcp_poc/recovery_loop.py` + `loop_demo.py`)
 - [x] workspace 搬家情境 resume(#48835 一般形式):claude session 綁啟動 cwd,
       搬家後原生 resume 必死——transcript 降級救回不重工(`workspace_recovery_test.py`)
+- [x] OpenHands ACP 對照(路線 B):SDK in-process headless 跑通、本機登入免 key、
+      同任務同 grader 對照 A 248 vs B 14 事件(`examples/openhands-acp-poc/`)
 - [x] waiting-permission → Jira ticket 升級迴路:denial 事件驅動開票 + 結果回寫
       (含結構化 permission_denials 與 resume 指令,`arcp_poc/escalation.py`)
 
