@@ -488,9 +488,13 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
 4. **OpenHands ACP 對照**:加 `OpenHandsACPDriver`,同一 Jira 任務在 A 與 B 各跑一次,比 trace 粒度、recovery、approval、維護感受。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket** 的升級迴路(FR-C4/L5)端到端。
-7. **journal → transcript 降級 resume**(§6.4 結論):`--resume` 失敗時從 `events.jsonl`
-   渲染 bootstrap transcript 注入新 session(抄 OpenHands `resume_transcript.py` 的
-   標記/截斷設計),完成「原生 resume → transcript 注入 → 全新重跑」三段梯度。
+7. **journal → transcript 降級 resume** — ✅ **已實作並 live 驗證(2026-08-02)**:
+   `arcp_poc/resume_transcript.py`(marker/總量 60k 砍舊留新/逐訊息 8k 截斷,設計
+   抄自 OpenHands §6.4)+ `recovery_test.py --resume-mode transcript`。實測
+   claude midtool×SIGKILL:crash 後**不用原生 resume**,從 journal 渲染 transcript
+   開全新 session → 4/4 判準 PASS(含不重工——新 session 無記憶,全靠 transcript
+   告知進度)。三段梯度「原生 resume → transcript 注入 → 全新重跑」前兩階皆有實測;
+   此路徑同時解決「codex 太早死、thread id 沒擷取到」的無 id 情境。
 
 ---
 

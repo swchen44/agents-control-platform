@@ -104,9 +104,10 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
    在 A/B 各跑一次,比 trace 粒度/控制/recovery/setup 成本(使用者目前選擇先不做)。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
 6. **waiting-permission → 開 Jira ticket** 升級迴路端到端。
-7. **journal → transcript 降級 resume**(v3 §6.4):`--resume` 失敗時從 events.jsonl
-   渲染 bootstrap transcript 注入新 session(抄 OpenHands `resume_transcript.py` 設計),
-   形成「原生 resume → transcript 注入 → 全新重跑」三段梯度。
+7. **journal → transcript 降級 resume**:✅ **已實作 + live 驗證(2026-08-02)**——
+   `arcp_poc/resume_transcript.py` + `recovery_test.py --resume-mode transcript`,
+   claude midtool×SIGKILL 4/4 PASS(新 session 靠 transcript 續跑不重工)。
+   三段梯度前兩階皆有實測;無 id 情境(codex 太早死)也由此路徑涵蓋。
 
 ## 6.5 使用者立場備忘(2026-08-02)
 

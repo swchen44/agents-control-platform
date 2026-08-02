@@ -32,6 +32,9 @@ Usage:
   python3 recovery_test.py                 # claude, full 2x2 matrix, 1 rep each
   python3 recovery_test.py --agent codex
   python3 recovery_test.py --case midtool:SIGKILL --reps 2
+  python3 recovery_test.py --resume-mode transcript --case midtool:SIGKILL
+      # rung 2: bootstrap a FRESH session from the crash journal instead of
+      # native resume (C2 inverts: the new session id must DIFFER)
 Costs tokens (live runs; claude uses model=haiku, ~$0.05/case; codex uses
 your configured default model).
 Artifacts land in runtime_recovery/<case>/ (events.jsonl + snapshot.json
@@ -53,6 +56,8 @@ import uuid
 from arcp_poc.drivers import DRIVERS, Task
 from arcp_poc.events import AgentEvent, EventType
 from arcp_poc.grader import FileChecklistGrader
+from arcp_poc.resume_transcript import (build_transcript_resume_task,
+                                        load_journal_events)
 from arcp_poc.supervisor import RunHandle, Supervisor
 
 TASK_PROMPT = """任務:在目前目錄依序建立 step1.txt 到 step5.txt,規則:
@@ -149,8 +154,10 @@ def read_session_ids(events_path: str) -> set[str]:
     return sids
 
 
-def run_case(root: str, agent: str, phase: str, signame: str, rep: int) -> dict:
-    case_id = f"{agent}-{phase}-{signame}-r{rep}"
+def run_case(root: str, agent: str, phase: str, signame: str, rep: int,
+             resume_mode: str = "native") -> dict:
+    case_id = f"{agent}-{phase}-{signame}-r{rep}" + \
+        ("-tr" if resume_mode == "transcript" else "")
     case_dir = os.path.join(root, case_id)
     ws = os.path.join(case_dir, "ws")
     shutil.rmtree(case_dir, ignore_errors=True)
@@ -175,22 +182,35 @@ def run_case(root: str, agent: str, phase: str, signame: str, rep: int) -> dict:
                  for f in EXPECTED if os.path.exists(os.path.join(ws, f))}
     sid = sid or h1.session_id           # codex: whatever survived the crash
 
-    # -- run 2: resume the same session ----------------------------------- #
-    if sid is None:
-        # nothing to resume — grade the case as a recovery failure
-        checks = {"C1_resume_completed": False, "C2_same_session_id": False,
-                  "C3_files_complete": False, "C4_no_rework": False}
-        return {"case": case_id, "agent": agent, "phase": phase,
-                "signal": signame, "session_id": None, "killed": trigger.fired,
-                "files_at_crash": sorted(pre_files),
-                "run1_state": h1.state.value, "run2_state": "(not attempted)",
-                "note": "no session id harvested before crash",
-                "cost_usd": round(h1.cost_usd, 4),
-                "checks": checks, "pass": False}
-    sup2 = Supervisor(driver, journal_root=case_dir)
-    task2 = Task(run_id="run2-resume", prompt=RESUME_PROMPT, session_id=sid,
-                 **common)
-    h2 = run_with_timeout(sup2, task2, resume=True)
+    # -- run 2: rung 1 (native resume) or rung 2 (bootstrap transcript) ---- #
+    if resume_mode == "transcript":
+        # Degraded path: pretend the CLI's session store is gone. Build a
+        # FRESH session whose opening prompt replays the journal. Works even
+        # when no session id was harvested — that is the point of rung 2.
+        journal_events = load_journal_events(
+            os.path.join(case_dir, "run1-crash", "events.jsonl"))
+        sup2 = Supervisor(driver, journal_root=case_dir)
+        task2 = build_transcript_resume_task(task1, journal_events,
+                                             run_id="run2-resume")
+        h2 = run_with_timeout(sup2, task2, resume=False)
+    else:
+        if sid is None:
+            # nothing to resume — grade the case as a recovery failure
+            checks = {"C1_resume_completed": False, "C2_session_semantics": False,
+                      "C3_files_complete": False, "C4_no_rework": False}
+            return {"case": case_id, "agent": agent, "phase": phase,
+                    "signal": signame, "session_id": None,
+                    "killed": trigger.fired,
+                    "files_at_crash": sorted(pre_files),
+                    "run1_state": h1.state.value,
+                    "run2_state": "(not attempted)",
+                    "note": "no session id harvested before crash",
+                    "cost_usd": round(h1.cost_usd, 4),
+                    "checks": checks, "pass": False}
+        sup2 = Supervisor(driver, journal_root=case_dir)
+        task2 = Task(run_id="run2-resume", prompt=RESUME_PROMPT,
+                     session_id=sid, **common)
+        h2 = run_with_timeout(sup2, task2, resume=True)
 
     # -- deterministic grading -------------------------------------------- #
     resumed_sids = read_session_ids(
@@ -198,14 +218,22 @@ def run_case(root: str, agent: str, phase: str, signame: str, rep: int) -> dict:
     files_ok = FileChecklistGrader(EXPECTED).grade(ws).passed
     no_rework = all(os.path.getmtime(os.path.join(ws, f)) == m
                     for f, m in pre_files.items())
+    if resume_mode == "native":
+        # rung 1: the whole point is reattaching the ORIGINAL session
+        session_ok = resumed_sids == {sid}
+    else:
+        # rung 2: the whole point is a FRESH session (old one presumed lost)
+        session_ok = bool(resumed_sids) and (sid is None
+                                             or sid not in resumed_sids)
     checks = {
         "C1_resume_completed": h2.state.value == "done",
-        "C2_same_session_id": resumed_sids == {sid},
+        "C2_session_semantics": session_ok,
         "C3_files_complete": files_ok,
         "C4_no_rework": no_rework,
     }
     return {
         "case": case_id, "agent": agent, "phase": phase, "signal": signame,
+        "resume_mode": resume_mode,
         "session_id": sid,
         "killed": trigger.fired,
         "files_at_crash": sorted(pre_files),
@@ -220,6 +248,11 @@ def main() -> int:
     ap.add_argument("--agent", choices=sorted(DRIVERS), default="claude")
     ap.add_argument("--case", action="append", metavar="PHASE:SIGNAL",
                     help="e.g. midtool:SIGKILL (default: full 2x2 matrix)")
+    ap.add_argument("--resume-mode", choices=["native", "transcript"],
+                    default="native",
+                    help="native = rung 1 (--resume / exec resume); "
+                         "transcript = rung 2 (bootstrap a FRESH session "
+                         "from the crash journal)")
     ap.add_argument("--reps", type=int, default=1)
     ap.add_argument("--root", default="./runtime_recovery")
     args = ap.parse_args()
@@ -230,13 +263,16 @@ def main() -> int:
     results = []
     for phase, signame in cases:
         for rep in range(1, args.reps + 1):
-            print(f"=== case {args.agent} {phase}:{signame} rep {rep} ===",
-                  flush=True)
-            r = run_case(args.root, args.agent, phase, signame, rep)
+            print(f"=== case {args.agent} {phase}:{signame} rep {rep}"
+                  f" ({args.resume_mode}) ===", flush=True)
+            r = run_case(args.root, args.agent, phase, signame, rep,
+                         resume_mode=args.resume_mode)
             results.append(r)
             print(json.dumps(r, ensure_ascii=False, indent=2), flush=True)
 
-    with open(os.path.join(args.root, f"results-{args.agent}.json"), "w") as f:
+    suffix = "" if args.resume_mode == "native" else f"-{args.resume_mode}"
+    with open(os.path.join(args.root,
+                           f"results-{args.agent}{suffix}.json"), "w") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     print("\n=== summary ===")

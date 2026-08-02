@@ -88,5 +88,34 @@ with tempfile.TemporaryDirectory() as tmp:
     check("DONE stream + passing evidence -> stays DONE",
           h2.state == RunState.DONE)
 
+print("degraded resume (transcript, recovery rung 2):")
+from arcp_poc.drivers import Task  # noqa: E402
+from arcp_poc.resume_transcript import (  # noqa: E402
+    RESUME_CONTEXT_MARKER, build_transcript_resume_task,
+    render_resume_transcript)
+
+evs = [
+    {"type": "message", "text": "step1 done"},
+    {"type": "tool.started", "tool_name": "Write"},
+    {"type": "raw", "text": "noise-not-rendered"},
+    {"type": "run.failed", "text": "worker exited rc=-9 (crash?)"},
+]
+t = render_resume_transcript(evs, "依序建立 step1~5")
+check("transcript: marker + task + crash forensics, no raw noise",
+      t.startswith(RESUME_CONTEXT_MARKER) and "依序建立 step1~5" in t
+      and "rc=-9" in t and "noise-not-rendered" not in t)
+big = [{"type": "message", "text": f"m{i} " + "x" * 100} for i in range(2000)]
+t2 = render_resume_transcript(big, "p", max_chars=5000)
+check("transcript: budget truncates oldest-first (tail kept)",
+      len(t2) <= 5200 and "m1999" in t2 and "[assistant] m0 " not in t2)
+orig = Task(run_id="r", prompt="p", cwd=".", session_id="OLD-ID", model="haiku")
+nt = build_transcript_resume_task(orig, evs, "r2")
+check("transcript task: claude gets a FRESH session id",
+      bool(nt.session_id) and nt.session_id != "OLD-ID"
+      and nt.model == "haiku")
+check("transcript task: codex stays id-less",
+      build_transcript_resume_task(
+          Task(run_id="r", prompt="p", cwd="."), evs, "r2").session_id is None)
+
 print(f"\n{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

@@ -22,6 +22,7 @@ that neither raw CLI nor "OpenHands-for-ACP" gives you for free.
 | `arcp_poc/drivers.py` | `claude -p` / `codex exec` raw-subprocess adapters; OpenHands-ACP path documented |
 | `arcp_poc/supervisor.py` | spawn / trace / state-machine / stall-watchdog / control (pause, resume, kill); live + replay modes |
 | `arcp_poc/grader.py` | evidence-based stop: deterministic graders (files / command / all-of); DONE that fails evidence is overridden to FAILED |
+| `arcp_poc/resume_transcript.py` | recovery rung 2: render the journal into a bootstrap prompt for a FRESH session when native resume is unavailable |
 | `arcp_poc/rules.py` | JSON rule engine (assignee / keyword → agent / skills / repo) |
 | `arcp_poc/workspace.py` | per-issue folder + AgentSkills provisioning |
 | `arcp_poc/jira_watcher.py` | poll Jira Server REST, match rules, dispatch |
@@ -46,6 +47,8 @@ python3 run_demo.py codex "Reply with exactly the word: pong (trivial bug check)
 # 4. Live — crash-recovery matrix (claude, model=haiku, ~$0.2 total).
 python3 recovery_test.py                     # full 2x2: early/midtool x SIGTERM/SIGKILL
 python3 recovery_test.py --case midtool:SIGKILL
+python3 recovery_test.py --resume-mode transcript --case midtool:SIGKILL
+                                             # rung 2: journal -> fresh session
 ```
 
 ## Verified (2026-08-01, this machine)

@@ -94,7 +94,8 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
 進行中 / 下一步(節錄自 research v3 §9.3):
 
 - [x] **證據型停止**:確定性 grader 決定 DONE,證據不過覆寫 FAILED(`arcp_poc/grader.py`)
-- [ ] journal → transcript 降級 resume(三段梯度:原生 resume → 注入 → 重跑)
+- [x] journal → transcript 降級 resume:session store 遺失時從 journal 渲染
+      transcript 開新 session 續跑,live 驗證不重工(`--resume-mode transcript`)
 - [ ] Claude permission 行為矩陣實測
 - [ ] worktree 情境 resume(claude issue #48835)
 - [ ] supervisor 內建 FAILED → 自動 resume 迴路
