@@ -101,7 +101,8 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
 - [x] **自動 recovery 迴路**:run → grade → 梯度 resume,live 驗證硬 crash 與
       rc=0 假完成皆自動修復(`arcp_poc/recovery_loop.py` + `loop_demo.py`)
 - [ ] worktree 情境 resume(claude issue #48835)
-- [ ] waiting-permission → Jira ticket 升級迴路端到端
+- [x] waiting-permission → Jira ticket 升級迴路:denial 事件驅動開票 + 結果回寫
+      (含結構化 permission_denials 與 resume 指令,`arcp_poc/escalation.py`)
 
 ## License
 

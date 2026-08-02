@@ -505,7 +505,14 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
    denial,不是偵測卡住**。④ auto/manual/dontAsk 在無 allowlist 時全拒(auto ≠ 自動接受)。
 4. **OpenHands ACP 對照**:加 `OpenHandsACPDriver`,同一 Jira 任務在 A 與 B 各跑一次,比 trace 粒度、recovery、approval、維護感受。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
-6. **waiting-permission → 開 Jira ticket** 的升級迴路(FR-C4/L5)端到端。
+6. **waiting-permission → 開 Jira ticket 升級迴路** — ✅ **已實作並 live 驗證(2026-08-02)**:
+   `arcp_poc/escalation.py` + `escalation_demo.py`。依 §9.3-3 實測改為**事件驅動**
+   (headless 不會卡等核准,盯 denial 事件而非偵測卡住):driver 把真實 denial 文案
+   正規化為 WAITING_PERMISSION → EscalationObserver 首個 denial 開票、後續 denial
+   追加 comment、終端事件把 **`result.permission_denials` 結構化清單** + resume 指令
+   回寫原始 issue。離線用真實 denial 流(`fixtures/claude_p_denial_real.jsonl`)回歸,
+   live demo:`denial→DRY-1 開票→comment→OPS-42 回寫`,$0.028。
+   Jira 端為 DryRunJiraClient(JSONL outbox),REST 實作可直接替換。
 8. **自動 recovery 迴路** — ✅ **已實作並 live 驗證(2026-08-02)**:
    `arcp_poc/recovery_loop.py`(run → grade → 依梯度升級 resume,同一 rung 不重試,
    有重試上限;grader 必備——loop on evidence)+ `loop_demo.py`。兩個 live 場景:

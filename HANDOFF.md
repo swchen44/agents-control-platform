@@ -108,7 +108,10 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 4. **OpenHands ACP 對照**:實作 `OpenHandsACPDriver` + 起 agent-server,同一 Jira 任務
    在 A/B 各跑一次,比 trace 粒度/控制/recovery/setup 成本(使用者目前選擇先不做)。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。
-6. **waiting-permission → 開 Jira ticket** 升級迴路端到端。
+6. **waiting-permission → 開 Jira ticket 升級迴路**:✅ **已實作 + live 驗證(2026-08-02)**——
+   `arcp_poc/escalation.py`(事件驅動,盯 denial 不偵測卡住)+ 真實 denial fixture 回歸
+   + live demo(denial→開票→comment→結果回寫原 issue,含 permission_denials 結構化
+   清單與 resume 指令)。Jira 端 DryRun outbox,REST 可替換。
 7. **journal → transcript 降級 resume**:✅ **已實作 + live 驗證(2026-08-02)**——
    `arcp_poc/resume_transcript.py` + `recovery_test.py --resume-mode transcript`,
    claude midtool×SIGKILL 4/4 PASS(新 session 靠 transcript 續跑不重工)。

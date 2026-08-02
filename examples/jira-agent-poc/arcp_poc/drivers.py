@@ -15,10 +15,18 @@ The native->normalized mappings are derived from REAL captured streams
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .events import AgentEvent, EventType
+
+# Denial phrasing measured from real streams (permission_matrix.py, claude
+# 2.1.206): "Permission to use X has been denied ..." (dontAsk), "Claude
+# requested permissions to ..., but you haven't granted it yet" (auto/manual),
+# "... was blocked. For security ..." (sandbox path guard).
+_DENIAL_RE = re.compile(r"has been denied|haven't granted|was blocked", re.I)
+_DENIAL_TOOL_RE = re.compile(r"Permission to use (\w+)")
 
 
 @dataclass
@@ -98,7 +106,24 @@ class ClaudeDriver:
                       tokens_out=usage.get("output_tokens"))
 
         if t == "user":
-            # tool_result arrives as a user turn in the stream
+            # tool_result arrives as a user turn. Permission denials surface
+            # HERE (measured §9.3-3): headless never blocks — the CLI injects
+            # an explanatory tool_result and the agent moves on. Emit
+            # WAITING_PERMISSION so observers can escalate in real time; the
+            # structured list (result.permission_denials) arrives at the end.
+            blocks = (o.get("message", {}) or {}).get("content") or []
+            for b in (blocks if isinstance(blocks, list) else []):
+                if not isinstance(b, dict) or b.get("type") != "tool_result":
+                    continue
+                content = b.get("content")
+                if isinstance(content, list):
+                    content = " ".join(c.get("text", "") for c in content
+                                       if isinstance(c, dict))
+                if isinstance(content, str) and _DENIAL_RE.search(content):
+                    m = _DENIAL_TOOL_RE.search(content)
+                    return ev(EventType.WAITING_PERMISSION,
+                              tool_name=m.group(1) if m else None,
+                              text=content[:300])
             return ev(EventType.TOOL_FINISHED)
 
         if t == "rate_limit_event":

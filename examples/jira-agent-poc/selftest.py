@@ -166,5 +166,28 @@ check("loop: full ladder then give up (never retries a rung)",
       not res.succeeded and [a.mode for a in res.attempts]
       == ["initial", "native", "transcript", "rerun"])
 
+print("escalation loop (denial -> ticket, terminal -> comment):")
+from arcp_poc.escalation import DryRunJiraClient, EscalationObserver  # noqa: E402
+
+with tempfile.TemporaryDirectory() as tmp:
+    outbox = os.path.join(tmp, "outbox.jsonl")
+    esc = EscalationObserver(DryRunJiraClient(outbox), issue_key="OPS-42")
+    sup = Supervisor(DRIVERS["claude"], journal_root="./runtime_selftest",
+                     observers=[esc])
+    h = sup.replay(load(os.path.join(here, "fixtures/claude_p_denial_real.jsonl")),
+                   run_id="st-denial")
+    records = [json.loads(l) for l in open(outbox)]
+    tickets = [r for r in records if r["action"] == "create_ticket"]
+    comments = [r for r in records if r["action"] == "comment"]
+    check("denial stream -> exactly one escalation ticket",
+          len(tickets) == 1 and "permission denied" in tickets[0]["summary"])
+    check("run still completes (denial does not block, §9.3-3)",
+          h.state == RunState.DONE)
+    final = comments[-1] if comments else {"issue_key": "", "body": ""}
+    check("terminal comment -> structured denials + resume hint",
+          final["issue_key"] == "OPS-42"
+          and "permission_denials (2): Write, Bash" in final["body"]
+          and "claude --resume" in final["body"])
+
 print(f"\n{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

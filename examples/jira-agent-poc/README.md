@@ -24,6 +24,8 @@ that neither raw CLI nor "OpenHands-for-ACP" gives you for free.
 | `arcp_poc/grader.py` | evidence-based stop: deterministic graders (files / command / all-of); DONE that fails evidence is overridden to FAILED |
 | `arcp_poc/resume_transcript.py` | recovery rung 2: render the journal into a bootstrap prompt for a FRESH session when native resume is unavailable |
 | `arcp_poc/recovery_loop.py` | the automatic loop: run → grade → escalate the recovery ladder until evidence passes (never retries a failed rung) |
+| `arcp_poc/escalation.py` | permission-denial → Jira escalation: event-driven ticket + terminal write-back with structured `permission_denials` and a resume command |
+| `escalation_demo.py` | live demo: denial opens a ticket, outcome lands on the originating issue (dry-run Jira outbox) |
 | `loop_demo.py` | live demo of the loop repairing a hard crash (claude) and the rc=0 fake-DONE (codex) end to end |
 | `arcp_poc/rules.py` | JSON rule engine (assignee / keyword → agent / skills / repo) |
 | `arcp_poc/workspace.py` | per-issue folder + AgentSkills provisioning |
