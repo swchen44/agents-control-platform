@@ -96,8 +96,9 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
    ✅ **codex 基線完成(2026-08-02,3/4 時機,含最嚴苛 midtool×SIGKILL)**——皆 `recovery_test.py`。
    **剩**:codex midtool×SIGTERM 乾淨數據點(遇機器睡眠污染)、worktree 情境(issue #48835)、
    長跑/大 context resume、supervisor 內建「FAILED→自動 resume」迴路。
-2. **證據型停止**:接確定性 grader(跑測試/檢查檔案)決定 DONE,取代 agent 自稱完成。
-   **已從加分項升級為必要**:實測證實 codex SIGTERM 退場 rc=0,exit code 不能證明任務完成(§4)。
+2. **證據型停止**:✅ **已實作(2026-08-02)**——`arcp_poc/grader.py` + supervisor 整合,
+   DONE 需過證據、不過覆寫 FAILED(證據高於自稱);selftest 14/14。
+   (背景:實測證實 codex SIGTERM 退場 rc=0,exit code 不能證明任務完成,§4。)
 3. **Claude permission 行為矩陣**(v2 §2.3 第 5 點文件描述被 0-3 推翻,需實測)。
 4. **OpenHands ACP 對照**:實作 `OpenHandsACPDriver` + 起 agent-server,同一 Jira 任務
    在 A/B 各跑一次,比 trace 粒度/控制/recovery/setup 成本(使用者目前選擇先不做)。

@@ -93,7 +93,7 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
 
 進行中 / 下一步(節錄自 research v3 §9.3):
 
-- [ ] **證據型停止**:確定性 grader(跑測試/檢查檔案)決定 DONE
+- [x] **證據型停止**:確定性 grader 決定 DONE,證據不過覆寫 FAILED(`arcp_poc/grader.py`)
 - [ ] journal → transcript 降級 resume(三段梯度:原生 resume → 注入 → 重跑)
 - [ ] Claude permission 行為矩陣實測
 - [ ] worktree 情境 resume(claude issue #48835)

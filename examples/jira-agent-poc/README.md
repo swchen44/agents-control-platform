@@ -21,6 +21,7 @@ that neither raw CLI nor "OpenHands-for-ACP" gives you for free.
 | `arcp_poc/events.py` | unified `AgentEvent` schema + `RunState` machine (the cross-CLI layer) |
 | `arcp_poc/drivers.py` | `claude -p` / `codex exec` raw-subprocess adapters; OpenHands-ACP path documented |
 | `arcp_poc/supervisor.py` | spawn / trace / state-machine / stall-watchdog / control (pause, resume, kill); live + replay modes |
+| `arcp_poc/grader.py` | evidence-based stop: deterministic graders (files / command / all-of); DONE that fails evidence is overridden to FAILED |
 | `arcp_poc/rules.py` | JSON rule engine (assignee / keyword → agent / skills / repo) |
 | `arcp_poc/workspace.py` | per-issue folder + AgentSkills provisioning |
 | `arcp_poc/jira_watcher.py` | poll Jira Server REST, match rules, dispatch |

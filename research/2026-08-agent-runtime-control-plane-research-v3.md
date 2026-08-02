@@ -448,7 +448,7 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
 | Evaluation | 能重播 trace、比較版本? | ✅ events.jsonl 可 replay;⚠️ 版本比較待補 |
 | Operations | cost/延遲/失敗率/人工介入率被監控? | ⚠️ cost/state 有;聚合 dashboard 待補 |
 
-**最該優先補的兩項**(三層文最強調、ARCP 最缺):**Loop 的證據型停止**(別讓 agent 自稱 done)、**cross-CLI recovery**。
+**最該優先補的兩項**(三層文最強調、ARCP 最缺):**Loop 的證據型停止**(別讓 agent 自稱 done)、**cross-CLI recovery**。→ **兩項基線皆已補上(2026-08-02)**:grader 覆寫機制(§9.3-2)與 claude/codex resume 實測(§9.3-1);仍缺的是把兩者接成「FAILED→自動 resume→再驗證據」的迴路。
 
 ---
 
@@ -462,7 +462,7 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
 
 ## 9.2 PoC 現況(`examples/jira-agent-poc/`)
 
-已實作並實測:統一 event schema、狀態機、claude/codex raw driver(真實 schema)、supervisor(live+replay+watchdog+control)、rules 引擎、skills provision、Jira watcher(輪詢/去重/dispatch)。7/7 self-test 通過;claude/codex live 各跑通。另有 crash-recovery 矩陣 harness(`recovery_test.py`,§9.3-1)與 crash/resume fixtures。
+已實作並實測:統一 event schema、狀態機、claude/codex raw driver(真實 schema)、supervisor(live+replay+watchdog+control)、rules 引擎、skills provision、Jira watcher(輪詢/去重/dispatch)。self-test 全過(14 項);claude/codex live 各跑通。另有 crash-recovery 矩陣 harness(`recovery_test.py`,§9.3-1)、crash/resume fixtures、證據型停止 grader(`grader.py`,§9.3-2)。
 
 ## 9.3 下一步 PoC 實驗清單(先於大量寫碼)
 
@@ -479,7 +479,11 @@ supervisor 本來就 journal 全部事件(`events.jsonl`),素材齊全——`--r
    假 stall/假 hang——live 監督要防睡(caffeinate 只擋 idle sleep)或跑在 server。
    **尚未做**:codex midtool×SIGTERM 乾淨數據點、worktree 情境(issue #48835)、
    長跑/大 context 下的 resume、supervisor 內建 FAILED→自動 resume 迴路。
-2. **證據型停止**:接一個確定性 grader(跑測試/檢查檔案)決定 DONE,取代「agent 自稱完成」。
+2. **證據型停止** — ✅ **已實作(2026-08-02)**:`arcp_poc/grader.py`
+   (`FileChecklistGrader` / `CommandGrader` / `AllOf`,Verdict 附理由入 journal),
+   supervisor 掛 `grader` 後 DONE 需過證據——**證據不過即覆寫 FAILED**(sticky 終端
+   狀態唯一被批准的例外:證據高於自稱)。selftest 14/14 含「DONE 流 + 證據缺 → FAILED」;
+   recovery_test 的 C3 判準已 dogfood 此 grader。直接封堵 SIGTERM-rc=0 假完成(§6.4)。
 3. **Claude permission 行為矩陣**(v2 §2.3 第 5 點:文件描述 0-3 被推翻)——各 permission-mode × 未核准 tool call 的實際行為實測。
 4. **OpenHands ACP 對照**:加 `OpenHandsACPDriver`,同一 Jira 任務在 A 與 B 各跑一次,比 trace 粒度、recovery、approval、維護感受。
 5. **opencode via ACP**:`acp_command:["opencode","acp"]` 實測相容性。

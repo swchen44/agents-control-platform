@@ -25,6 +25,7 @@ from typing import Any, Callable
 
 from .drivers import Driver, Task
 from .events import AgentEvent, EventType, RunState, TERMINAL_STATES, next_state
+from .grader import Grader
 
 
 @dataclass
@@ -78,11 +79,13 @@ Observer = Callable[[AgentEvent, RunHandle], None]
 class Supervisor:
     def __init__(self, driver: Driver, journal_root: str = "./runtime",
                  stall_seconds: float = 30.0,
-                 observers: list[Observer] | None = None):
+                 observers: list[Observer] | None = None,
+                 grader: Grader | None = None):
         self.driver = driver
         self.journal_root = journal_root
         self.stall_seconds = stall_seconds
         self.observers = observers or []
+        self.grader = grader
         self._proc: subprocess.Popen | None = None
         self._stop = threading.Event()
 
@@ -146,8 +149,13 @@ class Supervisor:
         # If the worker exited without emitting a terminal event, decide by exit
         # code: rc==0 is a clean finish (some CLIs signal "done" only by exiting),
         # rc!=0 is a crash — where a real system would attempt `--resume`.
+        # ⚠️ Measured limit of that heuristic: codex exits rc=0 on SIGTERM, so a
+        # half-finished run can land here as DONE — which is exactly why the
+        # evidence check below exists.
         if h.state not in TERMINAL_STATES:
             self._finalize_on_exit(h, journal, rc)
+        if self.grader and h.state == RunState.DONE:
+            self._enforce_evidence(h, journal, task.cwd)
         return h
 
     def replay(self, native_events: Iterator[dict[str, Any]],
@@ -163,6 +171,8 @@ class Supervisor:
                 time.sleep(delay)
             if h.state in TERMINAL_STATES:
                 break
+        if self.grader and h.state == RunState.DONE:
+            self._enforce_evidence(h, journal, cwd)
         return h
 
     # -- internals ---------------------------------------------------------- #
@@ -206,6 +216,28 @@ class Supervisor:
                 journal.snapshot(h)
                 for obs in self.observers:
                     obs(ev, h)
+
+    def _enforce_evidence(self, h: RunHandle, journal: Journal, workdir: str) -> None:
+        """Evidence outranks self-report. A run that reached DONE (terminal
+        event or clean exit) but fails its grader is overridden to FAILED —
+        the single sanctioned override of a sticky terminal state. The verdict
+        reasons go into the journal either way, so completion is auditable."""
+        verdict = self.grader.grade(workdir)
+        if verdict.passed:
+            ev = AgentEvent(run_id=h.run_id, agent=h.agent, type=EventType.RAW,
+                            session_id=h.session_id,
+                            text=f"evidence PASS: {verdict.summary()}")
+            journal.append(ev)
+        else:
+            ev = AgentEvent(run_id=h.run_id, agent=h.agent,
+                            type=EventType.RUN_FAILED, session_id=h.session_id,
+                            text=f"evidence FAIL: {verdict.summary()}")
+            journal.append(ev)
+            h.state = RunState.FAILED
+            h.result_text = ev.text
+        journal.snapshot(h)
+        for obs in self.observers:
+            obs(ev, h)
 
     def _finalize_on_exit(self, h: RunHandle, journal: Journal, rc: int) -> None:
         if rc == 0:

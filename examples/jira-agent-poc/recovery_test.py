@@ -52,6 +52,7 @@ import uuid
 
 from arcp_poc.drivers import DRIVERS, Task
 from arcp_poc.events import AgentEvent, EventType
+from arcp_poc.grader import FileChecklistGrader
 from arcp_poc.supervisor import RunHandle, Supervisor
 
 TASK_PROMPT = """任務:在目前目錄依序建立 step1.txt 到 step5.txt,規則:
@@ -194,10 +195,7 @@ def run_case(root: str, agent: str, phase: str, signame: str, rep: int) -> dict:
     # -- deterministic grading -------------------------------------------- #
     resumed_sids = read_session_ids(
         os.path.join(case_dir, "run2-resume", "events.jsonl"))
-    files_ok = all(
-        os.path.isfile(os.path.join(ws, k))
-        and open(os.path.join(ws, k)).read().strip() == v
-        for k, v in EXPECTED.items())
+    files_ok = FileChecklistGrader(EXPECTED).grade(ws).passed
     no_rework = all(os.path.getmtime(os.path.join(ws, f)) == m
                     for f, m in pre_files.items())
     checks = {
