@@ -182,6 +182,17 @@ AgentBase 子類——**C 不用 fork**;真 `claude -p` 已在 OpenHands Convers
 內跑通(`spike_rawcli_agent.py` ~80 行雛形)。C 的未知數清零,
 剩下的是純工程(drivers.py 解析知識搬入)。
 
+## 6.8 B 期 harness 進度(2026-08-03)
+
+`harness/` 開工:**M1 灰度里程碑達成**——Phase 0(Jira Cloud source adapter,
+真實認證冒煙 PASS)+ Phase 1(routing/watch/watermark,真實 Jira E2E 4/4 PASS,
+notify_only 只記不動)。計畫與 checklist:`harness/PLAN_B.md`;
+教訓:`harness/LESSONS.md`(逐步累積)。
+環境:Atlassian Cloud swchen44,project **key=SCRUM**(名稱 AgentLifetimeBoardv1,
+「AGT」不存在——key 不隨改名變)、憑證 `~/.env`(不入 repo)、issue type 中文。
+**下一步:Phase 2(M2 第一張票端到端)**——workspace provisioning → inner
+runner(B route)→ 三態 outcome(含 UNKNOWN)→ 帶證據回寫 Jira。
+
 ## 7. 建議路線(report 定案)
 
 **主線 A(raw 一級)+ 可選後端 B(OpenHands 對照)+ C 只做差異化層。**
