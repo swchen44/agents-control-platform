@@ -1,5 +1,6 @@
-# B 期 Harness — Jira Outer Loop 開發計畫與 Checklist
+# PLAN_B — B 期 Harness:Jira Outer Loop 開發計畫與 Checklist
 
+> Lessons learned 全數留存於 `harness/LESSONS.md`(逐步累積,勿刪)。
 > 依 v5 設計(research/2026-08-jira-agent-harness-design-v5.md)P0/P1 範圍 +
 > A/B/C 策略(research/2026-08-abc-roadmap-analysis.md)B 期三守則。
 > **作業方式:單線、小步、每個 Phase 完成即 commit+push。**
