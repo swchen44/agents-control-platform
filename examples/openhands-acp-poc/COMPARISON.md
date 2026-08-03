@@ -131,3 +131,37 @@ B+ 的可視化/持久化,無 ACP 的保真損失與粗粒度。abc-roadmap §3 
 profile 一行在 rawcli(輕、隔離、細粒度)與 openhands-server(併發、持久化、
 可視化)間切換。**接進 harness dispatcher 的長駐共享 server(現每 attempt
 自起)是 backlog。**
+
+## 8. 執行形態:headless(stream-json) vs tmux-driven(交互 TUI)
+
+> 動機:發現 OpenHands 依賴 libtmux,問「能否用 tmux 取代 claude -p/codex exec、
+> 更有彈性、能連進去 debug」。先破誤解:libtmux 在 OpenHands 是給**自家
+> CodeActAgent 的 bash 工具**做持久 shell(跨指令保 cwd/env、4-pane 並行),
+> **Claude Code(ACP)根本不在 tmux 裡跑**(stdio 被 JSON-RPC 佔用、無 TTY)——
+> 連 OpenHands 自己都刻意不把 Claude Code 放 tmux(讀碼研究 §4)。這事實本身
+> 就是答案的一半:結構化輸出才是自動化基礎,tmux TUI 是給人看的。
+
+| | headless(claude -p/codex exec,我們的路) | tmux-driven(交互 TUI,人可 attach) |
+|---|---|---|
+| 輸出 | 結構化 stream-json(事件/cost/session_id/result) | 終端 TUI(ANSI,給人看) |
+| 可觀測性 | 細粒度事件→grader/狀態機/stall/detail page | 要 capture-pane 抓屏+解析 ANSI,**極脆弱** |
+| 終止判定 | 明確 result 事件(is_error/cost) | 無機器可讀終止,靠抓屏猜 |
+| resume | --session-id/--resume 明確(實測 4/4) | 交互模式 resume 語意模糊 |
+| **人 attach 接管** | ❌ | ✅ **tmux 唯一真優點** |
+| 持久跨 SSH 斷線 | 靠 store 續跑 | tmux session 活著 |
+| 自動化 | 程式驅動、可靠 | send-keys+抓屏,時序/版本敏感 |
+
+**判讀(致命問題)**:tmux 取代 headless = **失去結構化可觀測性**,而那是整個
+harness 的地基——grader(證據型停止)、狀態機、stall 檢測、細粒度事件、detail
+page、resume 全靠 stream-json。tmux 裡拿不到或靠脆弱抓屏(比 A 路教訓「不解析
+transcript JSONL」更糟:那至少是 JSON,tmux 是 TUI 像素)。
+
+**「連進去 debug」我們已有更好的**:detail page(💭思考/🔧工具/📋觀察 + 四層
+trace + grader + cost + ticket 語義)比 tmux attach 更結構化、可讀、**唯讀安全**
+(多人可看不誤觸;attach 可接管有風險)、5s 實時刷新。
+
+**結論**:tmux **不該取代** headless(拆掉自動化地基),但可作為「需要人 attach
+接管」的**可選 backend 並存**(profile 一行切換,符合可插拔架構),tradeoff 明確:
+**自動化(headless:grader/stall/細粒度/自動 resume) vs 人工可接管(tmux)**。
+多數 Jira 例行工單要自動化;極少數需人盯著操盤的可走 tmux。彈性/debug 需求已由
+detail page 用結構化方式滿足——又一個「backend 可插拔、視角統一」的受益點。
