@@ -82,3 +82,32 @@ PASS**(68s、14 事件、file probe 過)。對照數據點待額度重置後補�
 agent-server 形態另附併發/隔離);A-raw 留給需秒級觀測/精準控制的任務;差異化層
 共用(已證可行)。**重算此帳的訊號**:ACP spec 出現 progress/細粒度 notification
 擴充,或官方 adapter 開始轉發細事件。
+
+## 6. A/B/C 三方對照(C.5,2026-08-03 實跑)
+
+同任務(filechain)、同 grader、同機同日、claude haiku。route C = RawCLIAgent
+(`harness/arcp_rawcli/`,OpenHands 骨架 + raw CLI 執行單元)。
+數據源 `harness/runtime_abc/results.json`(`compare_abc.py`)。
+
+| | A-raw supervisor | B-ACP(agent-server) | **C-RawCLIAgent** |
+|---|---|---|---|
+| 蒸餾事件(語意層) | 93(未蒸餾,含 token delta 噪音) | 17(ACP 粗語意) | **10(乾淨有意義)** |
+| 原生保真(raw 行) | 93 | **0**(adapter 吞掉底層) | **94(全保留)** |
+| cost(haiku) | $0.0285 | $0.0285 | $0.0291 |
+| completed / grader | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
+| 中途控制窗口 | ✅(recovery_test kill) | ❌(批次無窗口) | ✅(C.4 fault kill) |
+| crash→resume | ✅(2×2 矩陣) | ✅(session/load) | ✅(C.4,--resume) |
+| setup | 零依賴 | venv+server(最重) | venv(無 server) |
+| 骨架/可視化 | 自建 | OpenHands(GUI/detail) | **OpenHands(detail 兩視角)** |
+
+**判讀:C 集大成。** A 的 93 ≈ C 的 94(同一 claude 原生流),但:
+- **保真度**:C(94)≈ A(93)>> B(0)——B 的 adapter 把底層 CLI stream 吞掉,零保真。
+- **語意乾淨度**:C(10 有意義)最可讀;A(93)混入 token delta 噪音、未蒸餾;
+  B(17)粗且無底層。
+- **只有 C 兩者兼得**:乾淨蒸餾語意層 + 原生全保真;A 只有原始無蒸餾,
+  B 只有粗語意無保真。加上中途控制窗口(B 缺)、OpenHands 可視化(A 缺)。
+- 成本三方近乎相同(同 model,使用者決策 A/B/C 同 model 後成本可比)。
+
+**結論**:route C 把 A 的細粒度/控制/recovery 搬進 OpenHands 骨架,同時保有
+B+ 的可視化/持久化,無 ACP 的保真損失與粗粒度。abc-roadmap §3 的「C 集大成」
+從分析升級為實跑實證。

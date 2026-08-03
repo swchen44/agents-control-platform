@@ -100,6 +100,13 @@ agent-server 不動,GUI/trace 在 C 期照用且事件更細(14→248 級)。
 
 修訂後路線:**B(已完成 M1-M3)→ B+(agent-server 模式 + 視覺化收割)→ C**。
 
+**C 期已實作並實跑(2026-08-03,`harness/arcp_rawcli/` + PLAN_C.md)**:
+C.0 gate(server 端可實例化自製 agent,集大成確認)→ C.1(RawCLIAgent 跑通)
+→ C.2(細粒度:蒸餾 10 事件 + 原生 94 保真)→ C.3(接進 harness,backend=rawcli,
+dispatcher 零改動,SCRUM-11 SUCCESS)→ C.4(crash→resume,--resume,對照 A 矩陣)
+→ C.5(A/B/C 三方對照,COMPARISON §6:C 集大成經實跑實證——保真≈A、語意乾淨勝 B、
+中途控制窗口 B 缺、可視化 A 缺)。C 的困難知識全來自 A 期,無新架構風險。
+
 ## 4. 與 v5 P0-P4 的關係
 
 時序相容:P0/P1 的 inner/outer loop 在 B 期建、天然為 C 服務(outer loop

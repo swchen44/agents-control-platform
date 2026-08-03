@@ -99,11 +99,17 @@
       **不重工**(crash 前 step1/2 mtime 不變)—— 對照 A 路 midtool 矩陣
 - [x] commit+push
 
-**Phase C.5 — A/B/C 三方對照 + 收割**
-- [ ] 同任務同 grader:A(raw supervisor)/ B(ACP)/ C(RawCLIAgent)事件粒度、
-      控制窗口、成本、setup 對照 → COMPARISON.md 補 C 欄
-- [ ] detail page 展示 C 的細粒度 conversation(vs B 的 19)
-- [ ] commit+push
+**Phase C.5 — A/B/C 三方對照 + 收割** ✅ 2026-08-03 **M6**
+- [x] `compare_abc.py` 同任務同 grader 三方實跑(claude haiku,同機同日):
+      A 蒸餾93/保真93、B 蒸餾17/保真0、**C 蒸餾10/保真94**;三方 completed+grader
+      全過、cost 近同($0.028-0.029)。COMPARISON.md §6 補 C 欄。
+- [x] **C 集大成經實跑實證**:保真≈A(94≈93)、語意乾淨勝 B(10 可讀 vs 17 粗)、
+      **只有 C 兩者兼得**(A 無蒸餾/B 無保真=0);+ 中途控制窗口(B 缺,C.4 證)
+      + OpenHands 可視化(A 缺)。
+- [x] detail page(Claude in Chrome,SCRUM-11 rawcli):conversation 視角展示
+      💭 思考 + 🔧 工具 + 📋 觀察交錯 —— **比 B 的工具卡片豐富一檔次**。
+- [x] abc-roadmap 更新:C 由分析/spike 升級「實跑實證」。
+- [x] commit+push
 
 **Phase C.6 — 文件回寫**
 - [ ] COMPARISON / abc-roadmap / HANDOFF:C 由「分析/spike」升級「實跑」
@@ -113,5 +119,6 @@
 
 M5(C.1-C.3)✅ = RawCLIAgent 接進 harness,filechain 走 rawcli backend 端到端
 (SCRUM-11 SUCCESS,dispatcher 零改動)。
-M6(C.4-C.5)= C 的 crash-resume + 三方對照,細粒度回到 A 級。
-最終判定:C 同時達成「A 級細粒度 + B+ 可視化」—— **C.0 gate PASS 已確認可行**。
+M6(C.4-C.5)✅ = C 的 crash-resume + 三方對照,細粒度回到 A 級。
+最終判定:**C 同時達成「A 級細粒度 + B+ 可視化」—— 三方對照實跑實證(COMPARISON §6):
+保真≈A、語意乾淨勝 B、控制窗口 B 缺、可視化 A 缺。C 集大成成立。**
