@@ -223,8 +223,18 @@ Agent Status/Link 欄位、detail page、Resolve transition、D10 併發閘門�
   **C 蒸餾10/保真94** —— C 兩者兼得,保真≈A、語意乾淨勝 B、控制窗口 B 缺、
   可視化 A 缺。detail page(SCRUM-11)展示 C 的 💭/🔧/📋 細粒度 conversation。
 
-**A/B/C 三線全部實跑落地**。剩 backlog(未排程):codex 對照點(quota 8/31)、
-detail page 拼 Jira 深連結、長駐共享 server、B+ resume 對照、`--bare` 公司 API 情境。
+**A/B/C 三線全部實跑落地**。
+
+**執行隔離(無 docker,2026-08-03)**:RawCLIAgent `os_sandbox`——claude 用
+macOS seatbelt(`sandbox-exec`)限制檔案寫入只到 workspace;codex 用內建
+`--sandbox`。**端到端真票驗證(SCRUM-13)**:outcome=SUCCESS(正常任務不誤傷)+
+`/tmp` 越界寫入被擋(隔離在完整鏈路生效)。`filechain-rawcli` profile 預設
+`os_sandbox: true`。踩過 symlink 逃逸坑(白名單勿放 /private/tmp,lesson #15)。
+ACP 隔著 adapter 隔離粒度較粗 —— 直接掌 CLI flag(A/C)比 ACP(B)易精確隔離。
+
+剩 backlog(未排程):codex 對照點(quota 8/31)、Docker workspace 隔離
+(要更強隔離時切 openhands-server backend)、多票並發 demo、detail page 拼
+Jira 深連結、長駐共享 server、B+ resume 對照、`--bare` 公司 API 情境。
 
 ## 7. 建議路線(report 定案)
 
