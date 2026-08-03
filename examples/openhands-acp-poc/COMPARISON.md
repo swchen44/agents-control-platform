@@ -111,3 +111,23 @@ agent-server 形態另附併發/隔離);A-raw 留給需秒級觀測/精準控制
 **結論**:route C 把 A 的細粒度/控制/recovery 搬進 OpenHands 骨架,同時保有
 B+ 的可視化/持久化,無 ACP 的保真損失與粗粒度。abc-roadmap §3 的「C 集大成」
 從分析升級為實跑實證。
+
+## 7. OpenHands agent-server 的併發價值(2026-08-03 實測)
+
+回應「OpenHands 好處在小任務上感受不到」——併發是它相對 in-process/rawcli
+真正買到的東西。`demo_concurrent.py`:**1 個 agent-server 進程(PID 7944)
+同時管 4 個 conversation**,各自 workspace/事件流,grader 4/4 互不污染;
+**總併發 wall-clock 37s ≈ 最慢單張,非 4× 串行**。
+
+| | in-process / rawcli | agent-server |
+|---|---|---|
+| N 張票 | N 個獨立 CLI 子進程,各自為政 | 1 進程管 N conversation |
+| wall-clock | 串行 ~N×(或自造併發) | 併發 ≈ 單張 |
+| 生命週期 | 無 | 統一 + 閒置 evict→rehydrate |
+| 隔離 | 各子進程 | 各 conversation 獨立 workspace |
+
+**判讀**:任務越多、越要規模化(v5 D10 max_running 8),OpenHands 地基價值
+越浮現;單張 trivial 任務用 rawcli 裸跑更省。這正是「架構讓你不用賭」——
+profile 一行在 rawcli(輕、隔離、細粒度)與 openhands-server(併發、持久化、
+可視化)間切換。**接進 harness dispatcher 的長駐共享 server(現每 attempt
+自起)是 backlog。**

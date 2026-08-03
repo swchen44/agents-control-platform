@@ -232,9 +232,15 @@ macOS seatbelt(`sandbox-exec`)限制檔案寫入只到 workspace;codex 用內建
 `os_sandbox: true`。踩過 symlink 逃逸坑(白名單勿放 /private/tmp,lesson #15)。
 ACP 隔著 adapter 隔離粒度較粗 —— 直接掌 CLI flag(A/C)比 ACP(B)易精確隔離。
 
-剩 backlog(未排程):codex 對照點(quota 8/31)、Docker workspace 隔離
-(要更強隔離時切 openhands-server backend)、多票並發 demo、detail page 拼
-Jira 深連結、長駐共享 server、B+ resume 對照、`--bare` 公司 API 情境。
+**多票併發 demo(2026-08-03)**:`demo_concurrent.py`——1 個 agent-server
+進程管 4 個 conversation 併發,wall-clock 37s ≈ 最慢單張(非 4× 串行),
+grader 4/4 互不污染。這是 OpenHands agent-server 相對 in-process/rawcli 的
+核心價值(統一生命週期 + 閒置 evict→rehydrate),詳 COMPARISON §7。
+
+剩 backlog(未排程):codex 對照點(quota 8/31)、Docker workspace 隔離、
+harness dispatcher 接長駐共享 server(現每 attempt 自起)+ 並行 dispatch
+(v5 D10 max_running)、detail page 拼 Jira 深連結、B+ resume 對照、
+`--bare` 公司 API 情境。
 
 ## 7. 建議路線(report 定案)
 
