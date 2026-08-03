@@ -53,12 +53,16 @@
       不必在兩者間二選一。in-process 仍是保底(spike 已證)。
 - [x] commit+push
 
-**Phase C.1 — RawCLIAgent 最小實作(in-process 保底)**
-- [ ] `arcp_harness` 或新 pkg:`RawCLIAgent(AgentBase)`,`step()` spawn `claude -p`
-      stream-json,發基本事件(MessageEvent/ActionEvent/ObservationEvent),
-      終止設 execution_status=finished
-- [ ] `spike_rawcli_agent.py` 升級為正式最小雛形,Conversation 跑通 filechain
-- [ ] commit+push
+**Phase C.1 — RawCLIAgent 最小實作(in-process 保底)** ✅ 2026-08-03
+- [x] `arcp_rawcli/agent.py`:`RawCLIAgent(AgentBase)`,`step()` spawn
+      `claude -p` stream-json 逐行解析、發 MessageEvent、終止 finished;
+      command 移植 A 路 `ClaudeDriver.build_command`(--session-id 預指定備 C.4)
+- [x] E2E(`e2e_c1.py`)in-process 跑 filechain:Conversation FINISHED、
+      真 claude 建三檔正確(step1=1/step2=12/step3=123)、**A 路 grader PASS**、
+      agent 暴露 session_id+cost($0.0315)、5 則 assistant 事件
+      (⚠️ 首跑 grader FAIL 是 e2e 的 EXPECTED 打錯 range(1,4)→(1,n+1),
+      碼無誤 —— 既有檔案重驗 grade=True)
+- [x] commit+push
 
 **Phase C.2 — 細粒度事件映射(搬 A 路 drivers 解析)**
 - [ ] 把 `drivers.ClaudeDriver.normalize` 的 stream-json→事件映射接進 step():
