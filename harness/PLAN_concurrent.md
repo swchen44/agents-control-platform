@@ -27,14 +27,15 @@
 
 ## Checklist
 
-**Phase conc.1 — 並行 dispatch + Store 執行緒安全**
-- [ ] `store.py`:加 `threading.Lock`,包 upsert/journal/upsert_session(K2)
-- [ ] `poller.py`:一輪收集 dispatch 任務 → ThreadPoolExecutor 並行(K1/K3);
-      watch 狀態仍序列落庫(dispatch 前),dispatch 並行
-- [ ] routes.yaml `concurrency: {max_running: 4}`
-- [ ] E2E:同時開 3 張 filechain-rawcli 票 → 並行完成、store 無損、grader 全過、
-      wall-clock < 串行
-- [ ] commit+push
+**Phase conc.1 — 並行 dispatch + Store 執行緒安全** ✅ 2026-08-03 **M7**
+- [x] `store.py`:`threading.Lock` 包 get/upsert/journal/get_session/
+      upsert_session;`check_same_thread=False`(K2)
+- [x] `poller.py`:兩階段(watch 序列 + dispatch 並行 ThreadPoolExecutor);
+      一票拋異常不殺其它(as_completed try/except→dispatch_error)
+- [x] routes.yaml `concurrency: {max_running: 4}`;load_config 透出 max_running
+- [x] E2E(`e2e_parallel.py`)3 張 filechain-rawcli 並行:3/3 SUCCESS、store 無損
+      (costs 各自正確)、**wall-clock 27.5s vs 串行 ~75s**、selftest 17/17
+- [x] commit+push
 
 **Phase conc.2 — 長駐共享 server(openhands-server backend)**
 - [ ] `server_manager.py`:懶啟動 agent-server(1 個)、健康檢查、base_url/key、收攤
@@ -43,7 +44,32 @@
 - [ ] E2E:同時開 3 張 filechain-server 票 → 共用 1 個 server PID、並行完成
 - [ ] commit+push
 
+## 健壯性:non-normal cases 分析(2026-08-03,使用者提)
+
+核心原則(承 v5 + Hermes 三態):**store 是 source of truth,不是 server 記憶體**。
+任何票只要 outcome 非終態(SUCCESS/ABORTED),下次 poll 就重新評估→resume/retry。
+**「不漏掉」= 持久化 + 非終態必重評 + 基礎設施故障不消耗 attempt。**
+
+| # | 異常 | 現況 | 防護設計(conc.2) |
+|---|---|---|---|
+| N1 | **長駐 server 中途掛掉**(crash/OOM/kill) | 每 attempt 自起,無此問題但無共享 | ServerManager 健康檢查→**重起(同 `OH_PERSISTENCE_DIR`)→ OpenHands rehydrate conversation**;掛時未完成的票 envelope completed=False |
+| N2 | **掛掉的票怎麼續、不漏** | store 記 session_id+outcome | outcome 非 SUCCESS→下次 poll 重新 dispatch→`acp_resume_session_id`/`--resume` 續原 conversation(session_id 持久) |
+| N3 | **區分基礎設施 vs 任務故障**(關鍵) | 現在都算 error→消耗 attempt | envelope 加 `error_kind`:**infra(server 連不上/掛)→`pending:external`**(不消耗 attempt,server 回來下次 poll 續);task(agent 做不對)→FAILURE(消耗 attempt);無證據(kill)→UNKNOWN |
+| N4 | **server 啟動慢/失敗** | 自起 90s timeout | ServerManager 懶啟動+就緒探測;連不上=infra=pending:external |
+| N5 | **poll 週期重疊**(dispatch 慢於 interval) | run_poller **串行 poll**(一輪返回才 sleep)→不重疊 ✅ | 標注:未來 webhook/多 poller 需 in-flight 鎖(issue_id 正在跑就跳過) |
+| N6 | **harness 自己崩**(並行 dispatch 中) | store 持久 | 重起後非終態票重評續;in-flight 只在記憶體(崩了自然丟=重評,正確) |
+| N7 | **一張票 dispatch 拋異常** | ✅ as_completed try/except→dispatch_error,不殺其它 | 已處理 |
+| N8 | **Jira rate limit**(並行多 add_comment) | 未防 | 並行度限流(max_running)+ comment 退避重試;write_policy coarse(v5) |
+| N9 | **斷網**(poll 中) | ✅ run_poller retry next cycle | 已處理 |
+| N10 | **store 執行緒競爭** | ✅ conc.1 加鎖 | 已處理 |
+| N11 | **並行票 workspace 衝突** | ✅ 各自 tickets/{issue_id}/ws | 已隔離 |
+| N12 | **resume 找不到原 conversation**(session store 被清) | rawcli 有三段梯度(transcript);openhands load_session 失敗 fallback new_session | 既有機制;transcript 降級可補 openhands 側 |
+
+**conc.2 據此的必做**:① ServerManager(健康檢查+重起+同 persistence)② envelope
+`error_kind` 區分 infra/task/unknown → infra 走 pending:external(不消耗 attempt)。
+
 ## 里程碑
 
 M7 = 多張 Jira 票並行 dispatch(3 backend 通用)。
-M8 = openhands-server 票共用長駐 server(harness 版的 demo_concurrent)。
+M8 = openhands-server 票共用長駐 server + N1-N4 健壯(掛了能重起續、不漏、
+基礎設施故障不消耗 attempt)。

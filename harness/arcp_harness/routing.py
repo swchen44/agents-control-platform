@@ -80,7 +80,11 @@ def load_config(path: str) -> tuple[dict, list[Route]]:
         routes.append(Route(name=name, when=when,
                             profile=r.get("profile"), on_match=on_match,
                             comments_lookback=int(r.get("comments_lookback", 5))))
-    return outer.get("source") or {}, routes
+    src = outer.get("source") or {}
+    # expose max_running alongside source so callers need no new signature
+    src["max_running"] = int((outer.get("concurrency") or {}).get(
+        "max_running", 1))
+    return src, routes
 
 
 def match(ticket: Ticket, routes: list[Route]) -> Route | None:

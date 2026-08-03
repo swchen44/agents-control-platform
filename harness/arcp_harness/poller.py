@@ -11,6 +11,8 @@ so a re-poll — or a crash-restart mid-poll — never replays old events.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from .jira_source import JiraCloudSource
 from .routing import Route, match
 from .store import Store, TicketWatch
@@ -19,7 +21,7 @@ from .store import Store, TicketWatch
 class OuterLoop:
     def __init__(self, source: JiraCloudSource, store: Store,
                  routes: list[Route], jql: str, dispatcher=None,
-                 commands=None, external=None):
+                 commands=None, external=None, max_running: int = 1):
         self.source = source
         self.store = store
         self.routes = routes
@@ -27,10 +29,17 @@ class OuterLoop:
         self.dispatcher = dispatcher   # None = pure grey mode (Phase 1)
         self.commands = commands       # CommandHandler (Phase 3)
         self.external = external       # ExternalChangePolicy (Phase 3)
+        self.max_running = max(1, max_running)  # v5 D10 (conc.1)
 
     def poll_once(self) -> list[dict]:
-        """One reconciliation pass. Returns the events it journaled."""
+        """One reconciliation pass. Returns the events it journaled.
+
+        Two phases: watch state updates SERIAL (watermark ordering + store),
+        then dispatch runs in PARALLEL (ThreadPoolExecutor, max_running).
+        Store is thread-safe (conc.1 lock); dispatch is the slow part.
+        """
         events: list[dict] = []
+        to_dispatch: list = []  # (ticket, profile_name) collected serially
         for t in self.source.search(self.jql):
             prev = self.store.get(t.id)
             t.comments = self.source.get_comments(t.id)
@@ -78,9 +87,26 @@ class OuterLoop:
                 last_assignee_id=t.assignee_id or "",
                 route_name=route.name if route else None))
 
-            # dispatch AFTER the watch state is persisted: a crash mid-dispatch
-            # must not replay watch events on restart (idempotency first)
+            # collect dispatch AFTER watch state is persisted (idempotency
+            # first: a crash mid-dispatch must not replay watch events)
             if (route is not None and route.on_match == "create_or_resume"
                     and route.profile and self.dispatcher is not None):
-                events.extend(self.dispatcher.handle(t, route.profile))
+                to_dispatch.append((t, route.profile))
+
+        # -- parallel dispatch (conc.1, v5 D10 max_running) ---------------- #
+        if not to_dispatch:
+            return events
+        if self.max_running == 1 or len(to_dispatch) == 1:
+            for t, prof in to_dispatch:
+                events.extend(self.dispatcher.handle(t, prof))
+            return events
+        with ThreadPoolExecutor(max_workers=self.max_running) as pool:
+            futures = [pool.submit(self.dispatcher.handle, t, prof)
+                       for t, prof in to_dispatch]
+            for fut in as_completed(futures):
+                try:
+                    events.extend(fut.result())
+                except Exception as e:  # one ticket failing must not kill poll
+                    events.append(self.store.journal(
+                        "dispatch_error", 0, "?", error=str(e)[:200]))
         return events

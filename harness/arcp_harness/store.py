@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass
 
@@ -46,7 +47,12 @@ class Store:
         os.makedirs(root, exist_ok=True)
         self.db_path = os.path.join(root, "harness.db")
         self.journal_path = os.path.join(root, "events.jsonl")
-        self._db = sqlite3.connect(self.db_path)
+        # parallel dispatch (conc.1): SQLite connections are NOT thread-safe.
+        # dispatch is slow (tens of s); store ops are ms — a single lock
+        # serializing all DB writes + journal appends costs nothing and keeps
+        # the connection usable across dispatch threads.
+        self._lock = threading.Lock()
+        self._db = sqlite3.connect(self.db_path, check_same_thread=False)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("""
             CREATE TABLE IF NOT EXISTS ticket_watch (
@@ -74,15 +80,16 @@ class Store:
         self._db.commit()
 
     def get(self, issue_id: int) -> TicketWatch | None:
-        row = self._db.execute(
-            "SELECT issue_id, key, last_comment_id, last_state,"
-            " last_assignee_id, route_name FROM ticket_watch WHERE issue_id=?",
-            (issue_id,)).fetchone()
+        with self._lock:
+            row = self._db.execute(
+                "SELECT issue_id, key, last_comment_id, last_state,"
+                " last_assignee_id, route_name FROM ticket_watch"
+                " WHERE issue_id=?", (issue_id,)).fetchone()
         return TicketWatch(*row) if row else None
 
     def upsert(self, w: TicketWatch) -> None:
         # BEGIN IMMEDIATE: "查不到就建立" must be atomic (v5 D9)
-        with self._db:
+        with self._lock, self._db:
             self._db.execute("BEGIN IMMEDIATE")
             self._db.execute("""
                 INSERT INTO ticket_watch
@@ -102,19 +109,21 @@ class Store:
                 **fields) -> dict:
         event = {"ts": time.time(), "type": event_type,
                  "issue_id": issue_id, "key": key, **fields}
-        with open(self.journal_path, "a") as f:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        with self._lock:
+            with open(self.journal_path, "a") as f:
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
         return event
 
     def get_session(self, issue_id: int) -> TicketSession | None:
-        row = self._db.execute(
-            "SELECT issue_id, key, profile, workspace, session_id, attempts,"
-            " outcome, pending_reason, cost_usd FROM ticket_session"
-            " WHERE issue_id=?", (issue_id,)).fetchone()
+        with self._lock:
+            row = self._db.execute(
+                "SELECT issue_id, key, profile, workspace, session_id,"
+                " attempts, outcome, pending_reason, cost_usd FROM"
+                " ticket_session WHERE issue_id=?", (issue_id,)).fetchone()
         return TicketSession(*row) if row else None
 
     def upsert_session(self, s: TicketSession) -> None:
-        with self._db:
+        with self._lock, self._db:
             self._db.execute("BEGIN IMMEDIATE")
             self._db.execute("""
                 INSERT INTO ticket_session

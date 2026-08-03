@@ -8,6 +8,10 @@ outer_loop:
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
 
+  # 併發(conc.1,v5 D10):一輪最多幾張票並行 dispatch
+  concurrency:
+    max_running: 4
+
   # Phase 3:指令通道與外部變更政策
   commands:
     allowed_commenters: ['Shao-wei Chen']   # displayName 或 accountId(§6-13)
