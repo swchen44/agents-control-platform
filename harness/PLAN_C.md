@@ -41,11 +41,17 @@
 
 ## Checklist
 
-**Phase C.0 — gate spike:server 端自製 agent(UC1)**
-- [ ] 試 `POST /api/conversations` 塞 RawCLIAgent.model_dump() → 觀察反序列化
-- [ ] 若失敗:試 module 註冊機制 / PYTHONPATH / agent 子類註冊點(讀碼)
-- [ ] 產出結論:C 走 server 還是 in-process(定架構)
-- [ ] commit+push
+**Phase C.0 — gate spike:server 端自製 agent(UC1)** ✅ 2026-08-03 **PASS**
+- [x] `spike_c0.py`:server 啟動時 import 自製 agent 模組(`c0_server_launcher.py`)
+      → `POST /api/conversations` 塞 StubRawAgent.model_dump() → **201 反序列化成功、
+      跑到 finished、發出 C0_STUB_OK**(G0/G1/G2 全 PASS,免 token)
+- [x] **機制釘死**:`resolve_kind(kind)` 只認已 loaded 子類(`__subclasses__()`);
+      server 是我們 spawn 的子進程 → 啟動時 import agent 模組觸發
+      `DiscriminatedUnionMixin.__init_subclass__` 註冊 → `resolve_kind("...")` 找得到。
+      PYTHONPATH 注入模組路徑 + launcher 先 import 再 `runpy` 起 server。
+- [x] **架構定案:C 上 agent-server = 集大成**(A 級細粒度 + B+ 可視化/持久化),
+      不必在兩者間二選一。in-process 仍是保底(spike 已證)。
+- [x] commit+push
 
 **Phase C.1 — RawCLIAgent 最小實作(in-process 保底)**
 - [ ] `arcp_harness` 或新 pkg:`RawCLIAgent(AgentBase)`,`step()` spawn `claude -p`
@@ -86,4 +92,4 @@
 
 M5(C.1-C.3)= RawCLIAgent 接進 harness,filechain 走 rawcli backend 端到端。
 M6(C.4-C.5)= C 的 crash-resume + 三方對照,細粒度回到 A 級。
-最終判定:C 是否同時達成「A 級細粒度 + B+ 可視化」(取決於 C.0 gate)。
+最終判定:C 同時達成「A 級細粒度 + B+ 可視化」—— **C.0 gate PASS 已確認可行**。
