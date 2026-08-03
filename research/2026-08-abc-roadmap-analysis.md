@@ -81,6 +81,25 @@ adapter 內嵌 Claude Code(headless)。同樣無人互動,但呼叫形態與 C �
 量化)、bypassPermissions 治理押 workspace 隔離(v5 D6 專案隔離因此必要)、
 codex quota 至 8/31。
 
+## 3.5 B+ 修訂:視覺化/traceability 收割(使用者方向 2026-08-03)
+
+使用者欲在 B 期收割 OpenHands 的視覺化管理與 traceability。判定:**可行且
+投資可帶進 C**——C=RawCLIAgent 活在 SDK 內,Conversation/event 體系與
+agent-server 不動,GUI/trace 在 C 期照用且事件更細(14→248 級)。
+
+- **前置**:inner runner 從 in-process 換 **agent-server 模式**(POST
+  /api/conversations + WS,v3 §6.3;envelope 契約不變)——同時完成 backlog
+  的 agent-server 行為驗證 spike。
+- **收割形態**:(a) Agent Canvas GUI 零開發,conversation 視角;
+  (b) agent-server REST/WS + 自建 detail page(v5 §4.7),可拼上我們的
+  L0/L2 → 完整 traceability 視角。
+- **邊界**:OpenHands 只管 conversation 級(L1/L3);L0(ticket)/L2
+  (envelope/驗證/成本)仍是 harness journal——互補不是替代。
+- **C 期待驗點**:agent-server 由 server 端實例化自訂 RawCLIAgent
+  (註冊/反序列化)——C spike 2,半天。
+
+修訂後路線:**B(已完成 M1-M3)→ B+(agent-server 模式 + 視覺化收割)→ C**。
+
 ## 4. 與 v5 P0-P4 的關係
 
 時序相容:P0/P1 的 inner/outer loop 在 B 期建、天然為 C 服務(outer loop
