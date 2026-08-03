@@ -76,6 +76,13 @@
     對策:spike 的請求參數/邊界值照抄未來正式碼會用的值;邊界值(上限、
     分頁)在 spike 就要壓測。
 
+14. **model 切換是 profile 一行,但成本差幾十倍——測試 profile 別留貴模型**
+    實測:同 filechain 任務,rawcli backend model=opus(SCRUM-12)$0.279 vs
+    haiku(SCRUM-11)$0.035,~8x。model 欄位透傳 `claude -p --model` 別名
+    (opus/sonnet/haiku),切換 harness/RawCLIAgent 零改動。
+    對策:測試 profile 預設便宜模型(haiku),真實任務才設 opus;貴模型留在
+    測試 profile = 下次誰跑就 8x 成本陷阱。
+
 ## Session 作業教訓(跨專案通用)
 
 6. **背景工作的 cwd 會漂移**:background shell 從「當下」的工作目錄啟動,

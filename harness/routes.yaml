@@ -110,7 +110,9 @@ inner_loop:
       agent:
         backend: rawcli             # ← 唯一差別
         engine: claude              # claude | codex
-        model: haiku
+        model: haiku                # 測試省成本;model opus 已驗證可用(SCRUM-12
+                                    # SUCCESS $0.279 vs haiku $0.035,~8x)——
+                                    # 真實任務改這一行即可,rawcli/harness 零改動
         venv: ../examples/openhands-acp-poc/.venv
         timeout_sec: 300
       verify:                       # 確定性檢查,全過才 SUCCESS
