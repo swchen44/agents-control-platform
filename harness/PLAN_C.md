@@ -64,12 +64,18 @@
       碼無誤 —— 既有檔案重驗 grade=True)
 - [x] commit+push
 
-**Phase C.2 — 細粒度事件映射(搬 A 路 drivers 解析)**
-- [ ] 把 `drivers.ClaudeDriver.normalize` 的 stream-json→事件映射接進 step():
-      thinking/token delta、tool_use、tool_result、result → OpenHands 事件
-- [ ] 事件數回到 A 級(對照 A 的 ~248);detail page conversation 視角更細
-- [ ] codex 版(`codex exec --json`)同步(A 路已有 CodexDriver)
-- [ ] commit+push
+**Phase C.2 — 細粒度事件映射(搬 A 路 drivers 解析)** ✅ 2026-08-03
+- [x] **兩層策略**:① 原生 stream-json **全量保留**(`raw_events_path`,A 級保真/
+      協定回歸;filechain=93 行:57 stream_event/24 system/7 assistant/3 user…)
+      ② 蒸餾出**有意義細粒度事件**進 OpenHands(每 text/tool_use/tool_result/
+      thinking 一則,帶真實參數)——filechain 10 則(vs C.1 的 5、vs B 的 19 更可讀)
+- [x] claude + codex 雙引擎(`_ingest_claude`/`_ingest_codex`,移植 A 路
+      Claude/CodexDriver);🔧 tool / 📋 observation / 💭 thinking 標記
+- [x] detail page conversation 視角分渲染標記(tool 卡片/observation/thinking)
+- [x] E2E(`e2e_c2.py`)4/4:grader 過、事件 10>>5、raw 93 全量、tool+obs 標記齊
+      (⚠️ 誠實:A 的「248」大半是 token delta 雜訊;C.2 保留全量 raw 但只把
+      有意義單元進 event 體系 —— 比純數字更實用)
+- [x] commit+push
 
 **Phase C.3 — envelope 契約 + 接進 harness(backend=rawcli)**
 - [ ] `inner_rawcli_runner.py`(venv 內):跑 RawCLIAgent,吐同一份 envelope

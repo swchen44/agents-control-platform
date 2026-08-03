@@ -106,7 +106,17 @@ def render_conversation(items: list[dict]) -> str:
         if k == "MessageEvent":
             src = e.get("source", "agent")
             txt = _text_of((e.get("llm_message") or {}).get("content"))
-            if txt.strip():
+            if not txt.strip():
+                continue
+            # RawCLIAgent (route C) encodes fine-grained units via markers
+            if txt.startswith("🔧"):
+                out += f"<div class='tool'><span class='ti'>{esc(txt)}</span></div>"
+            elif txt.startswith("📋"):
+                out += (f"<div class='tool' style='border-color:#3fb950'>"
+                        f"<span class='io'>{esc(txt)}</span></div>")
+            elif txt.startswith("💭"):
+                out += f"<div class='think'>{esc(txt)}</div>"
+            else:
                 out += (f"<div class='msg {esc(src)}'><div class='bubble'>"
                         f"{esc(txt)}</div></div>")
         elif k == "SystemPromptEvent":
