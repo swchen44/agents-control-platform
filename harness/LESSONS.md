@@ -52,6 +52,14 @@
     內容敏感的驗證要嘛讓任務描述含內容、要嘛給多一輪(content-mismatch
     feedback 會揭示 expected)。
 
+11. **狀態轉移要用 statusCategory,不是狀態名稱**
+    症狀:改狀態名(A fazer→To Do)後,任何寫死名稱的 transition 都會壞。
+    根因:狀態名是 locale/使用者可改的顯示資料;transition 目標的
+    `statusCategory.key`(new/indeterminate/done)才是穩定語意。
+    對策:`transition(key, 'done')` 依 category 找 transition id,
+    語言/改名都免疫。呼應 lesson #3/#4:顯示資料一律不可當識別。
+    (同理:create_ticket 已改用 issue type **id** 10003 而非名稱。)
+
 ## Session 作業教訓(跨專案通用)
 
 6. **背景工作的 cwd 會漂移**:background shell 從「當下」的工作目錄啟動,

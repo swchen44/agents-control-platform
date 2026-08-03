@@ -35,7 +35,7 @@ def main() -> int:
 
     t = src.create_ticket("SCRUM", f"[e2e-gray] agent smoke {int(time.time())}",
                           description="Phase 1 灰度驗證測試票(可關閉)",
-                          labels=["agent"], issue_type="任務")
+                          labels=["agent"])
     print(f"test ticket: #{t.id} {t.key}")
 
     ev1 = loop.poll_once()

@@ -51,7 +51,7 @@ def main() -> int:
 
     t = src.create_ticket("SCRUM", f"[e2e-cmd] 指令通道 {int(time.time())}",
                           description="測試指令通道(會 timeout 進 pending)",
-                          labels=["cmddemo"], issue_type="任務")
+                          labels=["cmddemo"])
     print(f"ticket: #{t.id} {t.key}", flush=True)
     journal = "./runtime_cmd/events.jsonl"
 

@@ -153,20 +153,37 @@ class JiraCloudSource:
                       body={"body": text_to_adf(text)})
 
     def create_ticket(self, project_key: str, summary: str,
-                      description: str = "", issue_type: str = "Task",
+                      description: str = "", issue_type_id: str = "10003",
                       labels: list[str] | None = None) -> Ticket:
-        """Dev/test helper — production tickets are created by humans (v5 D6b)."""
+        """Dev/test helper — production tickets are created by humans (v5 D6b).
+
+        issue_type_id (not name): names are locale data (「任務」/Task/Tarefa);
+        the id (10003 = the standard Task type) is stable (lesson #4/§6-19).
+        """
         fields: dict[str, Any] = {
             "project": {"key": project_key},
             "summary": summary,
             "description": text_to_adf(description),
-            "issuetype": {"name": issue_type},
+            "issuetype": {"id": issue_type_id},
         }
         if labels:
             fields["labels"] = labels
         issue = self._request("POST", "/rest/api/3/issue",
                               body={"fields": fields})
         return self.get_ticket(issue["id"], with_comments=False)
+
+    def transition(self, id_or_key: str | int, to_category: str) -> bool:
+        """Move an issue to the first transition whose target statusCategory
+        matches (new|indeterminate|done) — category is locale-immune."""
+        data = self._request("GET",
+                             f"/rest/api/3/issue/{id_or_key}/transitions")
+        for tr in data.get("transitions", []):
+            if tr["to"]["statusCategory"]["key"] == to_category:
+                self._request("POST",
+                             f"/rest/api/3/issue/{id_or_key}/transitions",
+                             body={"transition": {"id": tr["id"]}})
+                return True
+        return False
 
     # -- mapping ------------------------------------------------------------ #
     def _to_ticket(self, issue: dict) -> Ticket:

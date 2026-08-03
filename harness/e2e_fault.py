@@ -46,11 +46,9 @@ def main() -> int:
 
     ts = int(time.time())
     t1 = src.create_ticket("SCRUM", f"[e2e-f1] retry 迴路 {ts}",
-                           description=F1_DESC, labels=["faultretry"],
-                           issue_type="任務")
+                           description=F1_DESC, labels=["faultretry"])
     t2 = src.create_ticket("SCRUM", f"[e2e-f2] unknown 路徑 {ts}",
-                           description=F2_DESC, labels=["faultdead"],
-                           issue_type="任務")
+                           description=F2_DESC, labels=["faultdead"])
     print(f"tickets: {t1.key}(retry) {t2.key}(unknown)", flush=True)
 
     loop.poll_once()
