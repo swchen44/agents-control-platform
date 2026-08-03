@@ -77,11 +77,16 @@
       有意義單元進 event 體系 —— 比純數字更實用)
 - [x] commit+push
 
-**Phase C.3 — envelope 契約 + 接進 harness(backend=rawcli)**
-- [ ] `inner_rawcli_runner.py`(venv 內):跑 RawCLIAgent,吐同一份 envelope
-- [ ] inner_runner.py RUNNERS 加 `rawcli`;profile agent `backend: rawcli`
-- [ ] E2E:filechain 走 rawcli backend → grader PASS、dispatcher 零改動實證
-- [ ] commit+push
+**Phase C.3 — envelope 契約 + 接進 harness(backend=rawcli)** ✅ 2026-08-03 **M5**
+- [x] `inner_rawcli_runner.py`:venv 內跑 RawCLIAgent + Conversation,callback
+      捕 OpenHands 事件供 detail page、raw stream-json 另存保真,吐**同一份
+      envelope**(completed/session_id/truly_resumed/cost/error)
+- [x] inner_runner.py RUNNERS 加 `rawcli`;profile `filechain-rawcli`
+      (backend: rawcli / engine: claude)+ route
+- [x] **E2E 真票端到端(SCRUM-11)outcome=SUCCESS、cost $0.0354、
+      dispatcher/grader/三態零改動** —— route C 只需 profile 一行(同 B+.1)
+- [x] harness_selftest 17/17(既有全綠,rawcli 不干擾)
+- [x] commit+push
 
 **Phase C.4 — crash→resume in RawCLIAgent**
 - [ ] `--session-id` 預指定 + `--resume`(A 路知識);envelope truly_resumed
@@ -100,6 +105,7 @@
 
 ## 里程碑
 
-M5(C.1-C.3)= RawCLIAgent 接進 harness,filechain 走 rawcli backend 端到端。
+M5(C.1-C.3)✅ = RawCLIAgent 接進 harness,filechain 走 rawcli backend 端到端
+(SCRUM-11 SUCCESS,dispatcher 零改動)。
 M6(C.4-C.5)= C 的 crash-resume + 三方對照,細粒度回到 A 級。
 最終判定:C 同時達成「A 級細粒度 + B+ 可視化」—— **C.0 gate PASS 已確認可行**。

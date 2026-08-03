@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNNERS = {
     "openhands-acp": os.path.join(HERE, "inner_acp_runner.py"),
     "openhands-server": os.path.join(HERE, "inner_agentserver_runner.py"),
+    "rawcli": os.path.join(HERE, "inner_rawcli_runner.py"),  # route C
 }
 
 
@@ -51,7 +52,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "ws": os.path.abspath(ws),
         "prompt": prompt,
         "acp_server": agent_cfg.get("acp_server", "claude-code"),
-        "acp_model": agent_cfg.get("acp_model"),
+        "acp_server_engine": agent_cfg.get("engine", "claude"),  # rawcli
+        "acp_model": agent_cfg.get("acp_model") or agent_cfg.get("model"),
         "resume_session_id": resume_session_id,
         "timeout_sec": agent_cfg.get("timeout_sec", 300),
         "events_path": os.path.join(artifacts_dir, f"a{attempt}.events.jsonl"),
