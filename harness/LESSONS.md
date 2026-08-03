@@ -35,6 +35,23 @@
    對策:`_request` 捕 HTTPError 時把 `e.read()` 前 400 字接到 msg 再 raise。
    這一條救了第 3、4 條的除錯——**錯誤體浮出是 adapter 的必備品,不是加分項**。
 
+9. **store 是 harness 唯一的記憶——wipe store + 票還開著 = 重派重跑**
+   症狀:fault 測試用全域 JQL + 全新 store,M2 的舊票(SCRUM-2)被重新執行、
+   多花一次錢、多一則重複 comment。
+   根因:冪等靠 store;store 沒了,open 票在 poller 眼中就是新工作。
+   對策:測試腳本一律 scope 自己的 JQL(label 過濾);**正式營運絕不 wipe
+   store**(v5 D9 的備份要求由此更硬);長期解 = Agent Status 欄位落在 Jira
+   側作第二記憶(v5 C2)。
+
+10. **feedback 的資訊量決定 retry 成敗(evidence_only 的邊界)**
+    症狀:attempt 2 聽話建了 extra.txt 但內容空,驗證仍敗——
+    missing-file 的失敗證據不含 expected content,agent 無從得知。
+    根因:FileChecklistGrader 對「缺檔」只報 missing,對「內容錯」才報
+    expected/got。
+    對策:驗證設計要與 feedback 資訊量匹配:existence-only 用 missing 即可;
+    內容敏感的驗證要嘛讓任務描述含內容、要嘛給多一輪(content-mismatch
+    feedback 會揭示 expected)。
+
 ## Session 作業教訓(跨專案通用)
 
 6. **背景工作的 cwd 會漂移**:background shell 從「當下」的工作目錄啟動,

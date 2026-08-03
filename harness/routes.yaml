@@ -34,6 +34,18 @@ outer_loop:
       profile: filechain
       on_match: create_or_resume
 
+    - name: fault-retry             # fault-injection:驗證 retry+evidence 迴路
+      when:
+        labels: ['faultretry']
+      profile: faultretry
+      on_match: create_or_resume
+
+    - name: fault-dead              # fault-injection:驗證 UNKNOWN 路徑
+      when:
+        labels: ['faultdead']
+      profile: faultdead
+      on_match: create_or_resume
+
 # Inner loop(v5 §4.2):profile 決定 workspace/skills/agent/verify/loop。
 # agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
 inner_loop:
@@ -58,3 +70,46 @@ inner_loop:
       loop:
         max_attempts: 2
         on_unknown: pending         # 不可改 retry(v5 D3)
+
+    # fault-injection 專用:verify 要求 ticket 沒提的 extra.txt →
+    # attempt 1 必敗 → 失敗證據餵回 attempt 2(native resume)→ 補齊
+    faultretry:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: openhands-acp
+        acp_server: claude-code
+        acp_model: haiku
+        venv: ../examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+      verify:
+        - name: chain-plus-extra
+          files:
+            step1.txt: '1'
+            extra.txt: null        # existence-only:missing-file feedback 不含
+                                   # expected content,agent 無從得知(lesson #10)
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # fault-injection 專用:timeout 短於 ACP 啟動 → runner 死 → UNKNOWN
+    faultdead:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: openhands-acp
+        acp_server: claude-code
+        acp_model: haiku
+        venv: ../examples/openhands-acp-poc/.venv
+        timeout_sec: 10
+      verify:
+        - name: never
+          files:
+            never.txt: 'x'
+      loop:
+        max_attempts: 2
+        on_unknown: pending

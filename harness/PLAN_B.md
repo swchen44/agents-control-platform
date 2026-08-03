@@ -65,9 +65,11 @@
 - [x] E2E 4/4 PASS(SCRUM-2):真票 → 接管 → ACPAgent(haiku,$0.045)→
       驗證 → 回寫 → 冪等
 - [x] commit+push
-- [ ] **殘項(Phase 3 前補)**:retry/resume 路徑與 UNKNOWN 路徑已實作但未
-      live 驗證——需 fault-injection E2E(故意給過不了驗證的任務 → 觀察
-      evidence feedback 重試;kill inner runner → 觀察 pending:unknown)
+- [x] **殘項已補**:fault-injection E2E 6/6 PASS(SCRUM-5/6)——
+      F1 敗一次 → evidence feedback → attempt2 **truly_resumed=True**(pipeline
+      內 native resume 實證)→ 補齊 SUCCESS;F2 timeout 殺 runner → UNKNOWN →
+      pending:unknown 只有人解、不自動重試;F3 跨 poll 冪等。
+      過程收穫 lesson #9(store 是唯一記憶)、#10(feedback 資訊量邊界)。
 
 **Phase 3 — 指令通道 + 外部變更防護**
 - [ ] `@agent` 指令(run/stop/retry/cancel)+ commenter 白名單 + ack 回覆 + 冪等
