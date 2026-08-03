@@ -68,8 +68,10 @@ def main() -> int:
     print(f"[poller] adopted {adopted} pre-existing ticket(s); "
           f"live for {minutes:.0f}m, interval {interval:.0f}s", flush=True)
 
-    deadline = time.time() + minutes * 60
-    while time.time() < deadline:
+    # 迭代計數時間盒:機器睡眠造成的 wall-clock 跳躍不會吃掉時間盒
+    # (lesson:睡眠凍結行程但時鐘照走)
+    cycles = max(1, int(minutes * 60 / interval))
+    for i in range(cycles):
         try:
             for e in loop.poll_once():
                 stamp = time.strftime("%H:%M:%S")
