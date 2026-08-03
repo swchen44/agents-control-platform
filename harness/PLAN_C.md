@@ -111,9 +111,16 @@
 - [x] abc-roadmap 更新:C 由分析/spike 升級「實跑實證」。
 - [x] commit+push
 
-**Phase C.6 — 文件回寫**
-- [ ] COMPARISON / abc-roadmap / HANDOFF:C 由「分析/spike」升級「實跑」
-- [ ] commit+push
+**Phase C.6 — 文件回寫** ✅ 2026-08-03
+- [x] COMPARISON §6(C.5 已補)/ abc-roadmap §3.5(C 升級實跑實證)/
+      HANDOFF 路線狀態表 C 列重定義 RawCLIAgent + §6.9 C 期完成總結
+- [x] commit+push
+
+## C 期收官(2026-08-03)
+
+RawCLIAgent(OpenHands 骨架 + raw CLI)實跑落地:C.0 gate→C.6 全綠。
+**A/B/C 三線全部有實測撐**,三 backend 共用 envelope 契約、harness 零改動切換。
+C 集大成經三方對照實證。困難知識全來自 A 期,無新架構風險兌現。
 
 ## 里程碑
 

@@ -105,6 +105,10 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
       搬家後原生 resume 必死——transcript 降級救回不重工(`workspace_recovery_test.py`)
 - [x] OpenHands ACP 對照(路線 B):SDK in-process headless 跑通、本機登入免 key、
       同任務同 grader 對照 A 248 vs B 14 事件(`examples/openhands-acp-poc/`)
+- [x] **Jira 驅動 harness(B):outer/inner loop、三態 outcome、指令通道、
+      agent-server + 視覺化(detail page)**(`harness/`,M1-M4;真 Jira 端到端)
+- [x] **RawCLIAgent(路線 C):OpenHands 骨架 + raw CLI,不 fork;三方對照 C 集大成
+      (保真≈A、語意乾淨勝 B、控制窗口/可視化兼得)**(`harness/arcp_rawcli/`,C.0-C.6)
 - [x] waiting-permission → Jira ticket 升級迴路:denial 事件驅動開票 + 結果回寫
       (含結構化 permission_denials 與 resume 指令,`arcp_poc/escalation.py`)
 

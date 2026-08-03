@@ -43,10 +43,14 @@ headless 啟動 agent → 監控狀態。專案暫名 **ARCP**(Agent Runtime / C
 | 路線 | research 有寫 | PoC 能跑 / 跑過 |
 |---|---|---|
 | **A. Raw**(自寫 supervisor 包 claude -p / codex exec) | ✅ | ✅ **真的跑過**:claude+codex live + replay + 7/7 self-test + claude/codex crash→resume 矩陣 |
-| **B. OpenHands ACP** | ✅ | ✅ **SDK in-process 已實跑**(2026-08-03,`examples/openhands-acp-poc/`):claude 全綠、codex 冒煙綠(對照點待 quota);agent-server 模式仍未跑 |
-| **C. 從零寫完整 runtime** | ✅ | ⚠️ PoC 本體就是 C 的 MVP(= A);recovery/REST/dashboard 未做 |
+| **B. OpenHands ACP** | ✅ | ✅ **已實跑**(2026-08-03):SDK in-process(claude 全綠)+ **agent-server 模式(B+)**+ Jira 全鏈路(M1-M3)+ 視覺化收割;codex 對照待 quota |
+| **C. RawCLIAgent**(OpenHands 骨架 + raw CLI,非 fork) | ✅ | ✅ **已實跑**(2026-08-03,`harness/arcp_rawcli/`):C.0 gate→C.5 三方對照全綠;**集大成**(保真≈A、語意乾淨勝 B、控制窗口/可視化兼得) |
 
-**關鍵澄清**:A 與 C 在 PoC 裡是同一份程式碼(C 只是 A 補上 recovery/REST/dashboard)。
+**關鍵澄清(2026-08-03 更新)**:C 已重定義為 **RawCLIAgent(C2)**——在 OpenHands SDK
+內以自製 AgentBase 子類直接 spawn `claude -p`/`codex exec`、解析 stream-json、發
+細粒度事件,**不 fork adapter、不走 ACP**。舊定義(從零寫完整 runtime)已棄。
+三個執行 backend(openhands-acp / openhands-server / rawcli)共用同一 envelope 契約,
+harness dispatcher/grader/三態零改動即可切換。
 能實跑對照的其實是兩條:自寫 supervisor(已跑)vs OpenHands ACP(未跑)。
 report §4 的三方優缺點表,**只有 A 欄是實測撐,B/C 是原始碼+文件分析推論**
 (§4.1 已加證據級別標註)。使用者選擇維持分析對照,**未接 OpenHands ACP 實跑**。
@@ -203,6 +207,24 @@ AgentBase 子類——**C 不用 fork**;真 `claude -p` 已在 OpenHands Convers
 **B 期 harness M1+M2+M3 全數達成(2026-08-03)。下一步(Phase 4,未排程)**:
 Agent Status/Link 欄位、detail page、Resolve transition、D10 併發閘門、
 常駐 poller。
+
+## 6.9 C 期完成(RawCLIAgent,2026-08-03)
+
+`harness/arcp_rawcli/` + `PLAN_C.md`。C=C2(RawCLIAgent,非 fork adapter):
+- **C.0 gate PASS**:server 端可實例化自製 agent(啟動時 import 觸發註冊)→
+  C 上 agent-server = 集大成(A 級細粒度 + B+ 可視化/持久化)。
+- **C.1-C.2**:RawCLIAgent spawn `claude -p` stream-json,兩層事件策略
+  (原生全保真 + 蒸餾有意義細粒度);claude+codex 雙引擎。
+- **C.3 M5**:接進 harness(backend=rawcli),真票 SCRUM-11 SUCCESS,
+  dispatcher/grader/三態零改動(三 backend 共用 envelope 契約)。
+- **C.4**:crash→resume(--resume,對照 A 矩陣,4/4);順帶修 completed 判定
+  (`_got_terminal` 而非進程結束,A 路 SIGTERM-rc=0 教訓的 RawCLIAgent 版)。
+- **C.5 M6**:A/B/C 三方對照(COMPARISON §6):A 蒸餾93/保真93、B 蒸餾17/保真0、
+  **C 蒸餾10/保真94** —— C 兩者兼得,保真≈A、語意乾淨勝 B、控制窗口 B 缺、
+  可視化 A 缺。detail page(SCRUM-11)展示 C 的 💭/🔧/📋 細粒度 conversation。
+
+**A/B/C 三線全部實跑落地**。剩 backlog(未排程):codex 對照點(quota 8/31)、
+detail page 拼 Jira 深連結、長駐共享 server、B+ resume 對照、`--bare` 公司 API 情境。
 
 ## 7. 建議路線(report 定案)
 
