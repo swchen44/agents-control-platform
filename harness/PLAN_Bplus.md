@@ -1,0 +1,62 @@
+# PLAN_B+ — agent-server 模式 + 視覺化/traceability 收割
+
+> 承 B(M1-M3 已完成)。目標:inner runner 從 SDK **in-process** 換成
+> **agent-server**(REST/WS),打通 OpenHands 視覺化;投資帶進 C(見
+> research/2026-08-abc-roadmap-analysis.md §3.5)。
+> **單線、小步、每步 commit+push。斷線 resume:讀本檔 checklist + git log。**
+> 最後更新:2026-08-03。
+
+## 依賴鏈與收割目標
+
+視覺化(GUI/detail page) ← agent-server ← conversation 存在 server 裡。
+現在 inner runner 是 in-process,conversation 不在任何 server,GUI 看不到。
+
+- OpenHands 給 conversation 級 trace(L1/L3);L0(ticket)/L2(envelope/驗證/
+  成本)仍是 harness journal —— 互補不是替代。
+- 收割形態二選一(到時決定):(a) Agent Canvas GUI 零開發;
+  (b) agent-server REST/WS + 自建 detail page(v5 §4.7)拼上 L0/L2。
+
+## 已釘死的事實(讀碼研究 openhands-acp-claude-code-lifetime.md)
+
+- 啟動:`uvx --from openhands-agent-server==1.39.1 --with openhands-sdk==1.39.1
+  --with openhands-tools==1.39.1 --with openhands-workspace==1.39.1
+  --with "agent-client-protocol<0.11" agent-server --host 127.0.0.1 --port 18000`
+- `/api/*` 需 `X-Session-API-Key`;事件走原生 WS `/sockets/events/{id}`
+- env:`OH_SESSION_API_KEYS_0`、`OH_PERSISTENCE_DIR`、`OH_CONVERSATIONS_PATH`
+- POST /api/conversations:workspace/agent_settings(acp)/secrets;lazy spawn
+- startup 90s / prompt idle 1800s;閒置 20 分 Evict→rehydrate
+
+## 前置未知數(spike 先消滅,勿直接改 runner)
+
+- U1 agent-server 能否用現有工具鏈起來(uvx 首啟數分鐘;或本地 SDK 版本)
+- U2 REST 建 conversation 的 payload 精確形狀(ACP agent_settings)
+- U3 WS 事件訂閱與終止判定(對映 in-process 的 envelope 欄位)
+- U4 GUI(Agent Canvas)能否連上此 server 看到 conversation
+
+## Checklist
+
+**Phase B+.0 — spike:agent-server 起得來 + REST 建 conversation**
+- [ ] 裝 openhands-agent-server 到既有 venv(或確認 uvx 路徑)
+- [ ] 起 server(127.0.0.1:18000)、GET /server_info 200、記啟動時間/timeout
+- [ ] REST 建一個 ACP conversation 跑 trivial 任務、WS 收到事件到終止
+- [ ] 產出 spike 答案(U1-U3)+ 事件↔envelope 欄位對映表
+- [ ] commit+push
+
+**Phase B+.1 — inner runner agent-server 版(envelope 契約不變)**
+- [ ] `inner_agentserver_runner.py`:REST 建 conversation + WS 訂閱 →
+      同一份 envelope(completed/session_id/truly_resumed/cost/error)
+- [ ] profile agent 區塊加 `backend: openhands-server`(與 openhands-acp 並存)
+- [ ] inner_runner.py 依 backend 分派(acp in-process / server)
+- [ ] E2E:同 filechain 任務走 server 版 → grader PASS、回寫 Jira
+- [ ] commit+push
+
+**Phase B+.2 — 視覺化收割**
+- [ ] GUI 或 detail page 二選一,連上 server 看到 live conversation
+- [ ] resume 對照:agent-server 的閒置 Evict→rehydrate vs 我們的 session 續用
+- [ ] 產出視覺化收割報告(能看到什麼/L0-L2 缺口如何補)
+- [ ] commit+push
+
+## 里程碑
+
+M4 = 同一張 Jira 票的 agent 執行在 OpenHands GUI 裡看得到 conversation。
+C 期待驗點(spike 2,半天):agent-server 由 server 端實例化自訂 RawCLIAgent。
