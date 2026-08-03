@@ -113,6 +113,10 @@ inner_loop:
         model: haiku                # 測試省成本;model opus 已驗證可用(SCRUM-12
                                     # SUCCESS $0.279 vs haiku $0.035,~8x)——
                                     # 真實任務改這一行即可,rawcli/harness 零改動
+        os_sandbox: true            # 執行隔離:claude 用 macOS seatbelt 限制
+                                    # 檔案寫入只能到 workspace(codex 用內建
+                                    # --sandbox=workspace-write,見 sandbox:)
+        sandbox: workspace-write    # codex --sandbox: read-only|workspace-write
         venv: ../examples/openhands-acp-poc/.venv
         timeout_sec: 300
       verify:                       # 確定性檢查,全過才 SUCCESS

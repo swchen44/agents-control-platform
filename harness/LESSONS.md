@@ -83,6 +83,20 @@
     對策:測試 profile 預設便宜模型(haiku),真實任務才設 opus;貴模型留在
     測試 profile = 下次誰跑就 8x 成本陷阱。
 
+15. **claude 無內建 OS 沙箱;seatbelt 白名單放 /private/tmp = /tmp 逃逸**
+    背景:claude 只有 permission-mode + allowedTools(工具層),無檔案沙箱
+    (help:「Recommended only for sandboxes with no internet access」= 假設
+    外部沙箱)。codex 有內建 `--sandbox`(read-only/workspace-write/…)。
+    陷阱實錄:macOS `sandbox-exec` 包 claude 時,白名單放 `(subpath
+    "/private/tmp")` → 因 `/tmp` 是 `/private/tmp` 的 symlink,等於放行 /tmp
+    逃逸(spike 首版被 claude 成功寫 /tmp)。移除 /private/tmp、臨時檔限
+    `/private/var/folders`(TMPDIR)後隔離生效(workspace 內可寫、/tmp 被擋)。
+    對策:seatbelt 白名單用 `allow default + deny file-write* + 精確 subpath`,
+    絕不放 /private/tmp;symlink 目標要一併考慮。RawCLIAgent `os_sandbox=True`
+    已實作驗證(`e2e_sandbox.py`)。
+    延伸:ACP 隔著 adapter + 硬編 bypassPermissions,隔離粒度比 rawcli 粗 ——
+    直接掌 CLI flag(A/C)比 ACP(B)更容易精確隔離。
+
 ## Session 作業教訓(跨專案通用)
 
 6. **背景工作的 cwd 會漂移**:background shell 從「當下」的工作目錄啟動,

@@ -51,7 +51,9 @@ def main() -> int:
             model=job.get("acp_model") or "haiku",
             session_id=resume_sid,
             resume=bool(resume_sid),
-            raw_events_path=raw_path)
+            raw_events_path=raw_path,
+            os_sandbox=job.get("os_sandbox", False),         # claude seatbelt
+            sandbox=job.get("sandbox", "workspace-write"))    # codex --sandbox
         conv = Conversation(agent=agent, workspace=os.path.abspath(job["ws"]),
                             callbacks=[capture])
         conv.send_message(job["prompt"])

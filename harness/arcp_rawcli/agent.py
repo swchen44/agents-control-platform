@@ -51,6 +51,11 @@ class RawCLIAgent(AgentBase):
     session_id: str | None = None          # pre-assigned for resume (C.4)
     resume: bool = False
     raw_events_path: str | None = None      # full-fidelity stream dump (L3)
+    # execution isolation (no docker). claude has NO built-in OS sandbox, so we
+    # wrap it in macOS seatbelt (sandbox-exec) confining file-write to the
+    # workspace. codex has its OWN --sandbox (below) so os_sandbox is a no-op
+    # for it. Verified: workspace writes pass, /tmp writes are blocked.
+    os_sandbox: bool = False                # claude: macOS sandbox-exec wrap
     # fault injection (TEST ONLY; None in production): kill the CLI child once
     # <file> appears, +delay — mirrors A-route KillTrigger for the resume matrix
     fault_kill_on_file: str | None = None
@@ -104,9 +109,12 @@ class RawCLIAgent(AgentBase):
         wd = getattr(getattr(state, "workspace", None), "working_dir", None) \
             or os.getcwd()
 
+        cmd = self._build_command(prompt)
+        if self.os_sandbox and self.engine == "claude":
+            cmd = ["sandbox-exec", "-f", self._write_sandbox_profile(wd)] + cmd
         raw_f = open(self.raw_events_path, "w") if self.raw_events_path else None
         proc = subprocess.Popen(
-            self._build_command(prompt), cwd=wd,
+            cmd, cwd=wd,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL, text=True, bufsize=1,
             start_new_session=True)
@@ -136,6 +144,33 @@ class RawCLIAgent(AgentBase):
         if self._final_session_id:
             self.__dict__["session_id"] = self._final_session_id
         state.execution_status = ConversationExecutionStatus.FINISHED
+
+    # -- execution isolation (macOS seatbelt, claude) ---------------------- #
+    def _write_sandbox_profile(self, wd: str) -> str:
+        """Write a seatbelt profile confining file-write to the workspace.
+
+        allow default + deny file-write* + whitelist (workspace, claude's own
+        state dirs, TMPDIR). NOTE: never whitelist /private/tmp — /tmp symlinks
+        to it and that reopens the escape (spike found this). Verified: writes
+        outside the workspace are blocked, claude itself runs fine.
+        """
+        home = os.path.expanduser("~")
+        prof = (
+            "(version 1)\n(allow default)\n(deny file-write*)\n"
+            "(allow file-write*\n"
+            f'  (subpath "{os.path.abspath(wd)}")\n'
+            f'  (subpath "{home}/.claude")\n'
+            f'  (subpath "{home}/.config")\n'
+            f'  (subpath "{home}/.npm")\n'
+            '  (subpath "/private/var/folders")\n'
+            '  (literal "/dev/null") (literal "/dev/stdout")\n'
+            '  (literal "/dev/stderr") (literal "/dev/dtracehelper")\n'
+            '  (literal "/dev/tty"))\n')
+        path = os.path.join(os.path.dirname(os.path.abspath(wd)),
+                            ".arcp_sandbox.sb")
+        with open(path, "w") as f:
+            f.write(prof)
+        return path
 
     # -- fault injection (test only) --------------------------------------- #
     def _fault_kill(self, proc, wd: str) -> None:

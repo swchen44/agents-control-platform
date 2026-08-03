@@ -54,6 +54,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "acp_server": agent_cfg.get("acp_server", "claude-code"),
         "acp_server_engine": agent_cfg.get("engine", "claude"),  # rawcli
         "acp_model": agent_cfg.get("acp_model") or agent_cfg.get("model"),
+        "os_sandbox": agent_cfg.get("os_sandbox", False),       # rawcli 隔離
+        "sandbox": agent_cfg.get("sandbox", "workspace-write"),  # codex 內建
         "resume_session_id": resume_session_id,
         "timeout_sec": agent_cfg.get("timeout_sec", 300),
         "events_path": os.path.join(artifacts_dir, f"a{attempt}.events.jsonl"),
