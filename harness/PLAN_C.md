@@ -88,10 +88,16 @@
 - [x] harness_selftest 17/17(既有全綠,rawcli 不干擾)
 - [x] commit+push
 
-**Phase C.4 — crash→resume in RawCLIAgent**
-- [ ] `--session-id` 預指定 + `--resume`(A 路知識);envelope truly_resumed
-- [ ] fault-injection:midtool kill → resume 續跑不重工(對照 A 矩陣)
-- [ ] commit+push
+**Phase C.4 — crash→resume in RawCLIAgent** ✅ 2026-08-03
+- [x] `--session-id` 預指定(C.1 埋)+ `--resume` 重接;test-only fault 注入
+      (`fault_kill_on_file`,鏡像 A 路 KillTrigger)
+- [x] **正確性修正**:`_got_terminal`(claude `result`/codex `turn.completed`)
+      判 completed,**非進程結束** —— crash 殺子進程在 terminal 前 → completed=False
+      (A 路 SIGTERM-rc=0 教訓的 RawCLIAgent 版;runner 同步改用 _got_terminal)
+- [x] E2E(`e2e_c4.py`)4/4:attempt1 midtool SIGKILL → completed=False;
+      attempt2 `--resume` 同 session 續建 step3 → grader 過、同 session_id、
+      **不重工**(crash 前 step1/2 mtime 不變)—— 對照 A 路 midtool 矩陣
+- [x] commit+push
 
 **Phase C.5 — A/B/C 三方對照 + 收割**
 - [ ] 同任務同 grader:A(raw supervisor)/ B(ACP)/ C(RawCLIAgent)事件粒度、

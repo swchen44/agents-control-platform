@@ -56,10 +56,9 @@ def main() -> int:
                             callbacks=[capture])
         conv.send_message(job["prompt"])
         conv.run()
-        envelope["completed"] = (
-            not agent._error
-            and (str(conv.state.execution_status).endswith("FINISHED")
-                 or conv.state.execution_status.value == "finished"))
+        # completed = terminal event seen (not just process ended); a crash
+        # kills the child before the terminal event → completed False
+        envelope["completed"] = agent._got_terminal and not agent._error
         envelope["session_id"] = agent.session_id
         envelope["truly_resumed"] = bool(resume_sid)  # native --resume used
         envelope["cost_usd"] = agent._cost_usd

@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
+import threading
+import time
 import uuid
 
 from pydantic import Field, PrivateAttr
@@ -48,11 +51,19 @@ class RawCLIAgent(AgentBase):
     session_id: str | None = None          # pre-assigned for resume (C.4)
     resume: bool = False
     raw_events_path: str | None = None      # full-fidelity stream dump (L3)
+    # fault injection (TEST ONLY; None in production): kill the CLI child once
+    # <file> appears, +delay — mirrors A-route KillTrigger for the resume matrix
+    fault_kill_on_file: str | None = None
+    fault_delay: float = 1.0
 
     # exposed to the runner after step() (C.3 envelope)
     _final_session_id: str | None = PrivateAttr(default=None)
     _cost_usd: float | None = PrivateAttr(default=None)
     _error: str | None = PrivateAttr(default=None)
+    # terminal event seen (claude `result` / codex `turn.completed`). A crash
+    # kills the child BEFORE this → completed stays False even though the
+    # process "ended" (A-route SIGTERM-rc=0 lesson, RawCLIAgent edition).
+    _got_terminal: bool = PrivateAttr(default=False)
     _raw_count: int = PrivateAttr(default=0)
     _event_count: int = PrivateAttr(default=0)
 
@@ -99,6 +110,9 @@ class RawCLIAgent(AgentBase):
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL, text=True, bufsize=1,
             start_new_session=True)
+        if self.fault_kill_on_file:
+            threading.Thread(target=self._fault_kill, args=(proc, wd),
+                             daemon=True).start()
         assert proc.stdout is not None
         try:
             for line in proc.stdout:
@@ -122,6 +136,20 @@ class RawCLIAgent(AgentBase):
         if self._final_session_id:
             self.__dict__["session_id"] = self._final_session_id
         state.execution_status = ConversationExecutionStatus.FINISHED
+
+    # -- fault injection (test only) --------------------------------------- #
+    def _fault_kill(self, proc, wd: str) -> None:
+        target = os.path.join(wd, self.fault_kill_on_file or "")
+        end = time.time() + 120
+        while time.time() < end and proc.poll() is None:
+            if os.path.exists(target):
+                time.sleep(self.fault_delay)
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    pass
+                return
+            time.sleep(0.1)
 
     # -- helpers ----------------------------------------------------------- #
     def _emit(self, on_event, text: str) -> None:
@@ -160,6 +188,7 @@ class RawCLIAgent(AgentBase):
                                      if isinstance(x, dict))
                     self._emit(on_event, f"📋 {str(c or '')[:120]}")
         elif t == "result":
+            self._got_terminal = True
             self._cost_usd = o.get("total_cost_usd")
             if o.get("is_error"):
                 self._error = str(o.get("result") or "cli error")[:300]
@@ -181,6 +210,7 @@ class RawCLIAgent(AgentBase):
             elif item.get("type") in ("command_execution", "tool_call"):
                 self._emit(on_event, f"📋 {str(item.get('type'))[:80]}")
         elif t == "turn.completed":
+            self._got_terminal = True
             u = o.get("usage") or {}
             self._cost_usd = u.get("total_cost_usd") or self._cost_usd
         elif t in ("turn.failed", "error"):
