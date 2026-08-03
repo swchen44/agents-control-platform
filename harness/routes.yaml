@@ -73,6 +73,20 @@ inner_loop:
         acp_model: haiku            # 使用者決策:A/B 同款 model
         venv: ../examples/openhands-acp-poc/.venv
         timeout_sec: 300
+
+    # 同 filechain,但走 agent-server backend(B+.1)——conversation 存 server,
+    # GUI 看得到。envelope 契約與 in-process 版相同,dispatcher 不變。
+    filechain-server:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: openhands-server   # ← 唯一差別
+        acp_server: claude-code
+        acp_model: haiku
+        venv: ../examples/openhands-acp-poc/.venv
+        timeout_sec: 300
       verify:                       # 確定性檢查,全過才 SUCCESS
         - name: filechain
           files:

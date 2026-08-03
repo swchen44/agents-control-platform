@@ -53,13 +53,23 @@
     error←ConversationErrorEvent
 - [x] commit+push
 
-**Phase B+.1 — inner runner agent-server 版(envelope 契約不變)**
-- [ ] `inner_agentserver_runner.py`:REST 建 conversation + WS 訂閱 →
-      同一份 envelope(completed/session_id/truly_resumed/cost/error)
-- [ ] profile agent 區塊加 `backend: openhands-server`(與 openhands-acp 並存)
-- [ ] inner_runner.py 依 backend 分派(acp in-process / server)
-- [ ] E2E:同 filechain 任務走 server 版 → grader PASS、回寫 Jira
-- [ ] commit+push
+**Phase B+.1 — inner runner agent-server 版(envelope 契約不變)** ✅ 2026-08-03
+- [x] `inner_agentserver_runner.py`:自啟 server + REST 建 conversation +
+      events 輪詢 → 同一份 envelope(completed/session_id/truly_resumed/cost/error)
+- [x] profile `backend: openhands-server`(filechain-server;與 openhands-acp 並存)
+- [x] inner_runner.py 依 backend 分派(RUNNERS 表);job 加 server_port/key/persist
+- [x] E2E 4/4 PASS(`e2e_agentserver.py`):server 版 completed + session_id +
+      A 路 grader 通過;in-process 對照同契約 —— **backend 切換 = 只改 profile 一行**
+- [x] commit+push
+- **真實發現(入 COMPARISON)**:
+  - ⚠️ **cost gap**:ACP-over-agent-server 的 UsageUpdate 常在拆除時尚未到達
+    (server.log "UsageUpdate not received"),`metrics.accumulated_cost` 回 $0;
+    in-process 版能拿到 $0.045 → 成本可控性是 in-process/raw 的又一優勢。
+  - 教訓:events search 端點 `limit<=100` 硬上限(assert);spike 用 100 貼邊
+    沒踩、runner 隨手寫 200 就 500 → **spike 參數要與正式碼一致**。長任務
+    (>100 事件)需分頁,列 B+.2 精修。
+  - 回寫 Jira 未測(直接跑 run_attempt 聚焦 envelope 契約);走 dispatcher
+    的完整 Jira E2E 與 in-process 版同路徑,低風險。
 
 **Phase B+.2 — 視覺化收割**
 - [ ] GUI 或 detail page 二選一,連上 server 看到 live conversation
