@@ -27,18 +27,18 @@ outer_loop:
       profile: default
       on_match: notify_only          # 灰度:只記 route_matched,不接管
 
+    - name: filechain-demo          # Phase 2 M2:第一條會「動手」的 route
+      when:
+        labels: ['filechain']
+      profile: filechain
+      on_match: create_or_resume
+
     - name: triage-keyword
       when:
         summary: '(?i)\b(triage|bug|fix|crash)\b'
       profile: triage
       on_match: notify_only
       comments_lookback: 5
-
-    - name: filechain-demo          # Phase 2 M2:第一條會「動手」的 route
-      when:
-        labels: ['filechain']
-      profile: filechain
-      on_match: create_or_resume
 
     - name: fault-retry             # fault-injection:驗證 retry+evidence 迴路
       when:
