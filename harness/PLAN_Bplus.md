@@ -71,11 +71,29 @@
   - 回寫 Jira 未測(直接跑 run_attempt 聚焦 envelope 契約);走 dispatcher
     的完整 Jira E2E 與 in-process 版同路徑,低風險。
 
-**Phase B+.2 — 視覺化收割**
-- [ ] GUI 或 detail page 二選一,連上 server 看到 live conversation
-- [ ] resume 對照:agent-server 的閒置 Evict→rehydrate vs 我們的 session 續用
-- [ ] 產出視覺化收割報告(能看到什麼/L0-L2 缺口如何補)
-- [ ] commit+push
+**Phase B+.2 — 視覺化收割** ✅ 2026-08-03(M4 達成)
+- [x] **detail page**(`detail_server.py`,v5 §4.7 雛形,stdlib http.server):
+      一張 ticket 的**四層 trace 一頁**——L0/L1 harness journal + L2 envelope +
+      **L3 agent-server conversation 原生事件**;Claude in Chrome 實地打開驗證
+      (SCRUM-9,19 事件:MessageEvent/ACPToolCall×8/StateUpdate running→finished)
+- [x] **收割核心價值證實**:L3 是 OpenHands 給的(conversation 視角);
+      **L0(ticket)/L1(attempt/outcome)/L2(grader/cost)是 GUI 給不了的**——
+      detail page 對齊兩者 = 完整 traceability(v5 §4.5 四層對齊落地)
+- [x] **cost gap 有解(收割副產品)**:L3 底部 `stats` 事件帶
+      `usage_to_metrics.haiku` → 用量在事件流裡,只是沒進 metrics.accumulated_cost;
+      改從 stats 事件讀即可修(非硬限制)。列 B+.3 精修。
+- [ ] resume 對照(agent-server 閒置 Evict→rehydrate)未做 —— 低優先,
+      機制已由讀碼研究釐清(§3.5)+ B+.1 session_id 續用實證。
+- [x] commit+push
+
+## B+ 總結(M4)
+
+同一張 Jira 票的 agent 執行,現在可在 detail page 看到完整四層 trace。
+backend 切換(in-process↔agent-server)只改 profile 一行,envelope 契約不變,
+dispatcher/grader/三態邏輯零改動 —— 為 C 期(換 RawCLIAgent)鋪好路。
+收割品(detail page、四層對齊)帶進 C 且事件更細(RawCLIAgent 發 248 級)。
+**B+.3 精修(未排程)**:cost 從 stats 事件讀、events 分頁(>100)、
+detail page 加 live 刷新 + 拼 Jira 連結。
 
 ## 里程碑
 

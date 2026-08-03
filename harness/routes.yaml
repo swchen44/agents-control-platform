@@ -27,6 +27,12 @@ outer_loop:
       profile: default
       on_match: notify_only          # 灰度:只記 route_matched,不接管
 
+    - name: filechain-server        # B+.2:走 agent-server backend(GUI/detail 可見)
+      when:
+        labels: ['filechain-server']
+      profile: filechain-server
+      on_match: create_or_resume
+
     - name: filechain-demo          # Phase 2 M2:第一條會「動手」的 route
       when:
         labels: ['filechain']
