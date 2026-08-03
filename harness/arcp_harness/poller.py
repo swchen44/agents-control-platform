@@ -18,11 +18,12 @@ from .store import Store, TicketWatch
 
 class OuterLoop:
     def __init__(self, source: JiraCloudSource, store: Store,
-                 routes: list[Route], jql: str):
+                 routes: list[Route], jql: str, dispatcher=None):
         self.source = source
         self.store = store
         self.routes = routes
         self.jql = jql
+        self.dispatcher = dispatcher   # None = pure grey mode (Phase 1)
 
     def poll_once(self) -> list[dict]:
         """One reconciliation pass. Returns the events it journaled."""
@@ -64,4 +65,10 @@ class OuterLoop:
                 last_state=t.state,
                 last_assignee_id=t.assignee_id or "",
                 route_name=route.name if route else None))
+
+            # dispatch AFTER the watch state is persisted: a crash mid-dispatch
+            # must not replay watch events on restart (idempotency first)
+            if (route is not None and route.on_match == "create_or_resume"
+                    and route.profile and self.dispatcher is not None):
+                events.extend(self.dispatcher.handle(t, route.profile))
         return events
