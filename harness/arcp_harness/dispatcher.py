@@ -54,17 +54,39 @@ def _resume_hint(sess: TicketSession) -> str:
 
 class Dispatcher:
     def __init__(self, source: JiraCloudSource, store: Store,
-                 profiles: dict[str, Profile], root: str):
+                 profiles: dict[str, Profile], root: str,
+                 server_manager=None):
         self.source = source
         self.store = store
         self.profiles = profiles
         self.root = root
+        self.server_manager = server_manager   # conc.3 long-lived shared server
+
+    def _effective_agent(self, profile: Profile) -> dict:
+        """Inject shared-server info for openhands-server backend (conc.3)."""
+        agent = dict(profile.agent)
+        if (self.server_manager is not None
+                and agent.get("backend") == "openhands-server"):
+            self.server_manager.ensure()          # lazy start / restart (N1)
+            agent["server_managed"] = True
+            agent["server_port"] = self.server_manager.port
+            agent["server_api_key"] = self.server_manager.api_key
+        return agent
 
     def handle(self, ticket: Ticket, profile_name: str) -> list[dict]:
         """Idempotent: terminal/pending sessions are skipped silently."""
         events: list[dict] = []
         profile = self.profiles[profile_name]
         sess = self.store.get_session(ticket.id)
+        # auto-recover pending:external once infra is back (N1/N3): server
+        # healthy again → clear the block and resume this poll (不漏)
+        if (sess and sess.pending_reason == "external"
+                and self.server_manager is not None
+                and self.server_manager.ensure()):
+            sess.pending_reason = None
+            self.store.upsert_session(sess)
+            events.append(self.store.journal(
+                "external_cleared", ticket.id, ticket.key, cause="server-back"))
         if sess and (sess.outcome in ("SUCCESS", "ABORTED")
                      or sess.pending_reason):
             return events  # done/cancelled or awaiting a human — nothing to do
@@ -90,6 +112,7 @@ class Dispatcher:
 
         grader = _grader(profile)
         artifacts = os.path.join(os.path.dirname(sess.workspace), "attempts")
+        agent_cfg = self._effective_agent(profile)  # conc.3 server injection
         feedback: str | None = None
 
         while sess.attempts < profile.max_attempts:
@@ -97,7 +120,7 @@ class Dispatcher:
             prompt = BASE_PROMPT if not feedback else (
                 f"{BASE_PROMPT}\n\n上次嘗試未通過驗證,失敗證據:\n{feedback}\n"
                 f"請只修正缺失的部分,不要重做已完成的部分。")
-            res = run_attempt(profile.agent, sess.workspace, prompt,
+            res = run_attempt(agent_cfg, sess.workspace, prompt,
                               artifacts, sess.attempts,
                               resume_session_id=sess.session_id)
             sess.session_id = res.session_id or sess.session_id
@@ -105,8 +128,25 @@ class Dispatcher:
             events.append(self.store.journal(
                 "attempt_finished", ticket.id, ticket.key,
                 attempt=sess.attempts, raw=res.raw_outcome,
+                error_kind=res.error_kind,
                 truly_resumed=res.truly_resumed,
                 envelope=res.envelope_path))
+
+            # infrastructure failure (server 掛/連不上, N3): NOT the agent's
+            # fault → roll back the attempt (don't consume it) + pending:external.
+            # server comes back → next poll resumes via session_id (不漏).
+            if res.error_kind == "infra":
+                sess.attempts -= 1  # infra doesn't burn a task attempt
+                sess.pending_reason = "external"
+                self.store.upsert_session(sess)
+                self.source.add_comment(ticket.id, (
+                    f"[agent] pending:external — 基礎設施故障"
+                    f"({res.error});不消耗重試,server 恢復後自動續。"
+                    f"\n{_resume_hint(sess)}"))
+                events.append(self.store.journal(
+                    "pending", ticket.id, ticket.key, reason="external",
+                    cause="infra"))
+                return events
 
             if res.raw_outcome == "unknown":
                 sess.outcome, sess.pending_reason = "UNKNOWN", "unknown"

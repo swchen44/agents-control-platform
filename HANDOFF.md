@@ -237,6 +237,16 @@ ACP 隔著 adapter 隔離粒度較粗 —— 直接掌 CLI flag(A/C)比 ACP(B)�
 grader 4/4 互不污染。這是 OpenHands agent-server 相對 in-process/rawcli 的
 核心價值(統一生命週期 + 閒置 evict→rehydrate),詳 COMPARISON §7。
 
+**harness 併發 + 健壯性(conc.1-3,2026-08-03,`PLAN_concurrent.md`)**:
+- conc.1 M7 並行 dispatch(ThreadPoolExecutor+max_running,Store 加鎖執行緒安全):
+  3 張並行 27.5s vs 串行 75s。
+- conc.2 M8 **stall/hang exit+resume**(RawCLIAgent reset-on-progress watchdog,
+  移植 A 路;無進展→killpg→resume 續;單元測 `test_stall.py` 免 token)。
+- conc.3 M9 **長駐共享 server + 掛了重起續**(`ServerManager` 健康檢查+重起同
+  persistence→rehydrate;infra→pending:external 不消耗 attempt;server 恢復自動
+  解除→resume);故障注入 E2E 3/3(kill server→重起新 PID→續 SUCCESS 不漏)。
+- non-normal 分析 N1-N13(使用者提)全數處理,詳 PLAN_concurrent。
+
 剩 backlog(未排程):codex 對照點(quota 8/31)、Docker workspace 隔離、
 harness dispatcher 接長駐共享 server(現每 attempt 自起)+ 並行 dispatch
 (v5 D10 max_running)、detail page 拼 Jira 深連結、B+ resume 對照、

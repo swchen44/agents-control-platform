@@ -50,12 +50,24 @@
       無 server,infra 故障主要在 openhands-server backend)
 - [x] commit+push
 
-**Phase conc.3 — 長駐共享 server + server 重起(N1/N4)**
-- [ ] `server_manager.py`:懶啟動 1 個 agent-server、**健康檢查+重起(同
-      `OH_PERSISTENCE_DIR`)**、base_url/key、收攤
-- [ ] inner_runner job 傳長駐 server_url/key;inner_agentserver_runner 優先連(K5)
-- [ ] 故障注入 E2E:跑到一半 kill server → 重起 rehydrate → 票 resume 續、不漏
-- [ ] commit+push
+**Phase conc.3 — 長駐共享 server + server 重起(N1/N3/N4)** ✅ 2026-08-03 **M9**
+- [x] `server_manager.py`:懶啟動 1 個 agent-server、**健康檢查+重起(同
+      `OH_PERSISTENCE_DIR`→rehydrate)**、base_url/key、收攤
+- [x] inner_agentserver_runner:`server_managed`→連長駐(不自起不關);中途 server
+      掛/連不上→`error_kind=infra`
+- [x] dispatcher:**infra→pending:external + 回滾 attempt(不消耗)**;server 健康
+      時**自動解除 pending:external → resume 續**(不漏);Dispatcher 持 ServerManager
+- [x] **故障注入 E2E(`e2e_server_restart.py`)3/3 PASS**:S1 2 張共用 1 server PID、
+      S2 kill server→pending:external attempts=0、S3 重起(新 PID,同 persistence)
+      →自動解除→resume→SUCCESS(不漏)
+- [x] commit+push
+
+## 收官(2026-08-03)
+
+harness 併發 + 健壯性全數落地:M7 並行 dispatch、M8 stall/hang exit+resume、
+M9 長駐 server+掛了重起續。**使用者提的 non-normal(server 重起不漏、agent
+沒反應 exit+resume、infra 不消耗 attempt)全部端到端實證**。核心原則:
+store 是 SoT、非終態必重評、基礎設施故障不消耗 attempt、server 恢復自動續。
 
 ## 健壯性:non-normal cases 分析(2026-08-03,使用者提)
 

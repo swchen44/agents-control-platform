@@ -88,26 +88,36 @@ def _cost_from_stats(events: list[dict]) -> float | None:
 def main() -> int:
     job = json.load(open(sys.argv[1]))
     envelope = {"completed": False, "session_id": None,
-                "truly_resumed": False, "cost_usd": None, "error": None}
+                "truly_resumed": False, "cost_usd": None, "error": None,
+                "error_kind": None}
     port = int(job.get("server_port", 18010))
     key = job.get("server_api_key", "harness-local-only")
     base = f"http://{HOST}:{port}"
+    managed = bool(job.get("server_managed"))  # conc.3: long-lived shared server
 
-    # start a private server for this attempt (simple + isolated; a long-lived
-    # shared server is a B+.2 optimization once the GUI wants persistence)
-    env = dict(os.environ)
-    env["OH_SESSION_API_KEYS_0"] = key
-    env["OH_PERSISTENCE_DIR"] = job["persist_dir"]
-    env["OPENHANDS_SUPPRESS_BANNER"] = "1"
-    log = open(os.path.join(os.path.dirname(job["events_path"]),
-                            "server.log"), "w")
-    server = subprocess.Popen(
-        [sys.executable, "-m", "openhands.agent_server",
-         "--host", HOST, "--port", str(port)],
-        env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    server = None
+    if managed:
+        # connect to the harness-managed long-lived server (don't spawn/close)
+        log = None
+    else:
+        # self-spawn a private server for this attempt (single-ticket path)
+        env = dict(os.environ)
+        env["OH_SESSION_API_KEYS_0"] = key
+        env["OH_PERSISTENCE_DIR"] = job["persist_dir"]
+        env["OPENHANDS_SUPPRESS_BANNER"] = "1"
+        log = open(os.path.join(os.path.dirname(job["events_path"]),
+                                "server.log"), "w")
+        server = subprocess.Popen(
+            [sys.executable, "-m", "openhands.agent_server",
+             "--host", HOST, "--port", str(port)],
+            env=env, stdout=log, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL)
     try:
-        if not _wait_ready(base):
-            envelope["error"] = "agent-server did not become ready"
+        if not _wait_ready(base, deadline_s=30 if managed else 120):
+            # server unreachable = INFRASTRUCTURE failure (N3), not task fail →
+            # dispatcher routes to pending:external (does NOT consume attempt)
+            envelope["error"] = "agent-server unreachable"
+            envelope["error_kind"] = "infra"
             raise SystemExit
         from openhands.sdk.agent import ACPAgent
         from openhands.sdk.settings.acp_providers import ACP_PROVIDERS
@@ -137,7 +147,15 @@ def main() -> int:
         agent_state = {}
         items: list[dict] = []
         while time.time() < deadline:
-            items = _fetch_all_events(base, key, cid)  # paged, no 100 cap
+            try:
+                items = _fetch_all_events(base, key, cid)  # paged, no 100 cap
+            except (urllib.error.URLError, OSError):
+                # server died mid-run = infra failure (N1/N3): the harness
+                # restarts it; this ticket resumes next poll via session_id
+                envelope["error"] = "agent-server died mid-run"
+                envelope["error_kind"] = "infra"
+                envelope["session_id"] = agent_state.get("acp_session_id")
+                break
             with open(job["events_path"], "w") as f:
                 for e in items:
                     f.write(json.dumps(e, ensure_ascii=False) + "\n")
@@ -173,12 +191,14 @@ def main() -> int:
     except Exception as e:
         envelope["error"] = f"{type(e).__name__}: {e}"[:300]
     finally:
-        server.terminate()
-        try:
-            server.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            server.kill()
-        log.close()
+        if server is not None:      # only close a self-spawned server
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
+        if log is not None:
+            log.close()
 
     with open(job["envelope_path"], "w") as f:
         json.dump(envelope, f, ensure_ascii=False)

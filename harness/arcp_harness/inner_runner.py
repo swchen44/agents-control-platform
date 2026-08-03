@@ -37,6 +37,7 @@ class AttemptResult:
     error: str | None
     events_path: str
     envelope_path: str
+    error_kind: str | None = None  # infra | stalled | task | no-terminal (N3)
 
 
 def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
@@ -56,6 +57,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "acp_model": agent_cfg.get("acp_model") or agent_cfg.get("model"),
         "os_sandbox": agent_cfg.get("os_sandbox", False),       # rawcli 隔離
         "sandbox": agent_cfg.get("sandbox", "workspace-write"),  # codex 內建
+        "stall_seconds": agent_cfg.get("stall_seconds", 0),      # rawcli N13
+        "server_managed": agent_cfg.get("server_managed", False),  # conc.3
         "resume_session_id": resume_session_id,
         "timeout_sec": agent_cfg.get("timeout_sec", 300),
         "events_path": os.path.join(artifacts_dir, f"a{attempt}.events.jsonl"),
@@ -98,4 +101,5 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         cost_usd=envelope.get("cost_usd"),
         error=envelope.get("error"),
         events_path=job["events_path"],
-        envelope_path=job["envelope_path"])
+        envelope_path=job["envelope_path"],
+        error_kind=envelope.get("error_kind"))
