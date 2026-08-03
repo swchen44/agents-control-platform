@@ -75,7 +75,62 @@ a{color:#58a6ff;text-decoration:none}main{padding:0 24px 40px;max-width:1100px}
 .ev .t{color:#8b949e}.ev .k{color:#58a6ff}.layer{border-left:3px solid #30363d;padding-left:12px}
 .L0{border-color:#a371f7}.L1{border-color:#58a6ff}.L2{border-color:#3fb950}.L3{border-color:#d29922}
 table{border-collapse:collapse;width:100%;font-size:12px}td{padding:3px 8px;border-bottom:1px solid #21262d;vertical-align:top}
+.tabs{display:flex;gap:8px;margin:16px 0 8px}.tab{padding:4px 14px;border-radius:6px;background:#21262d;cursor:pointer;user-select:none}.tab.on{background:#1f6feb;color:#fff}
+.pane{display:none}.pane.on{display:block}
+.msg{margin:8px 0;display:flex}.msg.user{justify-content:flex-end}
+.bubble{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word}
+.msg.user .bubble{background:#1f6feb;color:#fff;border-bottom-right-radius:3px}
+.msg.agent .bubble{background:#21262d;border-bottom-left-radius:3px}
+.tool{margin:6px 0 6px 20px;border-left:2px solid #d29922;padding:4px 10px;background:#161b22;border-radius:0 6px 6px 0;font-size:12px}
+.tool .ti{color:#e2d07e;font-weight:600}.tool .st{float:right;font-size:11px;color:#8b949e}
+.tool .io{font-family:ui-monospace,monospace;color:#8b949e;margin-top:2px}
+.think{margin:6px 0 6px 20px;color:#8b949e;font-style:italic;font-size:12px}
+.sys{color:#8b949e;font-size:11px;text-align:center;margin:8px 0}
 """
+
+
+def _text_of(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(c.get("text", "") for c in content
+                        if isinstance(c, dict) and c.get("type") == "text")
+    return ""
+
+
+def render_conversation(items: list[dict]) -> str:
+    """L3 events → chat-style conversation view (OpenHands-UI-like)."""
+    out = ""
+    for e in items:
+        k = e.get("kind")
+        if k == "MessageEvent":
+            src = e.get("source", "agent")
+            txt = _text_of((e.get("llm_message") or {}).get("content"))
+            if txt.strip():
+                out += (f"<div class='msg {esc(src)}'><div class='bubble'>"
+                        f"{esc(txt)}</div></div>")
+        elif k == "SystemPromptEvent":
+            n = len(e.get("tools") or [])
+            out += f"<div class='sys'>— system prompt · {n} tools —</div>"
+        elif k == "ActionEvent":
+            th = (e.get("thought") or "").strip()
+            if th:
+                out += f"<div class='think'>💭 {esc(th[:400])}</div>"
+        elif k == "ACPToolCallEvent":
+            title = e.get("title") or e.get("tool_kind") or "tool"
+            status = e.get("status") or ""
+            ri = e.get("raw_input")
+            io = ""
+            if isinstance(ri, dict):
+                fp = ri.get("file_path") or ri.get("command") or ""
+                if fp:
+                    io = f"<div class='io'>{esc(str(fp)[:120])}</div>"
+            err = " ⚠️" if e.get("is_error") else ""
+            out += (f"<div class='tool'><span class='st'>{esc(status)}{err}"
+                    f"</span><span class='ti'>🔧 {esc(title)}</span>"
+                    f"<span style='color:#6e7681'> · {esc(e.get('tool_kind',''))}"
+                    f"</span>{io}</div>")
+    return out or "<div class='sys'>(no conversation events)</div>"
 
 
 def render_index(journal, sessions) -> str:
@@ -115,22 +170,23 @@ def render_ticket(iid, journal, sessions) -> str:
                f"<span class='t'>{esc(json.dumps(extra, ensure_ascii=False))}"
                f"</span></div>")
 
-    # L2/L3 per attempt
+    # L2/L3 per attempt — build BOTH a trace view and a conversation view
     ad = attempt_dir(iid)
-    layers = ""
+    trace_layers, convo_panes = "", ""
     if os.path.isdir(ad):
         envs = sorted(f for f in os.listdir(ad) if f.endswith(".envelope.json"))
         for ef in envs:
             n = ef.split(".")[0]
             env = json.load(open(os.path.join(ad, ef)))
-            layers += (f"<h2>{esc(n)} · L2 envelope</h2><div class='card layer L2'>"
-                       f"<div class='row'>"
-                       f"<span class='kv'><b>completed</b> {esc(env.get('completed'))}</span>"
-                       f"<span class='kv'><b>session</b> {esc(env.get('session_id'))}</span>"
-                       f"<span class='kv'><b>resumed</b> {esc(env.get('truly_resumed'))}</span>"
-                       f"<span class='kv'><b>cost</b> ${esc(env.get('cost_usd'))}</span>"
-                       f"<span class='kv'><b>error</b> {esc(env.get('error'))}</span>"
-                       f"</div></div>")
+            trace_layers += (
+                f"<h2>{esc(n)} · L2 envelope</h2><div class='card layer L2'>"
+                f"<div class='row'>"
+                f"<span class='kv'><b>completed</b> {esc(env.get('completed'))}</span>"
+                f"<span class='kv'><b>session</b> {esc(env.get('session_id'))}</span>"
+                f"<span class='kv'><b>resumed</b> {esc(env.get('truly_resumed'))}</span>"
+                f"<span class='kv'><b>cost</b> ${esc(env.get('cost_usd'))}</span>"
+                f"<span class='kv'><b>error</b> {esc(env.get('error'))}</span>"
+                f"</div></div>")
             evp = os.path.join(ad, f"{n}.events.jsonl")
             if os.path.exists(evp):
                 items = [json.loads(l) for l in open(evp) if l.strip()]
@@ -138,20 +194,34 @@ def render_ticket(iid, journal, sessions) -> str:
                 hist = Counter(i.get("kind") or i.get("type") or "?"
                                for i in items)
                 rows = ""
-                for i in items[:60]:
+                for i in items:
                     kind = i.get("kind") or i.get("type") or "?"
                     src = i.get("source", "")
                     txt = ""
                     if kind == "ConversationStateUpdateEvent":
                         txt = f"{i.get('key','')}={str(i.get('value',''))[:60]}"
                     elif kind == "ACPToolCallEvent":
-                        txt = str(i.get("tool_name", ""))[:60]
+                        txt = str(i.get("title") or i.get("tool_kind") or "")[:60]
                     rows += (f"<div class='ev'><span class='k'>{esc(kind)}</span> "
                              f"<span class='t'>{esc(src)} {esc(txt)}</span></div>")
-                layers += (f"<h2>{esc(n)} · L3 conversation events "
-                           f"({sum(hist.values())}) {esc(dict(hist))}</h2>"
-                           f"<div class='card layer L3'>{rows}</div>")
+                trace_layers += (
+                    f"<h2>{esc(n)} · L3 events ({sum(hist.values())}) "
+                    f"{esc(dict(hist))}</h2>"
+                    f"<div class='card layer L3'>{rows}</div>")
+                convo_panes += (f"<h2>{esc(n)}</h2><div class='card'>"
+                                f"{render_conversation(items)}</div>")
 
+    trace_view = (f"<h2>L0/L1 · ticket & attempt 事件(harness journal)</h2>"
+                  f"<div class='card layer L0'>{l0}</div>{trace_layers}")
+    convo_view = convo_panes or "<div class='sys'>(此 backend 無 conversation 事件)</div>"
+
+    # tab state in the URL hash so the 5s live-refresh keeps the current tab
+    tabs_js = ("<script>function tab(n){location.hash=n;"
+               "for(const p of document.querySelectorAll('.pane'))p.classList.remove('on');"
+               "for(const t of document.querySelectorAll('.tab'))t.classList.remove('on');"
+               "document.getElementById('pane-'+n).classList.add('on');"
+               "document.getElementById('tab-'+n).classList.add('on');}"
+               "tab((location.hash||'#convo').slice(1));</script>")
     return (f"<header><h1><a href='/'>← </a>{esc(key)} · "
             f"<span class='badge {esc(s.get('outcome') or '')}'>"
             f"{esc(s.get('outcome') or '-')}</span></h1></header><main>"
@@ -161,8 +231,13 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<span class='kv'><b>cost</b> ${s.get('cost_usd',0):.4f}</span>"
             f"<span class='kv'><b>workspace</b> {esc(s.get('workspace','-'))}</span>"
             f"</div></div>"
-            f"<h2>L0/L1 · ticket & attempt 事件(harness journal)</h2>"
-            f"<div class='card layer L0'>{l0}</div>{layers}</main>")
+            f"<div class='tabs'>"
+            f"<div class='tab on' id='tab-convo' onclick='tab(\"convo\")'>💬 Conversation</div>"
+            f"<div class='tab' id='tab-trace' onclick='tab(\"trace\")'>🔍 Trace (L0-L3)</div>"
+            f"</div>"
+            f"<div class='pane on' id='pane-convo'>{convo_view}</div>"
+            f"<div class='pane' id='pane-trace'>{trace_view}</div>"
+            f"{tabs_js}</main>")
 
 
 class Handler(BaseHTTPRequestHandler):

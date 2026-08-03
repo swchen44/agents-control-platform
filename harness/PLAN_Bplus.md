@@ -102,7 +102,17 @@ dispatcher/grader/三態邏輯零改動 —— 為 C 期(換 RawCLIAgent)鋪好�
       逐步可見。
 - [x] commit+push
 
-**B+.3 後續(未排程,低優先)**:detail page 拼 Jira 深連結、resume 對照
+**Phase B+.4 — conversation 視角(像本來的 UI)** ✅ 2026-08-03
+- [x] detail page 加**兩分頁**:💬 Conversation(聊天氣泡:user 訊息靠右藍泡、
+      assistant 訊息、💭 thought、🔧 工具卡片含 title/kind/status/路徑)/
+      🔍 Trace(L0-L3 原四層);分頁狀態存 URL hash → 5s 刷新後保持
+- [x] Claude in Chrome 驗證(SCRUM-10):對話流完整、cost $0.0257(B+.3 確認)
+- [x] commit+push
+- **收割完整度**:兩視角並存 —— Conversation 給 OpenHands-UI 式的可讀對話
+      (面向操作/審查),Trace 給四層對齊(面向除錯/稽核);GUI 只有前者,
+      detail page 兩者兼備且拼上 ticket 語意。
+
+**B+ 後續(未排程,低優先)**:detail page 拼 Jira 深連結、resume 對照
 (閒置 Evict→rehydrate)、長駐共享 server(避免每 attempt 重啟)。
 
 ## 里程碑
