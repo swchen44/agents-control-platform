@@ -35,12 +35,23 @@
 
 ## Checklist
 
-**Phase B+.0 — spike:agent-server 起得來 + REST 建 conversation**
-- [ ] 裝 openhands-agent-server 到既有 venv(或確認 uvx 路徑)
-- [ ] 起 server(127.0.0.1:18000)、GET /server_info 200、記啟動時間/timeout
-- [ ] REST 建一個 ACP conversation 跑 trivial 任務、WS 收到事件到終止
-- [ ] 產出 spike 答案(U1-U3)+ 事件↔envelope 欄位對映表
-- [ ] commit+push
+**Phase B+.0 — spike:agent-server 起得來 + REST 建 conversation** ✅ 2026-08-03
+- [x] 裝齊四個第一方包(--no-deps,見 openhands-acp-poc/PLAN.md 陷阱補記)+ libtmux
+- [x] 起 server(127.0.0.1:18010)、GET / 200(本地啟動數秒,非 uvx 數分鐘)
+- [x] REST 建 ACP conversation 跑 trivial 任務、events 輪詢到產出(`spike_agentserver.py`)
+- [x] **spike 答案(U1-U3 皆 PASS)**:
+  - U1 起法:`python -m openhands.agent_server --host --port`,env
+    `OH_SESSION_API_KEYS_0`;認證 header `X-Session-API-Key`
+  - U2 建 conversation:`POST /api/conversations`,body =
+    `{workspace:{kind:LocalWorkspace,working_dir}, agent:<ACPAgent.model_dump>,
+    initial_message:{role,content}}` → 201 + `id`
+  - U3 事件:`GET /api/conversations/{id}/events/search?limit=100` → `items[]`;
+    **終止判定 = `ConversationStateUpdateEvent.execution_status`
+    (running→finished)**;session_id 在 `agent_state.acp_session_id`
+- [x] 事件↔envelope 對映:completed←execution_status==finished;
+    session_id←agent_state;cost←需另查 conversation info(B+.1 補);
+    error←ConversationErrorEvent
+- [x] commit+push
 
 **Phase B+.1 — inner runner agent-server 版(envelope 契約不變)**
 - [ ] `inner_agentserver_runner.py`:REST 建 conversation + WS 訂閱 →

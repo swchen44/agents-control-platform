@@ -88,3 +88,10 @@
 - auth:adapter 是否吃本機既有 claude / codex 登入 **未知,Phase 1/2 的實驗目的之一**。
 - SDK 依賴安裝若失敗:記錄失敗形態,fallback 改起 agent-server(Docker)另議。
 - codex-acp 相容性未知(v3 只驗過 claude 側證據)——失敗本身就是有價值的結論。
+
+## 陷阱補記(2026-08-03,B+.0)
+- **裝 agent-server 會從 PyPI 拉舊 openhands-sdk(1.20.0)覆蓋 editable 1.39.1**
+  → acp_models 消失、ACP 全壞。修:四個第一方包(sdk/tools/workspace/
+  agent-server)一律 `pip install --no-deps -e <clone>`,依賴早已滿足,
+  順帶避開 litellm rust-wheel 重建(lesson #1)。
+- agent-server 額外執行期依賴:`libtmux`(editable 沒帶,要手動裝)。
