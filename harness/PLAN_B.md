@@ -51,17 +51,23 @@
 不存在的 project 回空集合不報錯,別被騙)。issue type 是中文(任務=10003)。
 未來若開真正的 AGT project,改 routes.yaml 兩處即可。
 
-**Phase 2 — dispatch 到 inner loop(B route 執行)**
-- [ ] workspace provisioning:`tickets/{issue_id}/` + skills 注入(.claude/skills)
-      + TICKET.md 渲染(ticket 欄位)
-- [ ] inner runner:openhands venv 的 ACPAgent 跑單次任務(subprocess 呼叫
-      openhands-acp-poc 環境;agent 設定獨立區塊——B→C 只換這塊)
-- [ ] grader/verify(沿用 arcp_poc.grader)+ **三態 outcome**(UNKNOWN:子行程
-      消失/無法證明副作用 → pending:unknown)
-- [ ] mapping 表 create_or_resume(acp_resume_session_id 續用)+ workspace health check
-- [ ] 結果回寫 AGT:Resolve comment 帶證據(verify 結果/變更檔案/attempt/成本)
-- [ ] E2E:AGT 真票 → 接管 → 執行 → 驗證 → 回寫
-- [ ] commit+push
+**Phase 2 — dispatch 到 inner loop(B route 執行)** ✅ 2026-08-03(M2 達成)
+- [x] workspace provisioning:`tickets/{issue_id}/ws` + skills 注入 +
+      TICKET.md 渲染 + resume 前 health check
+- [x] inner runner 對:`inner_acp_runner.py`(venv 內)+ `inner_runner.py`
+      (harness 側);job/envelope 檔案契約,分類只看 envelope 不看 exit code;
+      agent: 設定獨立區塊(B→C 只換 runner + 該區塊)
+- [x] grader/verify 沿用 A 路 `arcp_poc.grader`(差異化層跨 runtime 實證)+
+      三態 outcome(UNKNOWN=行程消失/無 envelope → pending:unknown 只有人解)
+- [x] ticket_session 對映表(create_or_resume、acp_resume_session_id 續用)
+- [x] 結果回寫:SUCCESS/FAILURE/UNKNOWN 皆帶證據 comment(驗證結果/attempt/
+      成本/resume hint)
+- [x] E2E 4/4 PASS(SCRUM-2):真票 → 接管 → ACPAgent(haiku,$0.045)→
+      驗證 → 回寫 → 冪等
+- [x] commit+push
+- [ ] **殘項(Phase 3 前補)**:retry/resume 路徑與 UNKNOWN 路徑已實作但未
+      live 驗證——需 fault-injection E2E(故意給過不了驗證的任務 → 觀察
+      evidence feedback 重試;kill inner runner → 觀察 pending:unknown)
 
 **Phase 3 — 指令通道 + 外部變更防護**
 - [ ] `@agent` 指令(run/stop/retry/cancel)+ commenter 白名單 + ack 回覆 + 冪等

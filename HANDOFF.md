@@ -184,14 +184,19 @@ AgentBase 子類——**C 不用 fork**;真 `claude -p` 已在 OpenHands Convers
 
 ## 6.8 B 期 harness 進度(2026-08-03)
 
-`harness/` 開工:**M1 灰度里程碑達成**——Phase 0(Jira Cloud source adapter,
-真實認證冒煙 PASS)+ Phase 1(routing/watch/watermark,真實 Jira E2E 4/4 PASS,
-notify_only 只記不動)。計畫與 checklist:`harness/PLAN_B.md`;
-教訓:`harness/LESSONS.md`(逐步累積)。
-環境:Atlassian Cloud swchen44,project **key=SCRUM**(名稱 AgentLifetimeBoardv1,
-「AGT」不存在——key 不隨改名變)、憑證 `~/.env`(不入 repo)、issue type 中文。
-**下一步:Phase 2(M2 第一張票端到端)**——workspace provisioning → inner
-runner(B route)→ 三態 outcome(含 UNKNOWN)→ 帶證據回寫 Jira。
+`harness/` 開工:**M1 + M2 里程碑皆達成(2026-08-03)**。
+- Phase 0-1(M1 灰度):Jira Cloud source adapter + routing/watch/watermark,
+  真實 Jira E2E 4/4 PASS(notify_only 只記不動、watermark 冪等)。
+- Phase 2(M2 端到端):**第一張真票全鏈路 PASS**(SCRUM-2)——routing →
+  workspace+TICKET.md → inner runner(openhands venv ACPAgent,haiku $0.045)
+  → A 路 grader 驗證 → 帶證據回寫 comment → 冪等不重派。三態 outcome
+  (UNKNOWN=行程消失→pending:unknown 只有人解)、ticket_session 對映表、
+  agent 設定獨立區塊(B→C 只換 inner runner + 該區塊)。
+計畫:`harness/PLAN_B.md`;教訓:`harness/LESSONS.md`。
+環境:Atlassian Cloud swchen44,project **key=SCRUM**(名稱 AgentLifetimeBoardv1)、
+憑證 `~/.env`(不入 repo)、issue type 中文(任務)。
+**下一步**:Phase 2 殘項 fault-injection E2E(retry/UNKNOWN 路徑 live 驗證)
+→ Phase 3(指令通道 + external_change_policy)。
 
 ## 7. 建議路線(report 定案)
 
