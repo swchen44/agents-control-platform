@@ -92,8 +92,18 @@
 backend 切換(in-process↔agent-server)只改 profile 一行,envelope 契約不變,
 dispatcher/grader/三態邏輯零改動 —— 為 C 期(換 RawCLIAgent)鋪好路。
 收割品(detail page、四層對齊)帶進 C 且事件更細(RawCLIAgent 發 248 級)。
-**B+.3 精修(未排程)**:cost 從 stats 事件讀、events 分頁(>100)、
-detail page 加 live 刷新 + 拼 Jira 連結。
+**Phase B+.3 — 精修** ✅ 2026-08-03
+- [x] **cost 修正**:改從 `stats.usage_to_metrics.*.accumulated_cost` 讀
+      (fallback metrics 端點)→ SCRUM-10 拿到 $0.0257(之前 $0)。
+      B+.2 記的 cost gap 消除 —— agent-server 成本可查,只是位置不同。
+- [x] **events 分頁**:`_fetch_all_events` 用 `next_page_id` 翻頁,破 100 硬上限
+      (B+.1 教訓);長任務(>100 事件)不再漏事件/誤判終止。
+- [x] **detail page live 刷新**:每 5s 自動重載,進行中的 conversation 事件
+      逐步可見。
+- [x] commit+push
+
+**B+.3 後續(未排程,低優先)**:detail page 拼 Jira 深連結、resume 對照
+(閒置 Evict→rehydrate)、長駐共享 server(避免每 attempt 重啟)。
 
 ## 里程碑
 

@@ -176,7 +176,10 @@ class Handler(BaseHTTPRequestHandler):
             body = render_ticket(iid, journal, sessions)
         else:
             body = render_index(journal, sessions)
-        page = (f"<!doctype html><html><head><meta charset='utf-8'>"
+        # live 刷新:每 5s 自動重載(只讀頁,最簡可靠;live conversation 進行中
+        # 也能看到事件逐步增加)
+        refresh = "<meta http-equiv='refresh' content='5'>"
+        page = (f"<!doctype html><html><head><meta charset='utf-8'>{refresh}"
                 f"<title>ARCP Detail</title><style>{CSS}</style></head>"
                 f"<body>{body}</body></html>")
         self.send_response(200)

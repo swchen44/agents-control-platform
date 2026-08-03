@@ -60,6 +60,22 @@
     語言/改名都免疫。呼應 lesson #3/#4:顯示資料一律不可當識別。
     (同理:create_ticket 已改用 issue type **id** 10003 而非名稱。)
 
+12. **agent-server 的 ACP 成本不在 metrics.accumulated_cost,在 stats 事件**
+    症狀:`GET /conversations/{id}.metrics.accumulated_cost` 回 $0,但 agent
+    確實花了錢。
+    根因:ACP-managed 的用量走 `ConversationStateUpdateEvent(key=stats)` 的
+    `usage_to_metrics.<usage_id>.accumulated_cost`,不進標準 metrics 欄位。
+    對策:從 stats 事件加總(fallback metrics)。教訓延伸:**「查不到」先懷疑
+    查錯位置,不要當作「沒有」**(呼應 lesson #2 的 search 假陰性)。
+    收穫途徑:B+.2 detail page 把 L3 事件攤開才看到 stats —— 可觀測性直接
+    回饋除錯能力。
+
+13. **spike 參數要與正式碼一致,否則綠燈是假安全感**
+    症狀:spike 用 events `limit=100` 貼邊過關,正式 runner 隨手寫 200 → 500
+    (端點 `assert limit<=100`)。
+    對策:spike 的請求參數/邊界值照抄未來正式碼會用的值;邊界值(上限、
+    分頁)在 spike 就要壓測。
+
 ## Session 作業教訓(跨專案通用)
 
 6. **背景工作的 cwd 會漂移**:background shell 從「當下」的工作目錄啟動,

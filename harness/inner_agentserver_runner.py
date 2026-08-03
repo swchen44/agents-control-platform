@@ -55,6 +55,36 @@ def _wait_ready(base, deadline_s=120):
     return False
 
 
+def _fetch_all_events(base, key, cid) -> list[dict]:
+    """Page through /events/search (server caps limit at 100, B+.1 lesson)."""
+    items: list[dict] = []
+    page = None
+    while True:
+        q = "?limit=100" + (f"&page_id={page}" if page else "")
+        evs = _api(base, key, "GET",
+                   f"/api/conversations/{cid}/events/search{q}")
+        batch = evs.get("items", evs.get("results", []))
+        items.extend(batch)
+        page = evs.get("next_page_id")
+        if not page or not batch:
+            return items
+
+
+def _cost_from_stats(events: list[dict]) -> float | None:
+    """ACP cost lives in the stats StateUpdate event, not metrics.accumulated_cost
+    (B+.2 finding). Sum accumulated_cost across usage_to_metrics entries."""
+    total, found = 0.0, False
+    for e in events:
+        if (e.get("kind") == "ConversationStateUpdateEvent"
+                and e.get("key") == "stats"
+                and isinstance(e.get("value"), dict)):
+            for m in (e["value"].get("usage_to_metrics") or {}).values():
+                c = m.get("accumulated_cost")
+                if c is not None:
+                    total, found = total + float(c), True
+    return total if found else None
+
+
 def main() -> int:
     job = json.load(open(sys.argv[1]))
     envelope = {"completed": False, "session_id": None,
@@ -105,10 +135,9 @@ def main() -> int:
         deadline = time.time() + float(job.get("timeout_sec", 300))
         status = "running"
         agent_state = {}
+        items: list[dict] = []
         while time.time() < deadline:
-            evs = _api(base, key, "GET",
-                       f"/api/conversations/{cid}/events/search?limit=100")
-            items = evs.get("items", evs.get("results", []))
+            items = _fetch_all_events(base, key, cid)  # paged, no 100 cap
             with open(job["events_path"], "w") as f:
                 for e in items:
                     f.write(json.dumps(e, ensure_ascii=False) + "\n")
@@ -130,12 +159,15 @@ def main() -> int:
         envelope["session_id"] = agent_state.get("acp_session_id")
         envelope["truly_resumed"] = bool(
             agent_state.get("_resumed_existing_session", False))
-        try:
-            ci = _api(base, key, "GET", f"/api/conversations/{cid}")
-            metrics = ci.get("metrics") or {}
-            envelope["cost_usd"] = float(metrics.get("accumulated_cost") or 0)
-        except Exception:
-            pass
+        # cost: prefer stats event (ACP path); fall back to metrics endpoint
+        envelope["cost_usd"] = _cost_from_stats(items)
+        if envelope["cost_usd"] is None:
+            try:
+                ci = _api(base, key, "GET", f"/api/conversations/{cid}")
+                metrics = ci.get("metrics") or {}
+                envelope["cost_usd"] = float(metrics.get("accumulated_cost") or 0)
+            except Exception:
+                pass
     except SystemExit:
         pass
     except Exception as e:
