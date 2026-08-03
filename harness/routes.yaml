@@ -27,3 +27,34 @@ outer_loop:
       profile: triage
       on_match: notify_only
       comments_lookback: 5
+
+    - name: filechain-demo          # Phase 2 M2:第一條會「動手」的 route
+      when:
+        labels: ['filechain']
+      profile: filechain
+      on_match: create_or_resume
+
+# Inner loop(v5 §4.2):profile 決定 workspace/skills/agent/verify/loop。
+# agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
+inner_loop:
+  profiles:
+    filechain:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:                        # ★ B→C 只換這塊
+        backend: openhands-acp
+        acp_server: claude-code
+        acp_model: haiku            # 使用者決策:A/B 同款 model
+        venv: ../examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+      verify:                       # 確定性檢查,全過才 SUCCESS
+        - name: filechain
+          files:
+            step1.txt: '1'
+            step2.txt: '12'
+            step3.txt: '123'
+      loop:
+        max_attempts: 2
+        on_unknown: pending         # 不可改 retry(v5 D3)
