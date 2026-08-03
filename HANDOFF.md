@@ -195,8 +195,14 @@ AgentBase 子類——**C 不用 fork**;真 `claude -p` 已在 OpenHands Convers
 計畫:`harness/PLAN_B.md`;教訓:`harness/LESSONS.md`。
 環境:Atlassian Cloud swchen44,project **key=SCRUM**(名稱 AgentLifetimeBoardv1)、
 憑證 `~/.env`(不入 repo)、issue type 中文(任務)。
-**下一步**:Phase 2 殘項 fault-injection E2E(retry/UNKNOWN 路徑 live 驗證)
-→ Phase 3(指令通道 + external_change_policy)。
+- Phase 2 殘項:fault-injection E2E 6/6(retry+evidence+truly_resumed 實證、
+  UNKNOWN→pending:unknown 只有人解)。
+- Phase 3(M3 閉環):`@agent run/retry/stop/cancel` 指令通道 E2E 5/5
+  (retry 同輪重派 = 人工解除 pending 機制)、external_change_policy、
+  pending 三分類、harness_selftest 17 項離線全過。
+**B 期 harness M1+M2+M3 全數達成(2026-08-03)。下一步(Phase 4,未排程)**:
+Agent Status/Link 欄位、detail page、Resolve transition、D10 併發閘門、
+常駐 poller。
 
 ## 7. 建議路線(report 定案)
 

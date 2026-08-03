@@ -8,6 +8,12 @@ outer_loop:
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
 
+  # Phase 3:指令通道與外部變更政策
+  commands:
+    allowed_commenters: ['Shao-wei Chen']   # displayName 或 accountId(§6-13)
+  external_change:
+    cancel_states: ['完成', 'Done', 'Cancelled']  # 人 out-of-band 關票 = 撤銷
+
   routes:
     # 由上而下第一個 match 勝出;when 內欄位 AND、陣列值 OR
     - name: hands-off
@@ -44,6 +50,12 @@ outer_loop:
       when:
         labels: ['faultdead']
       profile: faultdead
+      on_match: create_or_resume
+
+    - name: cmd-demo                # Phase 3:指令通道 E2E 用
+      when:
+        labels: ['cmddemo']
+      profile: faultdead            # 10s timeout → 快速進 pending:unknown
       on_match: create_or_resume
 
 # Inner loop(v5 §4.2):profile 決定 workspace/skills/agent/verify/loop。

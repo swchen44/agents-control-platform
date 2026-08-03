@@ -71,11 +71,20 @@
       pending:unknown 只有人解、不自動重試;F3 跨 poll 冪等。
       過程收穫 lesson #9(store 是唯一記憶)、#10(feedback 資訊量邊界)。
 
-**Phase 3 — 指令通道 + 外部變更防護**
-- [ ] `@agent` 指令(run/stop/retry/cancel)+ commenter 白名單 + ack 回覆 + 冪等
-- [ ] external_change_policy:Cancelled → 立即中斷;assignee 改走 → pending
-- [ ] pending 三分類(human-decision/external/unknown)
-- [ ] commit+push
+**Phase 3 — 指令通道 + 外部變更防護** ✅ 2026-08-03(M3 達成)
+- [x] `@agent` 指令(run/retry/stop/cancel)+ 白名單 + ack + 不認得也回覆
+      (§6-13/14);冪等由 watermark 保證;[agent] 自家留言防迴圈
+- [x] E2E 5/5 PASS(SCRUM-7):UNKNOWN pending → dance 收說明 → **retry ack
+      + 同輪重派**(人工解除 pending 機制實證)→ cancel ABORTED → 不再派工
+- [x] external_change_policy:out-of-band 關票 → ABORTED;assignee 改走 →
+      pending:external + 說明留言(offline selftest 驗證;live 屬低風險殘項)
+- [x] pending 三分類落地:human-decision(stop)/ external(assignee)/
+      unknown(行程消失)——unknown 只有人能解
+- [x] harness_selftest.py 17 項離線全過(routing/護欄/指令/白名單/external)
+- [x] commit+push
+
+**Phase 4(未排程)— v5 P2 剩餘**:Agent Status/Agent Link 自訂欄位、
+detail page、Resolve transition、D10 雙閘門併發、常駐 poller(daemon 模式)。
 
 **每 Phase 完成判準**:E2E 可重現 + selftest 級免費驗證 + 文件同步。
 

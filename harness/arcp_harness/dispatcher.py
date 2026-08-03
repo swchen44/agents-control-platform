@@ -65,8 +65,9 @@ class Dispatcher:
         events: list[dict] = []
         profile = self.profiles[profile_name]
         sess = self.store.get_session(ticket.id)
-        if sess and (sess.outcome == "SUCCESS" or sess.pending_reason):
-            return events  # done or awaiting a human — nothing to do
+        if sess and (sess.outcome in ("SUCCESS", "ABORTED")
+                     or sess.pending_reason):
+            return events  # done/cancelled or awaiting a human — nothing to do
 
         if sess is None:
             ws = provision(self.root, ticket, profile)
