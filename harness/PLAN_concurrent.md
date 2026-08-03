@@ -37,11 +37,24 @@
       (costs 各自正確)、**wall-clock 27.5s vs 串行 ~75s**、selftest 17/17
 - [x] commit+push
 
-**Phase conc.2 — 長駐共享 server(openhands-server backend)**
-- [ ] `server_manager.py`:懶啟動 agent-server(1 個)、健康檢查、base_url/key、收攤
+**Phase conc.2 — 健壯性:stall/hang exit+resume + 故障分類(N13/N3)** ✅ 2026-08-03 **M8**
+- [x] RawCLIAgent **reset-on-progress watchdog**:`stall_seconds`,任何 stream 行
+      reset 進度,無進展 → killpg 子進程 → `_stalled`(移植 A 路 supervisor._watchdog)
+- [x] **watchdog 機制單元測(`test_stall.py`,免 token 確定)**:W1 無進展→3s
+      killpg、W2 持續進展→不 kill(slow is legal)。⚠️ progress 定義 bug 已修
+      (partial streaming 算進展,lesson #16);claude sleep 不可靠→用假進程測
+- [x] envelope `error_kind`(stalled/no-terminal/task);**exit→resume 的 resume
+      由 C.4 現成迴路(completed=False→dispatcher resume)** —— 只缺的「主動 exit」
+      這步補上了
+- [~] dispatcher infra→pending:external(不消耗 attempt):留 conc.3(rawcli 本地
+      無 server,infra 故障主要在 openhands-server backend)
+- [x] commit+push
+
+**Phase conc.3 — 長駐共享 server + server 重起(N1/N4)**
+- [ ] `server_manager.py`:懶啟動 1 個 agent-server、**健康檢查+重起(同
+      `OH_PERSISTENCE_DIR`)**、base_url/key、收攤
 - [ ] inner_runner job 傳長駐 server_url/key;inner_agentserver_runner 優先連(K5)
-- [ ] OuterLoop 持有 ServerManager,openhands-server 票共用
-- [ ] E2E:同時開 3 張 filechain-server 票 → 共用 1 個 server PID、並行完成
+- [ ] 故障注入 E2E:跑到一半 kill server → 重起 rehydrate → 票 resume 續、不漏
 - [ ] commit+push
 
 ## 健壯性:non-normal cases 分析(2026-08-03,使用者提)
@@ -64,9 +77,20 @@
 | N10 | **store 執行緒競爭** | ✅ conc.1 加鎖 | 已處理 |
 | N11 | **並行票 workspace 衝突** | ✅ 各自 tickets/{issue_id}/ws | 已隔離 |
 | N12 | **resume 找不到原 conversation**(session store 被清) | rawcli 有三段梯度(transcript);openhands load_session 失敗 fallback new_session | 既有機制;transcript 降級可補 openhands 側 |
+| N13 | **agent 沒反應/執行太久**(stall/hang) | 只有硬 timeout(總時長)、超時消耗 attempt | **reset-on-progress watchdog**(移植 A 路 `supervisor._watchdog`):無事件推進超 `stall_seconds` → **exit(killpg)→ resume 續跑**(不重工);硬 timeout=hang(連 stall 事件都沒)。tradeoff:合法長工具 vs 卡死(v5「深度任務 vs 卡死」)→ stall_seconds 設合理值 |
 
-**conc.2 據此的必做**:① ServerManager(健康檢查+重起+同 persistence)② envelope
-`error_kind` 區分 infra/task/unknown → infra 走 pending:external(不消耗 attempt)。
+**「沒反應/太久要 exit and resume」(N13,使用者)** = A 路 watchdog 的 harness 版:
+- **exit**:watchdog 偵測無進展 → killpg agent 子進程(A 路已證「進程死≠完成」,
+  killpg 杜絕孤兒)
+- **resume**:envelope completed=False → dispatcher 現成 retry+resume 迴路
+  (C.4)續原 session,不重工 —— **resume 是現成的,只缺「主動 exit」那一步**
+- stall(卡住) vs 合法慢工具:A 路「slow is legal; stalled is not」,stall_seconds
+  夠大避免誤殺深度任務;真無限等待會觸發
+
+**Phase 重新定位**:
+- **conc.2 = 健壯性(檢測+恢復)**:N13 stall/hang exit+resume(先,使用者直接要)
+  + N3 error_kind 區分 infra/task/stall/unknown(infra→pending:external 不消耗 attempt)
+- **conc.3 = 長駐共享 server + N1 server 重起**(健康檢查+同 persistence+rehydrate)
 
 ## 里程碑
 

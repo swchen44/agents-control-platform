@@ -97,6 +97,18 @@
     延伸:ACP 隔著 adapter + 硬編 bypassPermissions,隔離粒度比 rawcli 粗 ——
     直接掌 CLI flag(A/C)比 ACP(B)更容易精確隔離。
 
+16. **stall 檢測的「進展」定義:partial token streaming 也算進展**
+    症狀:stall watchdog 首版在 claude 啟動+輸出階段(只有 system+stream_event)
+    就誤殺(8s dur、files=[]、raw 只有 system/stream_event)。
+    根因:`_last_progress` 只在「有意義事件」(_emit:message/tool)時更新,但
+    partial token deltas(stream_event)不 _emit → model 正常輸出被當無進展。
+    對策:**任何 stream 行都是進展**(每行 reset);只有「工具執行中零輸出」
+    (真卡住)才 starve progress → stall。呼應 A 路 watchdog「slow is legal;
+    stalled is not」——slow=有心跳,stalled=完全無輸出。
+    延伸:**用 claude sleep 制造 stall 不可靠**(haiku 常不真 sleep,dur<預期)→
+    watchdog 機制用假進程單元測(`test_stall.py`,免 token、確定),不依賴 agent
+    行為;resume 續跑由 C.4 已證。分層驗證勝過脆弱的 live 端到端。
+
 ## Session 作業教訓(跨專案通用)
 
 6. **背景工作的 cwd 會漂移**:background shell 從「當下」的工作目錄啟動,

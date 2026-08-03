@@ -60,6 +60,10 @@ class RawCLIAgent(AgentBase):
     # <file> appears, +delay — mirrors A-route KillTrigger for the resume matrix
     fault_kill_on_file: str | None = None
     fault_delay: float = 1.0
+    # stall watchdog (N13, ported from A-route supervisor._watchdog): if no
+    # event advances the run for stall_seconds, EXIT (killpg) so the harness
+    # can resume instead of hanging. 0 = off. "slow is legal; stalled is not."
+    stall_seconds: float = 0.0
 
     # exposed to the runner after step() (C.3 envelope)
     _final_session_id: str | None = PrivateAttr(default=None)
@@ -69,6 +73,8 @@ class RawCLIAgent(AgentBase):
     # kills the child BEFORE this → completed stays False even though the
     # process "ended" (A-route SIGTERM-rc=0 lesson, RawCLIAgent edition).
     _got_terminal: bool = PrivateAttr(default=False)
+    _stalled: bool = PrivateAttr(default=False)
+    _last_progress: float = PrivateAttr(default=0.0)
     _raw_count: int = PrivateAttr(default=0)
     _event_count: int = PrivateAttr(default=0)
 
@@ -118,8 +124,12 @@ class RawCLIAgent(AgentBase):
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL, text=True, bufsize=1,
             start_new_session=True)
+        self._last_progress = time.time()
         if self.fault_kill_on_file:
             threading.Thread(target=self._fault_kill, args=(proc, wd),
+                             daemon=True).start()
+        if self.stall_seconds > 0:
+            threading.Thread(target=self._stall_watchdog, args=(proc,),
                              daemon=True).start()
         assert proc.stdout is not None
         try:
@@ -127,6 +137,11 @@ class RawCLIAgent(AgentBase):
                 line = line.strip()
                 if not line:
                     continue
+                # ANY stream line = progress (partial token deltas included):
+                # "slow is legal" — model still producing. Only a TOOL running
+                # with zero output (e.g. a hung command) starves progress →
+                # stall. (Bug found: emitting-only reset killed live streaming.)
+                self._last_progress = time.time()
                 try:
                     o = json.loads(line)
                 except json.JSONDecodeError:
@@ -144,6 +159,21 @@ class RawCLIAgent(AgentBase):
         if self._final_session_id:
             self.__dict__["session_id"] = self._final_session_id
         state.execution_status = ConversationExecutionStatus.FINISHED
+
+    # -- stall watchdog (N13, reset-on-progress) --------------------------- #
+    def _stall_watchdog(self, proc) -> None:
+        """No event for stall_seconds → EXIT (killpg) so the harness resumes."""
+        while proc.poll() is None:
+            time.sleep(1.0)
+            if time.time() - self._last_progress > self.stall_seconds:
+                self._stalled = True
+                self._error = (f"stalled: no progress for "
+                               f"{self.stall_seconds:.0f}s")
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    pass
+                return
 
     # -- execution isolation (macOS seatbelt, claude) ---------------------- #
     def _write_sandbox_profile(self, wd: str) -> str:

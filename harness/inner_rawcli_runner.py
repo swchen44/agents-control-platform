@@ -28,7 +28,8 @@ sys.path.insert(0, HERE)  # arcp_rawcli lives here
 def main() -> int:
     job = json.load(open(sys.argv[1]))
     envelope = {"completed": False, "session_id": None,
-                "truly_resumed": False, "cost_usd": None, "error": None}
+                "truly_resumed": False, "cost_usd": None, "error": None,
+                "error_kind": None}   # stalled | task | no-terminal | None
 
     def capture(event) -> None:
         try:
@@ -53,7 +54,8 @@ def main() -> int:
             resume=bool(resume_sid),
             raw_events_path=raw_path,
             os_sandbox=job.get("os_sandbox", False),         # claude seatbelt
-            sandbox=job.get("sandbox", "workspace-write"))    # codex --sandbox
+            sandbox=job.get("sandbox", "workspace-write"),    # codex --sandbox
+            stall_seconds=float(job.get("stall_seconds", 0)))  # N13 watchdog
         conv = Conversation(agent=agent, workspace=os.path.abspath(job["ws"]),
                             callbacks=[capture])
         conv.send_message(job["prompt"])
@@ -65,6 +67,14 @@ def main() -> int:
         envelope["truly_resumed"] = bool(resume_sid)  # native --resume used
         envelope["cost_usd"] = agent._cost_usd
         envelope["error"] = agent._error
+        # error_kind (N13/N3): stalled → dispatcher resumes; no-terminal =
+        # crash/kill; task = agent ran but reported error
+        if agent._stalled:
+            envelope["error_kind"] = "stalled"
+        elif not agent._got_terminal:
+            envelope["error_kind"] = "no-terminal"
+        elif agent._error:
+            envelope["error_kind"] = "task"
     except Exception as e:
         envelope["error"] = f"{type(e).__name__}: {e}"[:300]
 
