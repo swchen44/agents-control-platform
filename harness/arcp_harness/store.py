@@ -43,6 +43,7 @@ class TicketSession:
     queued: bool = False           # F1:本輪額滿排隊(下輪重評)
     queued_at: float = 0.0         # FIFO 排序時間
     inactive: bool = False         # DESIGN §6:assignee 不在機器人手上→不占額度(W2 置位)
+    approval_revisions: int = 0    # W2.3 審批退回重填次數
 
 
 class Store:
@@ -81,7 +82,8 @@ class Store:
                 cost_usd       REAL NOT NULL DEFAULT 0,
                 queued         INTEGER NOT NULL DEFAULT 0,
                 queued_at      REAL NOT NULL DEFAULT 0,
-                inactive       INTEGER NOT NULL DEFAULT 0
+                inactive       INTEGER NOT NULL DEFAULT 0,
+                approval_revisions INTEGER NOT NULL DEFAULT 0
             )""")
         self._migrate()
         self._db.commit()
@@ -93,7 +95,9 @@ class Store:
             "PRAGMA table_info(ticket_session)")}
         for name, ddl in (("queued", "INTEGER NOT NULL DEFAULT 0"),
                           ("queued_at", "REAL NOT NULL DEFAULT 0"),
-                          ("inactive", "INTEGER NOT NULL DEFAULT 0")):
+                          ("inactive", "INTEGER NOT NULL DEFAULT 0"),
+                          ("approval_revisions",
+                           "INTEGER NOT NULL DEFAULT 0")):
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -135,7 +139,7 @@ class Store:
 
     _SESSION_COLS = ("issue_id, key, profile, workspace, session_id, attempts,"
                      " outcome, pending_reason, cost_usd, queued, queued_at,"
-                     " inactive")
+                     " inactive, approval_revisions")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -143,7 +147,8 @@ class Store:
             issue_id=row[0], key=row[1], profile=row[2], workspace=row[3],
             session_id=row[4], attempts=row[5], outcome=row[6],
             pending_reason=row[7], cost_usd=row[8], queued=bool(row[9]),
-            queued_at=row[10], inactive=bool(row[11]))
+            queued_at=row[10], inactive=bool(row[11]),
+            approval_revisions=row[12])
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -170,8 +175,8 @@ class Store:
                 INSERT INTO ticket_session
                     (issue_id, key, profile, workspace, session_id,
                      attempts, outcome, pending_reason, cost_usd,
-                     queued, queued_at, inactive)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                     queued, queued_at, inactive, approval_revisions)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
@@ -179,10 +184,12 @@ class Store:
                     attempts=excluded.attempts, outcome=excluded.outcome,
                     pending_reason=excluded.pending_reason,
                     cost_usd=excluded.cost_usd, queued=excluded.queued,
-                    queued_at=excluded.queued_at, inactive=excluded.inactive
+                    queued_at=excluded.queued_at, inactive=excluded.inactive,
+                    approval_revisions=excluded.approval_revisions
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
-                  int(s.queued), s.queued_at, int(s.inactive)))
+                  int(s.queued), s.queued_at, int(s.inactive),
+                  s.approval_revisions))
 
     def close(self) -> None:
         self._db.close()

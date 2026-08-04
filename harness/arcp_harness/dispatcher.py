@@ -59,12 +59,13 @@ def _resume_hint(sess: TicketSession) -> str:
 class Dispatcher:
     def __init__(self, source: JiraCloudSource, store: Store,
                  profiles: dict[str, Profile], root: str,
-                 server_manager=None):
+                 server_manager=None, approval=None):
         self.source = source
         self.store = store
         self.profiles = profiles
         self.root = root
         self.server_manager = server_manager   # conc.3 long-lived shared server
+        self.approval = approval               # W2.3 ApprovalGate | None
 
     def _effective_agent(self, profile: Profile) -> dict:
         """Inject shared-server info for openhands-server backend (conc.3)."""
@@ -91,6 +92,28 @@ class Dispatcher:
             self.store.upsert_session(sess)
             events.append(self.store.journal(
                 "external_cleared", ticket.id, ticket.key, cause="server-back"))
+
+        # W2.3 起點審批門:require_approval 時 fork 前先審(新建/換手;resume 不審)。
+        # pending:approval 仍要跑(偵測 assignee 交回);escalated 由下方通用 skip 擋。
+        if (profile.require_approval and self.approval is not None
+                and (sess is None
+                     or (sess.session_id is None and sess.outcome is None
+                         and sess.pending_reason in (None, "approval")))):
+            if sess is None:
+                sess = TicketSession(
+                    issue_id=ticket.id, key=ticket.key, profile=profile.name,
+                    workspace="(pending-approval)", session_id=None, attempts=0,
+                    outcome=None, pending_reason=None, cost_usd=0.0)
+            decision = self.approval.gate(ticket, profile, sess)
+            self.store.upsert_session(sess)
+            events.append(self.store.journal(
+                "approval", ticket.id, ticket.key, decision=decision,
+                revisions=sess.approval_revisions))
+            if decision != "proceed":
+                return events
+            sess.workspace = provision(self.root, ticket, profile)
+            self.store.upsert_session(sess)
+
         if sess and (sess.outcome in ("SUCCESS", "ABORTED")
                      or sess.pending_reason):
             return events  # done/cancelled or awaiting a human — nothing to do
@@ -118,6 +141,7 @@ class Dispatcher:
         artifacts = os.path.join(os.path.dirname(sess.workspace), "attempts")
         agent_cfg = self._effective_agent(profile)  # conc.3 server injection
         feedback: str | None = None
+        res = None  # 若 attempts 已達 max、while 一次都沒跑,FAILURE 段仍安全
 
         while sess.attempts < profile.max_attempts:
             sess.attempts += 1
@@ -205,7 +229,7 @@ class Dispatcher:
         sess.outcome, sess.pending_reason = "FAILURE", "max-attempts"
         self.store.upsert_session(sess)
         self_eval = (f"\nagent 自評:{summarize(res.structured)}"
-                     if res.structured else "")
+                     if res is not None and res.structured else "")
         self.source.add_comment(ticket.id, (
             f"[agent] outcome=FAILURE:{profile.max_attempts} 次嘗試未過驗證。"
             f"最後失敗證據:\n{feedback}{self_eval}\n{_resume_hint(sess)}"))

@@ -215,6 +215,16 @@ class JiraCloudSource:
                 return True
         return False
 
+    def set_description(self, id_or_key: str | int, text: str) -> None:
+        """Overwrite the issue description (W2.3 審批門寫分區段 plan)。"""
+        self._request("PUT", f"/rest/api/3/issue/{id_or_key}",
+                      body={"fields": {"description": text_to_adf(text)}})
+
+    def assign(self, id_or_key: str | int, account_id: str | None) -> None:
+        """Set assignee by accountId(None = 取消指派)。W2.3/W2.4 換手用。"""
+        self._request("PUT", f"/rest/api/3/issue/{id_or_key}/assignee",
+                      body={"accountId": account_id})
+
     # -- mapping ------------------------------------------------------------ #
     def _to_ticket(self, issue: dict) -> Ticket:
         f = issue.get("fields", {}) or {}

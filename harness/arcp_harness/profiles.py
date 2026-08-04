@@ -36,6 +36,9 @@ class Profile:
     max_attempts: int
     on_unknown: str                  # must be "pending" (v5 D3)
     max_budget_usd: float | None = None  # A4:超支→pending:budget(None=不限)
+    require_approval: bool = False    # W2.3 起點審批門(per-profile)
+    approver: str | None = None       # 審批者 email/accountId
+    max_revisions: int = 3            # 退回重填上限
 
 
 def load_profiles(path: str) -> dict[str, Profile]:
@@ -58,6 +61,7 @@ def load_profiles(path: str) -> dict[str, Profile]:
                 raise ConfigError(f"profile {name}: verify '{step.name}' "
                                   f"需要 files 或 cmd 其中之一")
             steps.append(step)
+        appr = p.get("approval") or {}
         agent = p.get("agent") or {}
         if not agent.get("backend"):
             raise ConfigError(f"profile {name}: agent.backend 必填")
@@ -86,5 +90,8 @@ def load_profiles(path: str) -> dict[str, Profile]:
             max_attempts=int(loop.get("max_attempts", 2)),
             on_unknown="pending",
             max_budget_usd=(float(loop["max_budget_usd"])
-                            if loop.get("max_budget_usd") is not None else None))
+                            if loop.get("max_budget_usd") is not None else None),
+            require_approval=bool(appr.get("required", False)),
+            approver=appr.get("approver"),
+            max_revisions=int(appr.get("max_revisions", 3)))
     return profiles
