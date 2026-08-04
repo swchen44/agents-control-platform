@@ -38,7 +38,41 @@
 | W15 | Python `logging`(分級、可配 `ARCP_LOG_LEVEL`/log file)與 journal(events.jsonl 稽核)並存 | 補充3;journal=結構化稽核,logging=運維 debug |
 | W16 | 新碼 ruff-clean;新測試 pytest-compatible(`def test_*`+assert,仍可自跑);不大重構現有目錄 | 補充4:量產另開 repo,此處尽量做 |
 
-## 分區段 description 規格(W2.2 / W11 / W10)
+## 分區段 description 規格 ★ 定案 2026-08-05(W2.2 / W11 / W10)
+
+**使用者 2026-08-05 定案調整(sections.py 初版已實作,待按此重構)**:
+1. **版面**:ARCP 區塊**整個置頂**(人一打開就填);區塊內順序 human(最前,簡單選項方便填)
+   → control → agent:<名>。
+2. **界定標記**:開始 `<!-- ARCP:sections v1 -->` + **結束 `<!-- /ARCP:sections -->`**;
+   區塊**外**(前後)所有非區段內容**一律不碰**(不只原始需求,任何正常資訊)。
+3. **全掃描 + log**:每次讀 description **掃全部機器段驗 hash**(純 python 不花 token),
+   不符=被誤寫 → 還原 + **log 記(段名 + 時間)** + comment 提示;human 段永遠尊重。
+4. hash:control/agent 段各附;human 無。命名 snake_case;附件 `key: attach:<檔名>`。
+
+目標版面:
+
+    <!-- ARCP:sections v1 -->
+    ### [ARCP owner=human]
+    ```yaml
+    agent_name:            # ← 請填(從 reviewer|fixer|… 擇一)
+    param:                 # 選填
+    ```
+    ### [ARCP owner=control updated=<iso>]
+    ```yaml
+    template: templates/python-fix
+    status: awaiting-approval
+    ```
+    hash: 3f8a1c9e0b2d
+    ### [ARCP owner=agent:reviewer updated=<iso>]
+    ```yaml
+    result: passed
+    ```
+    hash: a1b2c3d4e5f6
+    <!-- /ARCP:sections -->
+
+    <原始需求 + 任何其它資訊 —— 一律不碰>
+
+以下為 W2.2 初版示意(順序 control-first,待調整成 human 前置 + 結束標記):
 
 ```
 <原始需求…頂部不動…>
@@ -83,7 +117,9 @@ hash: a1b2c3d4e5f6
 - [ ] 單元測 `test_logutil.py`(pytest-compatible):level 生效、file handler 寫檔
 - [ ] commit+push
 
-**Phase W2.2 — description 分區段 + hash(W10/W11)**
+**Phase W2.2 — description 分區段 + hash(W10/W11)** ✅ 初版 6f9421d
+⚠️ 待按定案版面重構:human 段前置 + 結束標記 `<!-- /ARCP:sections -->` + 區塊置頂 +
+全掃描所有機器段驗 hash 並 log(段名+時間)+ 區塊外內容一律不碰
 - [ ] `arcp_harness/sections.py`:parse(description)→{原始需求, sections[]};
       render(sections)→description 文字;`section_hash(body)`(規範化+sha256[:12]);
       `verify_and_restore(parsed, authoritative)`→(restored_desc, violations)

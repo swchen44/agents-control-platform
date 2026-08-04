@@ -61,6 +61,10 @@ Jira summary 可編輯,**不可入 path**。
 
 ### 4.2 description 參數區塊(Q4:標記包起的 YAML)
 
+> ★ 2026-08-05 升級為**多方分區段**(human/control/agent:<名>各專屬段、機器段附 hash、
+> 區塊置頂 human 前置、開始+結束標記界定、全掃描驗 hash+log、區塊外不碰)。
+> 定案規格見 **PLAN_wave2「分區段 description 規格」**;實作 sections.py(初版 6f9421d,待重構)。
+
 - **原始需求描述保留在上方不動**。
 - 底部加**標記包起的結構區塊**,機器人只讀/寫標記區內,人類只填區內空欄:
 
