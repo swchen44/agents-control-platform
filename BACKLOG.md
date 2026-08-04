@@ -50,6 +50,13 @@
 - **Wave 4 證據強化 + 隔離**:C2 trace 自檢、A2 harness ledger、C3 KPI+人力估算、
   D1 可插拔隔離抽象、D2 codex 沙盒驗證。
 
+### 橫切設計:agent 生命週期 + 審批門(2026-08-04,使用者提)
+
+見 **[harness/DESIGN_lifecycle.md](harness/DESIGN_lifecycle.md)** — template(class)→
+workspace(instance)、命名 resume-safe、起點審批門(description YAML 參數 + assignee 放行 +
+退回迴圈)、**assignee=資源開關**(不在機器人手上就 killpg 釋放 CPU/memory)、無票定時源。
+橫切 F1/F3/G1/A2/E3/N13;profile schema 變更與波次落點見該文 §8-9。
+
 ---
 
 ## 主題 A — 生產化健壯性(qm 更強 + v5 生產就緒)
