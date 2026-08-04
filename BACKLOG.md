@@ -3,20 +3,52 @@
 > 整合來源:qm 對比學到的(要加強)+ 各 PLAN/HANDOFF/COMPARISON/v3 §9.3 的
 > 未做項。每項附**做法、effort、價值**。優先級由使用者圈選;文末有 AI 建議。
 
-## ★ 使用者圈定優先級(2026-08-04,逐項問過)
+## ★ 使用者圈定優先級(2026-08-04,全 23 項逐項問過)
 
-**下一階段 high(現在做)** — 一組連貫功能(F 資源管制 + G agent 契約,G1 的 next 接 F3):
-- **F1** 分層資源閘門(全局+per-engine 上限;核心目的=機器 CPU/memory 有限要管制)
-- **F2** QUEUED 排隊可視化(看板/detail page 看得到排第幾)
-- **F3** 換手進隊列(`@agent next` 換 agent;換**人**不排 agent 隊列=pending:human)
-- **G1** agent 結構化契約(system prompt + JSON schema `{reason,status,next}`;
-  claude `--json-schema`/codex `--output-schema`;next→驅動 F3 換手;回 harness+Jira)
-- **G2** 重要任務可選確定性雙保險(保留 grader IP;一般任務純 G1 自評)
+**下一階段 high(現在做)** — 15 項,構成一個連貫系統:「資源受控 + 自動值班 +
+結構化闭環 + 證據可追溯 + 跨平台隔離」。
 
-**降級/不做**:F4 審查閘(與機器資源目的不同,先不做)、C1 複雜確定性檢查
-(改用 G1 agent 自評;grader 降為 G2 可選雙保險)。
+| # | 項目 | 使用者設計補充(這一輪新增) |
+|---|---|---|
+| **F1** | 分層資源閘門(全局+per-engine+per-profile) | 核心目的=機器 CPU/memory 有限要管制 |
+| **F2** | QUEUED 排隊可視化 | 與 C4 合併成同一頁總覽 |
+| **F3** | 換手進隊列(`@agent next`) | 換**人**不排 agent 隊列=pending:human |
+| **G1** | agent 結構化契約 `{reason,status,next}` | `--json-schema`/`--output-schema`;next→F3 |
+| **G2** | 重要任務可選 grader 雙保險 | 保留證據型停止 IP;一般任務純 G1 |
+| **B3** | Resolve 自動轉狀態 + 帶證據 comment | 閉環 ticket 生命週期(便宜快見效) |
+| **B4** | 常駐服務化 + detail page 拼 Jira 深連結 | 從「手動一輪」到「一直在跑」 |
+| **A2** | 動作不重做(冪等重放) | **分層**:agent 工具調用靠 transcript(已有);<br>**harness 自己的副作用**(comment/transition/建 ws)靠自己的 ledger |
+| **A3** | Jira rate limit 退避 | F1 並發 + B4 常駐的保護罩 |
+| **A4** | budget 花費上限 | 防失控燒錢(opus 8× 教訓);錢也是資源 |
+| **C2** | L0-L3 trace completeness 自檢 | v5 唯一 P1 硬目標;強化證據 IP |
+| **C3** | KPI 框架 | **+ 人力節省估算**:用公式從過程(改幾檔/跑多久/幾步)<br>推算「人做要花多久」→量化省下的人力/ROI |
+| **C4** | 總覽儀表板(cost/狀態/失敗率) | 跟 F2 合併;含排隊、花費、資源用量 |
+| **D1** | **可插拔隔離層** | 跨平台(Linux/Win/macOS);**OS 原生優先**<br>(mac=seatbelt 已有、Linux=namespaces/bwrap、Win=沙盒);<br>docker 當跨平台後備;config 讓使用者選(auto/os-native/docker);<br>**先建抽象,不急端到端驗** |
+| **D2** | codex 原生沙盒驗證(`--sandbox`) | codex token 已可用;D1「OS 原生優先」的 codex 那段實證 |
 
-**尚未逐項問**:A(生產化)、B(Jira 接入)、D(隔離)、E(對照)—— 待使用者決定。
+**排進計畫但不急(6 項)**:
+- **B1** 真實 Jira Server REST client(需公司環境)
+- **B2** Agent Status/Link 自訂欄位 + transition condition(需 Jira admin)
+- **E1** codex 對照點(補齊 A/B/C 三方 codex 欄)
+- **E2** 長跑/大 context crash resume(token 貴、需防睡)
+- **E3** 閒置 evict→rehydrate 對照 —— 已被 N13 stall watchdog + resume 覆蓋;
+  使用者觀察:**「有時卡住沒反應、不知原因,resume 就救回」= 非終態→resume 通用手段**
+
+**先不做/降級(4 項)**:
+- **A1** Postgres(單機 SQLite 夠用,要多機生產再說)
+- **C1** 複雜確定性檢查(被 G1 agent 自評取代;grader 降為 G2 可選雙保險)
+- **F4** max_awaiting_close 審查閘(與機器資源目的不同)
+- **E4** qm Jira adapter spike(與主線「把自己 harness 做強」方向不同)
+
+### 建議實作波次(依賴排序,待使用者確認)
+
+- **Wave 1 地基(資源管制 + 契約=你的核心目的)**:F1 分層閘門(F2/F3 的基礎)、
+  G1 結構化契約(F3 換手的輸入)、A3 rate limit、A4 budget(兩個便宜保護一起做)。
+- **Wave 2 可視化 + 換手(建在 Wave 1 上)**:F2+C4 合併總覽、F3 換手進隊列(用 G1 的 next)。
+- **Wave 3 閉環 + 值班(相對獨立,可與 W2 並行)**:B3 Resolve 轉狀態、B4 常駐服務、
+  G2 可選 grader 雙保險。
+- **Wave 4 證據強化 + 隔離**:C2 trace 自檢、A2 harness ledger、C3 KPI+人力估算、
+  D1 可插拔隔離抽象、D2 codex 沙盒驗證。
 
 ---
 
