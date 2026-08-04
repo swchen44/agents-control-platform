@@ -39,9 +39,9 @@
 | W8 | F1 in-flight **不計** outcome 終態/`pending:*`/`inactive` 的 session | §6:不在機器人手上=inactive=不占額度;等審批/等人=不占 |
 | W9 | F1 挑選:poll 每輪按 FIFO(created/入隊序)挑能跑的 → 與現架構一致 | BACKLOG F2 決策點:poll 挑 vs 事件驅動 → 前者 |
 
-## Checklist
+## Checklist(全部 ✅ 完成 2026-08-04,見各 commit W1.x)
 
-**Phase W1.1 — provision:template 複製 + resume-safe 命名**
+**Phase W1.1 — provision:template 複製 + resume-safe 命名** ✅
 - [ ] `profiles.py`:`workspace_template` 允許值除 `empty` 外加 **template folder path**
       (相對 harness 根;load 時檢查存在,不存在→ConfigError fail-fast)
 - [ ] `workspace.py provision()`:template 是路徑時 `copytree` 到臨時目錄再 rename 進 ws
@@ -117,6 +117,12 @@
 
 ## W1 里程碑
 
-**M10 = 地基就緒**:能從 template 複製出 resume-safe 命名的 workspace、Jira 寫入抗限速、
-花費有上限、agent 回結構化 `{reason,status,next}`、資源閘門分層限流且認得「不在機器人
-手上=不占額度」。**至此 W2(審批門 + assignee 換手 active/inactive + 排隊可視化)有地基可接。**
+**M10 = 地基就緒 ✅ 2026-08-04**:能從 template 複製出 resume-safe 命名的 workspace、
+Jira 寫入抗限速、花費有上限、agent 回結構化 `{reason,status,next}`、資源閘門分層限流
+且認得「不在機器人手上=不占額度」。**至此 W2(審批門 + assignee 換手 active/inactive +
+排隊可視化)有地基可接。**
+
+**落地統計**:5 phase 全綠,commit W1.1(4ba48d1)/W1.2(da60f5e)/W1.3(6d2245a)/
+W1.4(02137be)/W1.5(ac22f3b)。免 token 單元測:provision 8、ratelimit 9、budget 6、
+contract 11、gate 11(=45);E2E:e2e_contract 4(真跑 claude 確認 stream-json 帶
+structured_output,$0.057)、e2e_gate 5(fake dispatcher)。DB migration(舊9欄→補3欄)驗過。
