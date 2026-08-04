@@ -3,6 +3,23 @@
 > 整合來源:qm 對比學到的(要加強)+ 各 PLAN/HANDOFF/COMPARISON/v3 §9.3 的
 > 未做項。每項附**做法、effort、價值**。優先級由使用者圈選;文末有 AI 建議。
 
+## ★ 使用者圈定優先級(2026-08-04,逐項問過)
+
+**下一階段 high(現在做)** — 一組連貫功能(F 資源管制 + G agent 契約,G1 的 next 接 F3):
+- **F1** 分層資源閘門(全局+per-engine 上限;核心目的=機器 CPU/memory 有限要管制)
+- **F2** QUEUED 排隊可視化(看板/detail page 看得到排第幾)
+- **F3** 換手進隊列(`@agent next` 換 agent;換**人**不排 agent 隊列=pending:human)
+- **G1** agent 結構化契約(system prompt + JSON schema `{reason,status,next}`;
+  claude `--json-schema`/codex `--output-schema`;next→驅動 F3 換手;回 harness+Jira)
+- **G2** 重要任務可選確定性雙保險(保留 grader IP;一般任務純 G1 自評)
+
+**降級/不做**:F4 審查閘(與機器資源目的不同,先不做)、C1 複雜確定性檢查
+(改用 G1 agent 自評;grader 降為 G2 可選雙保險)。
+
+**尚未逐項問**:A(生產化)、B(Jira 接入)、D(隔離)、E(對照)—— 待使用者決定。
+
+---
+
 ## 主題 A — 生產化健壯性(qm 更強 + v5 生產就緒)
 
 | # | 項目 | 做法 | effort | 價值 |
