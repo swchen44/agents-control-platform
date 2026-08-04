@@ -46,6 +46,25 @@
 | E3 | **agent-server 閒置 Evict→rehydrate 對照** | 閒置 20 分→子進程關→再存取 rehydrate 續 | 低-中 | qm/OpenHands 的常態機制,我們只間接驗過 |
 | E4 | **qm Jira adapter spike**(對比研究延伸) | 在 qm 寫個 surface="jira" adapter,實測 effort | 中 | 驗證「把我們功能搬 qm」的低 effort 判斷 |
 
+## 主題 F — Flow control / 資源閘門 / 排隊 / 換手(使用者 2026-08-04)
+
+> 需求:最多幾個 agent(claude -p/codex exec)同時跑(怕系統不夠用)、不同 agent
+> 不同上限、排隊中可在看板看到、換下一手(next agent/人類、assignee 換)時進排隊。
+> 現況:conc.1 只有一個全局 `max_running`(ThreadPoolExecutor **隱式**排隊,看不到)。
+> 對應 v5 D10(雙閘門 max_running/max_awaiting_close、per_profile、queue_policy: fifo)。
+
+| # | 項目 | 做法 | effort | 價值 |
+|---|---|---|---|---|
+| F1 | **分層資源閘門(全局 + per-engine + per-profile)** | config `concurrency: {max_running, per_engine:{claude:N,codex:M}, per_profile:{...}}`;dispatch 前查 store 的 in-flight 數(該 engine/profile 正在跑的 session),額滿→不派、標 QUEUED。**顯式隊列取代 ThreadPool 隱式排隊** | 中 | 你的核心:防開太多 agent 撐爆系統;claude/codex 各自上限 |
+| F2 | **QUEUED 狀態 + 排隊可視化** | ticket_session 加 `queued` 狀態 + 入隊時間;poll 每輪按 FIFO(created/入隊序)挑能跑的;detail page 顯示排隊位置/前面幾個;可選寫 Jira Agent Status=QUEUED(看板可見) | 低-中 | 排隊透明,看板/detail page 看得到「在排、排第幾」 |
+| F3 | **換手(handoff)進隊列** | `@agent next <profile>`(換下一手 agent/engine)或 assignee 改人 → session 重置 QUEUED + 換 profile → 進新隊列排;換**人類**=assignee 改人→pending:human(不排 agent 隊列)。接既有 command channel + external_change_policy | 中 | 你要的:換下一手/換人時 assignee 換、重新入隊 |
+| F4 | **max_awaiting_close 審查閘門**(v5 D10 第二閘) | Resolve 未 Close 的張數達上限→停派新工(瓶頸在人審查時自動節流) | 低-中 | v5:真正瓶頸是人審查頻寬,不是機器;配 B3 用 |
+
+**設計決策點(你之後可定,或我給建議)**:
+- 閘門層級:只做全局+per-engine(簡單) vs 加 per-profile(細,v5)?
+- 隊列驅動:poll 每輪挑能跑的(簡單,與現架構一致) vs 事件驅動隊列(複雜)?→建議前者。
+- 換手觸發:`@agent next` 指令 + assignee 監看(現成通道)即可。
+
 ## AI 建議(供參考,你決定)
 
 **若目標是「盡快能上生產用」** → high: **B1**(真實 Jira)+ **B3**(Resolve 轉狀態)
@@ -56,6 +75,10 @@
 
 **若目標是「生產級健壯」** → high: **A1**(Postgres,qm 證明的生產 recovery)+
 **D1**(docker 隔離)。但 effort 高。
+
+**若目標是「flow control(資源保護/排隊透明)」** → high: **F1**(分層閘門)+
+**F2**(排隊可視化)。F1 是「怕系統不夠用」的直接解;F3/F4 換手/審查閘可接續。
+基礎已有(conc.1 max_running、store、detail page、command channel),effort 中。
 
 **便宜快見效(隨時可穿插)**:B3、A3、E1、D2、C2。
 
