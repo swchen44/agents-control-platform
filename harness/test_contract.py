@@ -18,8 +18,11 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp_harness import dispatcher as dmod  # noqa: E402
-from arcp_harness.contract import (CONTRACT_SCHEMA, summarize,  # noqa: E402
-                                   validate_structured)
+from arcp_harness.contract import (  # noqa: E402
+    CONTRACT_SCHEMA,
+    summarize,
+    validate_structured,
+)
 from arcp_harness.dispatcher import Dispatcher  # noqa: E402
 from arcp_harness.inner_runner import AttemptResult  # noqa: E402
 from arcp_harness.profiles import Profile, VerifyStep  # noqa: E402

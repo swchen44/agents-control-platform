@@ -41,8 +41,9 @@ def main() -> int:
             f.write(line + "\n")
 
     try:
-        from arcp_rawcli import RawCLIAgent
         from openhands.sdk.conversation import Conversation
+
+        from arcp_rawcli import RawCLIAgent
 
         raw_path = os.path.join(os.path.dirname(job["events_path"]),
                                 os.path.basename(job["events_path"])

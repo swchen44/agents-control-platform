@@ -20,13 +20,12 @@ import threading
 import time
 import uuid
 
-from pydantic import Field, PrivateAttr
-
 from openhands.sdk import Message, TextContent
 from openhands.sdk.agent.base import AgentBase
 from openhands.sdk.conversation.state import ConversationExecutionStatus
 from openhands.sdk.event.llm_convertible import MessageEvent
 from openhands.sdk.llm import LLM, content_to_str
+from pydantic import Field, PrivateAttr
 
 
 def _dummy_llm() -> LLM:

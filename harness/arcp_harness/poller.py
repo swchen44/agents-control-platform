@@ -17,8 +17,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .gate import engine_of, select_dispatchable
 from .jira_source import JiraCloudSource
+from .logutil import get_logger
 from .routing import Route, match
 from .store import Store, TicketWatch
+
+log = get_logger("poller")
 
 
 class OuterLoop:
@@ -168,4 +171,7 @@ class OuterLoop:
                 sess.queued = False
                 self.store.upsert_session(sess)
             selected.append((t, prof))
+        log.debug("gate: selected=%d (run=%d passthrough=%d) queued=%d active=%d",
+                  len(selected), len(run_l), len(passthrough), len(q_l),
+                  len(active))
         return selected

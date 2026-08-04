@@ -27,6 +27,7 @@ from arcp_poc.grader import AllOf, CommandGrader, FileChecklistGrader  # noqa: E
 from .contract import summarize  # noqa: E402
 from .inner_runner import run_attempt  # noqa: E402
 from .jira_source import JiraCloudSource  # noqa: E402
+from .logutil import get_logger  # noqa: E402
 from .profiles import Profile  # noqa: E402
 from .store import Store, TicketSession  # noqa: E402
 from .ticket import Ticket  # noqa: E402
@@ -34,6 +35,8 @@ from .workspace import health_check, provision  # noqa: E402
 
 BASE_PROMPT = ("請先閱讀工作目錄裡的 TICKET.md,完成其中「描述」段落交付的任務。"
                "完成後回覆一行 TASK_DONE。")
+
+log = get_logger("dispatcher")
 
 
 def _grader(profile: Profile):
@@ -175,6 +178,8 @@ class Dispatcher:
                 events.append(self.store.journal(
                     "resolved", ticket.id, ticket.key,
                     attempts=sess.attempts, cost_usd=sess.cost_usd))
+                log.info("%s SUCCESS attempt=%d cost=$%.4f",
+                         ticket.key, sess.attempts, sess.cost_usd)
                 return events
 
             feedback = verdict.summary()
@@ -206,4 +211,6 @@ class Dispatcher:
             f"最後失敗證據:\n{feedback}{self_eval}\n{_resume_hint(sess)}"))
         events.append(self.store.journal(
             "pending", ticket.id, ticket.key, reason="max-attempts"))
+        log.info("%s FAILURE (max-attempts=%d, cost=$%.4f)",
+                 ticket.key, profile.max_attempts, sess.cost_usd)
         return events
