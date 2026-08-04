@@ -15,6 +15,8 @@ import yaml
 
 from .routing import ConfigError
 
+_HARNESS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 @dataclass
 class VerifyStep:
@@ -61,10 +63,22 @@ def load_profiles(path: str) -> dict[str, Profile]:
         venv = agent.get("venv")
         if venv and not os.path.isdir(venv):
             raise ConfigError(f"profile {name}: agent.venv 不存在: {venv}")
+        # template=class:非 "empty" 時視為 template folder path(相對 harness 根),
+        # fork 前整包複製成 workspace instance(DESIGN_lifecycle §1)。fail-fast:
+        # 不存在的 template 死在 load,不是 dispatch。
+        ws_template = ws.get("template", "empty")
+        if ws_template != "empty":
+            tpath = os.path.join(_HARNESS_ROOT, ws_template)
+            if not os.path.isdir(tpath):
+                raise ConfigError(
+                    f"profile {name}: workspace.template 資料夾不存在: {tpath}")
         profiles[name] = Profile(
             name=name,
-            workspace_template=ws.get("template", "empty"),
-            workspace_folder=ws.get("folder", "tickets/{issue_id}"),
+            workspace_template=ws_template,
+            # resume-safe 命名(§2):可讀前綴 + 不變 issue_id 尾綴。舊模板
+            # 'tickets/{issue_id}' 仍相容(format 忽略多餘的 agent/key)。
+            workspace_folder=ws.get("folder",
+                                    "tickets/{agent}__{key}__{issue_id}"),
             skills=list(p.get("skills") or []),
             agent=agent,
             verify=steps,

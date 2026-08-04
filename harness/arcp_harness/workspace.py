@@ -20,6 +20,8 @@ import shutil
 from .profiles import Profile
 from .ticket import Ticket
 
+_HARNESS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 TICKET_TEMPLATE = """# {key}: {summary}
 
 - issue_id: {id}
@@ -46,13 +48,36 @@ def render_ticket_md(t: Ticket) -> str:
         description=t.description or "(無)", comments=comments)
 
 
+def _slug(s: str) -> str:
+    """Folder-safe token: keep it readable, replace anything odd with '-'."""
+    return "".join(c if (c.isalnum() or c in "-.") else "-" for c in s)
+
+
 def provision(root: str, ticket: Ticket, profile: Profile) -> str:
-    """Create (or refresh) the ticket workspace; returns the ws path."""
+    """Create (or refresh) the ticket workspace; returns the ws path.
+
+    template=class → workspace=instance (DESIGN_lifecycle §1): when
+    profile.workspace_template is a folder path (not "empty"), a fresh instance
+    is a copytree of it; skills layer on top. Path is keyed by the never-changing
+    issue_id tail so native resume (cwd-bound) survives even if summary/key are
+    edited (§2). Existing ws is never re-copied (instance state preserved).
+    """
     base = os.path.join(root, profile.workspace_folder.format(
-        issue_id=ticket.id))
+        agent=_slug(profile.name), key=_slug(ticket.key), issue_id=ticket.id))
     ws = os.path.join(base, "ws")
-    os.makedirs(ws, exist_ok=True)
-    for skill_path in profile.skills:
+    if not os.path.isdir(ws) and profile.workspace_template != "empty":
+        # W2 atomicity: copytree to a temp sibling, then rename into place, so a
+        # crash mid-copy never leaves a half-populated ws that looks healthy.
+        template = os.path.join(_HARNESS_ROOT, profile.workspace_template)
+        os.makedirs(base, exist_ok=True)
+        tmp = ws + ".tmp"
+        if os.path.isdir(tmp):
+            shutil.rmtree(tmp)
+        shutil.copytree(template, tmp)
+        os.rename(tmp, ws)
+    else:
+        os.makedirs(ws, exist_ok=True)
+    for skill_path in profile.skills:          # skills layer on top of template
         name = os.path.splitext(os.path.basename(skill_path))[0]
         dst = os.path.join(ws, ".claude", "skills", name)
         os.makedirs(dst, exist_ok=True)
