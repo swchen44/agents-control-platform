@@ -2,7 +2,30 @@
 
 > 給「在此目錄開的新 session」的接手文件。前一段對話的 session 綁在
 > `/Users/swchen.tw/git/openhands`(改名為「headless agent 自動化」)。本檔讓
-> 零上下文的新 session 也能無縫接上。最後更新:2026-08-01。
+> 零上下文的新 session 也能無縫接上。最後更新:2026-08-05。
+
+## ★ 最新進展(2026-08-05)— 從研究進入分波實作
+
+研究/PoC(§1-6)之後已進入**分波實作**。優先級與波次見 `BACKLOG.md`;橫切設計(審批門
++ assignee=資源開關 + template→workspace)見 `harness/DESIGN_lifecycle.md`。
+
+- **W1 地基 ✅(M10)** `harness/PLAN_wave1.md`:provision(template→workspace、resume-safe
+  命名 `agent__key__issue_id`)、A3 Jira 限速退避、A4 budget 上限、G1 agent 結構化契約
+  `{reason,status,next}`(claude `--json-schema`/codex `--output-schema`,真跑驗過)、
+  F1 分層資源閘門(全局+per-engine+per-profile+QUEUED+inactive)。6/6 綠。
+- **W2 進行中(3/7)** `harness/PLAN_wave2.md`:✅ W2.1 logging+ruff baseline、W2.2 分區段
+  +hash(⚠️ 初版,待按 2026-08-05 定案版面重構:ARCP 區塊置頂+human 前置+結束標記
+  `<!-- /ARCP:sections -->`+全掃描機器段驗 hash 並 log+區塊外不碰)、W2.3 起點審批門
+  (plan 寫分區段/填表放行/退回迴圈/escalate)。
+- **恢復起點**:(a) W2.2 `sections.py` 按定案版面重構;(b) W2.4 assignee=資源開關
+  (`on_assignee_changed`→inactive/resume、`handle` skip inactive);(c) W2.5 F3 換手
+  (`@agent next`/G1 next 驅動);(d) W2b:W2.6 REST 控制面(內嵌 http.server、hot reload/
+  pause)+ W2.7 web dashboard(擴 `detail_server.py`:排隊 F2+總覽 C4+控制)。
+- **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
+  venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
+  `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
+- **實測待補**:審批門真實 Jira(ADF description 往返保真、approver email→accountId
+  解析、人工填表流程)——mock 測覆蓋不到,需在真 SCRUM 專案跑一次。
 
 ## 0. 一句話目標
 
