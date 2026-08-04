@@ -35,6 +35,7 @@ class Profile:
     verify: list[VerifyStep]
     max_attempts: int
     on_unknown: str                  # must be "pending" (v5 D3)
+    max_budget_usd: float | None = None  # A4:超支→pending:budget(None=不限)
 
 
 def load_profiles(path: str) -> dict[str, Profile]:
@@ -83,5 +84,7 @@ def load_profiles(path: str) -> dict[str, Profile]:
             agent=agent,
             verify=steps,
             max_attempts=int(loop.get("max_attempts", 2)),
-            on_unknown="pending")
+            on_unknown="pending",
+            max_budget_usd=(float(loop["max_budget_usd"])
+                            if loop.get("max_budget_usd") is not None else None))
     return profiles

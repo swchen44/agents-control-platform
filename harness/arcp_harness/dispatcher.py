@@ -178,6 +178,21 @@ class Dispatcher:
                 feedback += f"\nrunner error: {res.error}"
             self.store.upsert_session(sess)
 
+            # A4:budget 上限 — 本次未過驗證,若累計花費達上限就別再燒錢,交
+            # 人工(pending:budget)。通過的 attempt 已在上面 return SUCCESS。
+            if (profile.max_budget_usd is not None
+                    and sess.cost_usd >= profile.max_budget_usd):
+                sess.pending_reason = "budget"
+                self.store.upsert_session(sess)
+                self.source.add_comment(ticket.id, (
+                    f"[agent] pending:budget — 累計 ${sess.cost_usd:.4f} 達上限 "
+                    f"${profile.max_budget_usd:.4f}(attempt {sess.attempts})。"
+                    f"不再自動重試,請人工檢查後解除。\n{_resume_hint(sess)}"))
+                events.append(self.store.journal(
+                    "pending", ticket.id, ticket.key, reason="budget",
+                    cost_usd=sess.cost_usd))
+                return events
+
         sess.outcome, sess.pending_reason = "FAILURE", "max-attempts"
         self.store.upsert_session(sess)
         self.source.add_comment(ticket.id, (
