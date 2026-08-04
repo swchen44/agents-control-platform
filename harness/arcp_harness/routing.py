@@ -81,9 +81,14 @@ def load_config(path: str) -> tuple[dict, list[Route]]:
                             profile=r.get("profile"), on_match=on_match,
                             comments_lookback=int(r.get("comments_lookback", 5))))
     src = outer.get("source") or {}
+    conc = outer.get("concurrency") or {}
     # expose max_running alongside source so callers need no new signature
-    src["max_running"] = int((outer.get("concurrency") or {}).get(
-        "max_running", 1))
+    src["max_running"] = int(conc.get("max_running", 1))
+    src["concurrency"] = {                               # F1 三層閘門
+        "max_running": int(conc.get("max_running", 1)),
+        "per_engine": dict(conc.get("per_engine") or {}),
+        "per_profile": dict(conc.get("per_profile") or {}),
+    }
     return src, routes
 
 

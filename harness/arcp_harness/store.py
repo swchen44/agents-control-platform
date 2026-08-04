@@ -38,8 +38,11 @@ class TicketSession:
     session_id: str | None
     attempts: int
     outcome: str | None            # SUCCESS | FAILURE | UNKNOWN | None
-    pending_reason: str | None     # human-decision | external | unknown | max-attempts
+    pending_reason: str | None     # human-decision|external|unknown|max-attempts|budget
     cost_usd: float
+    queued: bool = False           # F1:本輪額滿排隊(下輪重評)
+    queued_at: float = 0.0         # FIFO 排序時間
+    inactive: bool = False         # DESIGN §6:assignee 不在機器人手上→不占額度(W2 置位)
 
 
 class Store:
@@ -75,9 +78,25 @@ class Store:
                 attempts       INTEGER NOT NULL DEFAULT 0,
                 outcome        TEXT,
                 pending_reason TEXT,
-                cost_usd       REAL NOT NULL DEFAULT 0
+                cost_usd       REAL NOT NULL DEFAULT 0,
+                queued         INTEGER NOT NULL DEFAULT 0,
+                queued_at      REAL NOT NULL DEFAULT 0,
+                inactive       INTEGER NOT NULL DEFAULT 0
             )""")
+        self._migrate()
         self._db.commit()
+
+    def _migrate(self) -> None:
+        """Add F1 columns to a pre-existing ticket_session (SQLite has no
+        ADD COLUMN IF NOT EXISTS)."""
+        cols = {r[1] for r in self._db.execute(
+            "PRAGMA table_info(ticket_session)")}
+        for name, ddl in (("queued", "INTEGER NOT NULL DEFAULT 0"),
+                          ("queued_at", "REAL NOT NULL DEFAULT 0"),
+                          ("inactive", "INTEGER NOT NULL DEFAULT 0")):
+            if name not in cols:
+                self._db.execute(
+                    f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
 
     def get(self, issue_id: int) -> TicketWatch | None:
         with self._lock:
@@ -114,13 +133,35 @@ class Store:
                 f.write(json.dumps(event, ensure_ascii=False) + "\n")
         return event
 
+    _SESSION_COLS = ("issue_id, key, profile, workspace, session_id, attempts,"
+                     " outcome, pending_reason, cost_usd, queued, queued_at,"
+                     " inactive")
+
+    @staticmethod
+    def _row_to_session(row) -> TicketSession:
+        return TicketSession(
+            issue_id=row[0], key=row[1], profile=row[2], workspace=row[3],
+            session_id=row[4], attempts=row[5], outcome=row[6],
+            pending_reason=row[7], cost_usd=row[8], queued=bool(row[9]),
+            queued_at=row[10], inactive=bool(row[11]))
+
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
             row = self._db.execute(
-                "SELECT issue_id, key, profile, workspace, session_id,"
-                " attempts, outcome, pending_reason, cost_usd FROM"
-                " ticket_session WHERE issue_id=?", (issue_id,)).fetchone()
-        return TicketSession(*row) if row else None
+                f"SELECT {self._SESSION_COLS} FROM ticket_session"
+                " WHERE issue_id=?", (issue_id,)).fetchone()
+        return self._row_to_session(row) if row else None
+
+    def active_sessions(self) -> list[TicketSession]:
+        """In-flight = 占機器額度的 session:非終態(outcome IS NULL)且不在等待
+        (pending_reason IS NULL)且 active(inactive=0)且未排隊(queued=0)。
+        W8:pending/inactive/queued/終態都不占額度。"""
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {self._SESSION_COLS} FROM ticket_session"
+                " WHERE outcome IS NULL AND pending_reason IS NULL"
+                " AND inactive=0 AND queued=0").fetchall()
+        return [self._row_to_session(r) for r in rows]
 
     def upsert_session(self, s: TicketSession) -> None:
         with self._lock, self._db:
@@ -128,17 +169,20 @@ class Store:
             self._db.execute("""
                 INSERT INTO ticket_session
                     (issue_id, key, profile, workspace, session_id,
-                     attempts, outcome, pending_reason, cost_usd)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                     attempts, outcome, pending_reason, cost_usd,
+                     queued, queued_at, inactive)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
                     session_id=excluded.session_id,
                     attempts=excluded.attempts, outcome=excluded.outcome,
                     pending_reason=excluded.pending_reason,
-                    cost_usd=excluded.cost_usd
+                    cost_usd=excluded.cost_usd, queued=excluded.queued,
+                    queued_at=excluded.queued_at, inactive=excluded.inactive
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
-                  s.attempts, s.outcome, s.pending_reason, s.cost_usd))
+                  s.attempts, s.outcome, s.pending_reason, s.cost_usd,
+                  int(s.queued), s.queued_at, int(s.inactive)))
 
     def close(self) -> None:
         self._db.close()

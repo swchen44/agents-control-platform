@@ -9,9 +9,11 @@ outer_loop:
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
     write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
 
-  # 併發(conc.1,v5 D10):一輪最多幾張票並行 dispatch
+  # 併發/分層資源閘門(F1,v5 D10):怕系統不夠用,管制同時跑的 agent 數
   concurrency:
-    max_running: 4
+    max_running: 4                     # 全局:一輪最多幾張票並行
+    per_engine: {claude: 3, codex: 2}  # 各引擎進程上限(機器 CPU/memory)
+    per_profile: {}                    # 可選:個別 profile 上限
 
   # Phase 3:指令通道與外部變更政策
   commands:

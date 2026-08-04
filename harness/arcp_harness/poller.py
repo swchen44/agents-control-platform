@@ -11,8 +11,11 @@ so a re-poll — or a crash-restart mid-poll — never replays old events.
 
 from __future__ import annotations
 
+import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from .gate import engine_of, select_dispatchable
 from .jira_source import JiraCloudSource
 from .routing import Route, match
 from .store import Store, TicketWatch
@@ -21,7 +24,8 @@ from .store import Store, TicketWatch
 class OuterLoop:
     def __init__(self, source: JiraCloudSource, store: Store,
                  routes: list[Route], jql: str, dispatcher=None,
-                 commands=None, external=None, max_running: int = 1):
+                 commands=None, external=None, max_running: int = 1,
+                 concurrency: dict | None = None):
         self.source = source
         self.store = store
         self.routes = routes
@@ -30,6 +34,10 @@ class OuterLoop:
         self.commands = commands       # CommandHandler (Phase 3)
         self.external = external       # ExternalChangePolicy (Phase 3)
         self.max_running = max(1, max_running)  # v5 D10 (conc.1)
+        # F1 分層閘門;缺省退化成單層 max_running(向後相容)
+        self.concurrency = concurrency or {
+            "max_running": self.max_running, "per_engine": {},
+            "per_profile": {}}
 
     def poll_once(self) -> list[dict]:
         """One reconciliation pass. Returns the events it journaled.
@@ -93,16 +101,21 @@ class OuterLoop:
                     and route.profile and self.dispatcher is not None):
                 to_dispatch.append((t, route.profile))
 
-        # -- parallel dispatch (conc.1, v5 D10 max_running) ---------------- #
+        # -- F1 分層資源閘門 + 並行 dispatch (v5 D10) ---------------------- #
         if not to_dispatch:
             return events
-        if self.max_running == 1 or len(to_dispatch) == 1:
-            for t, prof in to_dispatch:
+        selected = self._gate(to_dispatch, events)      # 額滿標 QUEUED
+        if not selected:
+            return events
+        max_workers = min(self.concurrency.get("max_running", 1),
+                          len(selected))
+        if max_workers <= 1 or len(selected) == 1:
+            for t, prof in selected:
                 events.extend(self.dispatcher.handle(t, prof))
             return events
-        with ThreadPoolExecutor(max_workers=self.max_running) as pool:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(self.dispatcher.handle, t, prof)
-                       for t, prof in to_dispatch]
+                       for t, prof in selected]
             for fut in as_completed(futures):
                 try:
                     events.extend(fut.result())
@@ -110,3 +123,49 @@ class OuterLoop:
                     events.append(self.store.journal(
                         "dispatch_error", 0, "?", error=str(e)[:200]))
         return events
+
+    def _gate(self, to_dispatch, events):
+        """F1:分層額度閘門(FIFO,to_dispatch 已是 created ASC)。
+
+        只有「真正要跑 agent」的候選(session None 或 active)占額度、按三層額度選,
+        超額標 QUEUED;已終態/pending/inactive 的直接放行(dispatcher.handle 會 skip,
+        或自解除 pending:external),**不占額度**(W8)——否則 SUCCESS-未轉狀態的票仍在
+        JQL 結果裡會白占額度、擠掉要跑的。回傳本輪 selected [(ticket, profile)]。"""
+        profiles = self.dispatcher.profiles
+        active = self.store.active_sessions()           # W8:只含 active
+        inf_eng = Counter(engine_of(profiles[s.profile]) for s in active
+                          if s.profile in profiles)
+        inf_prof = Counter(s.profile for s in active)
+        passthrough, need = [], []
+        for idx, (t, prof) in enumerate(to_dispatch):
+            s = self.store.get_session(t.id)
+            if s is not None and (s.outcome in ("SUCCESS", "ABORTED")
+                                  or s.pending_reason or s.inactive):
+                passthrough.append(idx)                 # handle 秒 skip / 自解除
+            else:
+                need.append(idx)
+        cand = [(engine_of(profiles[to_dispatch[i][1]])
+                 if to_dispatch[i][1] in profiles else "claude",
+                 to_dispatch[i][1]) for i in need]
+        run_l, q_l = select_dispatchable(
+            cand, self.concurrency, in_flight_engine=inf_eng,
+            in_flight_profile=inf_prof, in_flight_total=len(active))
+        for j in q_l:                                   # 標 QUEUED,下輪重評
+            i = need[j]
+            t, prof = to_dispatch[i]
+            sess = self.store.get_session(t.id)
+            if sess is not None:                        # 只標已有 session
+                sess.queued = True
+                sess.queued_at = sess.queued_at or time.time()
+                self.store.upsert_session(sess)
+            events.append(self.store.journal(
+                "queued", t.id, t.key, profile=prof, engine=cand[j][0]))
+        selected = []
+        for i in passthrough + [need[j] for j in run_l]:
+            t, prof = to_dispatch[i]
+            sess = self.store.get_session(t.id)         # 要跑了→清 queued 標記
+            if sess is not None and sess.queued:
+                sess.queued = False
+                self.store.upsert_session(sess)
+            selected.append((t, prof))
+        return selected

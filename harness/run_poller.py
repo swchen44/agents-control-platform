@@ -65,7 +65,9 @@ def main() -> int:
         src, store, routes, jql,
         dispatcher=Dispatcher(src, store, profiles, root="./runtime_live"),
         commands=CommandHandler(src, store, ["Shao-wei Chen"]),
-        external=ExternalChangePolicy(src, store, ["完成", "Done", "Concluído"]))
+        external=ExternalChangePolicy(src, store, ["完成", "Done", "Concluído"]),
+        max_running=source_cfg.get("max_running", 1),
+        concurrency=source_cfg.get("concurrency"))
 
     adopted = adopt_existing(src, store, routes, jql)
     print(f"[poller] adopted {adopted} pre-existing ticket(s); "
