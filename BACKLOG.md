@@ -65,6 +65,22 @@
 - 隊列驅動:poll 每輪挑能跑的(簡單,與現架構一致) vs 事件驅動隊列(複雜)?→建議前者。
 - 換手觸發:`@agent next` 指令 + assignee 監看(現成通道)即可。
 
+## 主題 G — agent↔harness 結構化契約(使用者 2026-08-04,取代 C1 方向)
+
+> 使用者:「太多檢查不好作,給 agent 判斷。準備 system prompt + claude -p/codex exec
+> 定好回應 JSON schema,回給 control 和留在 Jira。至少要有 reason、status、next
+> (建議下一位給誰)。」→ 用 **agent 結構化自評**取代複雜的確定性 grader。
+
+| # | 項目 | 做法 | effort | 價值 |
+|---|---|---|---|---|
+| G1 | **agent 結構化回應契約(reason/status/next)** | system prompt 定角色+規則;claude `--json-schema`、codex `--output-schema` 強制結構化輸出;schema 至少 `{reason, status, next}`(status=完成/失敗/待人/…;next=下一手 agent 或人);harness 解析:status→outcome、**next→F3 換手**、reason→Jira comment | 中 | 定義 agent↔harness 契約;next 直接驅動 F3 換手;比堆確定性檢查簡單靈活 |
+| G2 | **可選確定性雙保險(保留 grader IP)** | 高價值/破壞性 profile 可選加 grader(build/test/檔案)覆核 agent 自評;一般 profile 純靠 G1 | 低(grader 已有) | agent 自評是「信任」(loop on confidence);關鍵任務加確定性檢查防「自稱成功沒做對」(v5/qm 教訓) |
+
+**張力(誠實)**:G1 是「信任 agent 判斷」,和我們一路的「證據型停止(loop on
+evidence, not confidence)」方向相反。qm/v5 都踩過「agent 自稱完成但沒做對」。
+好處是簡單、靈活、next 接換手;代價是純自評可能誤判成功 → 故 G2 保留確定性
+grader 作關鍵任務的可選雙保險(profile 決定)。
+
 ## AI 建議(供參考,你決定)
 
 **若目標是「盡快能上生產用」** → high: **B1**(真實 Jira)+ **B3**(Resolve 轉狀態)
