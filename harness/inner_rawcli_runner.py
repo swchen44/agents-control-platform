@@ -29,7 +29,8 @@ def main() -> int:
     job = json.load(open(sys.argv[1]))
     envelope = {"completed": False, "session_id": None,
                 "truly_resumed": False, "cost_usd": None, "error": None,
-                "error_kind": None}   # stalled | task | no-terminal | None
+                "error_kind": None,   # stalled | task | no-terminal | None
+                "structured": None}   # G1 agent 結構化自評
 
     def capture(event) -> None:
         try:
@@ -55,7 +56,8 @@ def main() -> int:
             raw_events_path=raw_path,
             os_sandbox=job.get("os_sandbox", False),         # claude seatbelt
             sandbox=job.get("sandbox", "workspace-write"),    # codex --sandbox
-            stall_seconds=float(job.get("stall_seconds", 0)))  # N13 watchdog
+            stall_seconds=float(job.get("stall_seconds", 0)),  # N13 watchdog
+            output_schema=job.get("output_schema"))            # G1 契約(dict|None)
         conv = Conversation(agent=agent, workspace=os.path.abspath(job["ws"]),
                             callbacks=[capture])
         conv.send_message(job["prompt"])
@@ -67,6 +69,7 @@ def main() -> int:
         envelope["truly_resumed"] = bool(resume_sid)  # native --resume used
         envelope["cost_usd"] = agent._cost_usd
         envelope["error"] = agent._error
+        envelope["structured"] = agent._structured   # G1
         # error_kind (N13/N3): stalled → dispatcher resumes; no-terminal =
         # crash/kill; task = agent ran but reported error
         if agent._stalled:

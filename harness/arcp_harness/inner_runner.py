@@ -19,6 +19,8 @@ import os
 import subprocess
 from dataclasses import dataclass
 
+from .contract import CONTRACT_SCHEMA
+
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # backend → venv runner script (same job/envelope contract for all)
 RUNNERS = {
@@ -38,6 +40,7 @@ class AttemptResult:
     events_path: str
     envelope_path: str
     error_kind: str | None = None  # infra | stalled | task | no-terminal (N3)
+    structured: dict | None = None  # G1 agent {reason,status,next}
 
 
 def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
@@ -58,6 +61,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "os_sandbox": agent_cfg.get("os_sandbox", False),       # rawcli 隔離
         "sandbox": agent_cfg.get("sandbox", "workspace-write"),  # codex 內建
         "stall_seconds": agent_cfg.get("stall_seconds", 0),      # rawcli N13
+        "output_schema": (CONTRACT_SCHEMA                        # G1 契約(rawcli)
+                          if agent_cfg.get("output_schema") else None),
         "server_managed": agent_cfg.get("server_managed", False),  # conc.3
         "resume_session_id": resume_session_id,
         "timeout_sec": agent_cfg.get("timeout_sec", 300),
@@ -102,4 +107,5 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         error=envelope.get("error"),
         events_path=job["events_path"],
         envelope_path=job["envelope_path"],
-        error_kind=envelope.get("error_kind"))
+        error_kind=envelope.get("error_kind"),
+        structured=envelope.get("structured"))

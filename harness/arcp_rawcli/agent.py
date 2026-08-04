@@ -64,11 +64,15 @@ class RawCLIAgent(AgentBase):
     # event advances the run for stall_seconds, EXIT (killpg) so the harness
     # can resume instead of hanging. 0 = off. "slow is legal; stalled is not."
     stall_seconds: float = 0.0
+    # G1:structured-output 契約(DESIGN §4.2)。dict=JSON Schema 傳給 CLI 強制
+    # 結構化輸出;None=關(向後相容,行為同現狀)。
+    output_schema: dict | None = None
 
     # exposed to the runner after step() (C.3 envelope)
     _final_session_id: str | None = PrivateAttr(default=None)
     _cost_usd: float | None = PrivateAttr(default=None)
     _error: str | None = PrivateAttr(default=None)
+    _structured: dict | None = PrivateAttr(default=None)   # G1 agent 自評
     # terminal event seen (claude `result` / codex `turn.completed`). A crash
     # kills the child BEFORE this → completed stays False even though the
     # process "ended" (A-route SIGTERM-rc=0 lesson, RawCLIAgent edition).
@@ -90,6 +94,8 @@ class RawCLIAgent(AgentBase):
                     "--skip-git-repo-check"]
             if self.model:
                 base += ["--model", self.model]
+            if self.output_schema:                       # G1:codex 要檔案路徑
+                base += ["--output-schema", self._schema_file()]
             if self.resume:
                 return ["codex", "exec", "resume", sid, "--json",
                         "--skip-git-repo-check",
@@ -101,9 +107,19 @@ class RawCLIAgent(AgentBase):
             cmd += ["--model", self.model]
         cmd += (["--resume", sid] if self.resume else ["--session-id", sid])
         cmd += ["--permission-mode", self.permission_mode]
+        if self.output_schema:                           # G1:claude 收 inline JSON
+            cmd += ["--json-schema", json.dumps(self.output_schema)]
         if self.allowed_tools:
             cmd += ["--allowedTools", *self.allowed_tools]
         return cmd
+
+    def _schema_file(self) -> str:
+        """Write output_schema to a temp file for codex --output-schema <FILE>."""
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix=".schema.json", prefix="arcp-")
+        with os.fdopen(fd, "w") as f:
+            json.dump(self.output_schema, f)
+        return path
 
     def step(self, conversation, on_event, on_token=None) -> None:  # noqa: ARG002
         state = conversation.state
@@ -255,6 +271,8 @@ class RawCLIAgent(AgentBase):
         elif t == "result":
             self._got_terminal = True
             self._cost_usd = o.get("total_cost_usd")
+            if o.get("structured_output") is not None:   # G1:claude 直接給物件
+                self._structured = o.get("structured_output")
             if o.get("is_error"):
                 self._error = str(o.get("result") or "cli error")[:300]
 
@@ -272,6 +290,11 @@ class RawCLIAgent(AgentBase):
             item = o.get("item") or {}
             if item.get("type") == "agent_message":
                 self._emit(on_event, item.get("text", ""))
+                if self.output_schema:                   # G1:最終訊息即 schema JSON
+                    try:
+                        self._structured = json.loads(item.get("text") or "")
+                    except (ValueError, TypeError):
+                        pass
             elif item.get("type") in ("command_execution", "tool_call"):
                 self._emit(on_event, f"📋 {str(item.get('type'))[:80]}")
         elif t == "turn.completed":

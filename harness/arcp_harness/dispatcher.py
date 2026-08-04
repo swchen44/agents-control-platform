@@ -24,6 +24,7 @@ if _A_ROUTE not in sys.path:
 
 from arcp_poc.grader import AllOf, CommandGrader, FileChecklistGrader  # noqa: E402
 
+from .contract import summarize  # noqa: E402
 from .inner_runner import run_attempt  # noqa: E402
 from .jira_source import JiraCloudSource  # noqa: E402
 from .profiles import Profile  # noqa: E402
@@ -130,6 +131,7 @@ class Dispatcher:
                 attempt=sess.attempts, raw=res.raw_outcome,
                 error_kind=res.error_kind,
                 truly_resumed=res.truly_resumed,
+                structured=res.structured,               # G1:agent 自評(記錄)
                 envelope=res.envelope_path))
 
             # infrastructure failure (server 掛/連不上, N3): NOT the agent's
@@ -164,9 +166,11 @@ class Dispatcher:
                 sess.outcome, sess.pending_reason = "SUCCESS", None
                 self.store.upsert_session(sess)
                 checks = "\n".join(f"- {r}" for r in verdict.reasons)
+                self_eval = (f"\nagent 自評:{summarize(res.structured)}"
+                             if res.structured else "")
                 self.source.add_comment(ticket.id, (
                     f"[agent] outcome=SUCCESS(attempt {sess.attempts},"
-                    f" 累計 ${sess.cost_usd:.4f})\n驗證結果:\n{checks}\n"
+                    f" 累計 ${sess.cost_usd:.4f})\n驗證結果:\n{checks}{self_eval}\n"
                     f"{_resume_hint(sess)}"))
                 events.append(self.store.journal(
                     "resolved", ticket.id, ticket.key,
@@ -195,9 +199,11 @@ class Dispatcher:
 
         sess.outcome, sess.pending_reason = "FAILURE", "max-attempts"
         self.store.upsert_session(sess)
+        self_eval = (f"\nagent 自評:{summarize(res.structured)}"
+                     if res.structured else "")
         self.source.add_comment(ticket.id, (
             f"[agent] outcome=FAILURE:{profile.max_attempts} 次嘗試未過驗證。"
-            f"最後失敗證據:\n{feedback}\n{_resume_hint(sess)}"))
+            f"最後失敗證據:\n{feedback}{self_eval}\n{_resume_hint(sess)}"))
         events.append(self.store.journal(
             "pending", ticket.id, ticket.key, reason="max-attempts"))
         return events
