@@ -7,6 +7,7 @@ outer_loop:
     project: SCRUM
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
+    write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
 
   # 併發(conc.1,v5 D10):一輪最多幾張票並行 dispatch
   concurrency:

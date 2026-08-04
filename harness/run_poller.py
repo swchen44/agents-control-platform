@@ -53,8 +53,11 @@ def main() -> int:
     minutes = float(sys.argv[1]) if len(sys.argv) > 1 else 30.0
     interval = float(sys.argv[2]) if len(sys.argv) > 2 else 15.0
 
-    src = JiraCloudSource(*jira_credentials())
     source_cfg, routes = load_config("routes.yaml")
+    _wr = source_cfg.get("write_retry") or {}            # A3(N8)
+    src = JiraCloudSource(*jira_credentials(),
+                          write_retry_max=int(_wr.get("max", 5)),
+                          write_retry_base=float(_wr.get("base_sec", 1.0)))
     profiles = load_profiles("routes.yaml")
     store = Store("./runtime_live")          # 持久,絕不 wipe(lesson #9)
     jql = source_cfg["jql"]

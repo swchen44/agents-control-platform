@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -77,9 +78,14 @@ def text_to_adf(text: str) -> dict:
 # --------------------------------------------------------------------------- #
 class JiraCloudSource:
     def __init__(self, base_url: str, email: str, api_token: str,
-                 timeout: float = 20.0):
+                 timeout: float = 20.0, write_retry_max: int = 5,
+                 write_retry_base: float = 1.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        # A3 (N8): only WRITES back off on rate-limit/5xx — reads are idempotent
+        # and the poll loop retries them next cycle, so reads never back off.
+        self._write_retry_max = max(0, write_retry_max)
+        self._write_retry_base = write_retry_base
         raw = f"{email}:{api_token}".encode()
         self._auth = "Basic " + base64.b64encode(raw).decode()
         self._ssl = _ssl_context()
@@ -96,19 +102,43 @@ class JiraCloudSource:
             "Accept": "application/json",
             "Content-Type": "application/json",
         })
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout,
-                                        context=self._ssl) as resp:
-                payload = resp.read()
-        except urllib.error.HTTPError as e:
-            detail = ""
+        write = method.upper() != "GET"
+        attempt = 0
+        while True:
             try:
-                detail = e.read().decode()[:400]
-            except Exception:
-                pass
-            e.msg = f"{e.msg} :: {detail}"  # surface Jira's error body
-            raise
+                with urllib.request.urlopen(req, timeout=self.timeout,
+                                            context=self._ssl) as resp:
+                    payload = resp.read()
+                break
+            except urllib.error.HTTPError as e:
+                # A3 (W3): back off + retry ONLY writes, ONLY on 429/5xx.
+                # Reads are idempotent — the poll loop retries them next cycle.
+                if (write and e.code in (429, 500, 502, 503, 504)
+                        and attempt < self._write_retry_max):
+                    delay = (self._retry_after(e)
+                             or self._write_retry_base * (2 ** attempt))
+                    attempt += 1
+                    time.sleep(delay)
+                    continue
+                detail = ""
+                try:
+                    detail = e.read().decode()[:400]
+                except Exception:
+                    pass
+                e.msg = f"{e.msg} :: {detail}"  # surface Jira's error body
+                raise
         return json.loads(payload) if payload.strip() else {}
+
+    @staticmethod
+    def _retry_after(e: urllib.error.HTTPError) -> float | None:
+        """Honour Jira's Retry-After header (integer seconds) when present."""
+        try:
+            ra = e.headers.get("Retry-After") if e.headers else None
+        except Exception:
+            ra = None
+        if ra and str(ra).strip().isdigit():
+            return float(str(ra).strip())
+        return None
 
     # -- API --------------------------------------------------------------- #
     def myself(self) -> dict:
