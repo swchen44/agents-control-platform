@@ -30,8 +30,11 @@
 - **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
   venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
   `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
-- **實測待補**:審批門真實 Jira(ADF description 往返保真、approver email→accountId
-  解析、人工填表流程)——mock 測覆蓋不到,需在真 SCRUM 專案跑一次。
+- **真 Jira 實測 ✅(2026-08-05,SCRUM-20)**:審批門完整鏈路一次通過 —— ADF 往返
+  保真(人 UI 編輯後機器段 hash 仍符)、approver/human_email email→accountId 解析、
+  填表放行、fork claude($0.0544)、SUCCESS、冪等、審批中資源開關不誤標。
+  詳 `harness/TEST_real_jira.md` 結果表。未實測(單元測有蓋):退回迴圈、ghost
+  email 退回、G1 handoff kind=human 指派。
 
 ## 0. 一句話目標
 

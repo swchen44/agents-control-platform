@@ -1,5 +1,25 @@
 # TEST_real_jira — W2a 審批門 + human_email 真 Jira 實測
 
+> ## ★ 實測結果(2026-08-05 22:40-22:48,SCRUM-20)— PASS
+>
+> 完整鏈路一次通過:建票 → 貼 plan(區塊置頂/hash)→ 指派 fox44(email→
+> accountId `712020:1b45...`)→ 人在 Jira UI 填表(agent_name + human_email)
+> → assignee 交回 bot → 放行 → fork claude haiku(27s,$0.0544)→ verify
+> done.txt → SUCCESS comment → 轉 Done。
+>
+> | 觀察重點 | 結果 |
+> |---|---|
+> | 1 ADF 往返保真 | ✓ 標記/```/hash 行原樣讀回,hash 重算一致 |
+> | 2 人 UI 編輯後機器段 | ✓ **人編輯 human 段後 control 段 hash 仍符**(編輯器沒重排) |
+> | 3 approver email→accountId | ✓ assignee=fox44(accountId,非 email 字串) |
+> | 4 human_email 校驗 | ✓ 合法 email 放行(ghost 退回未實測,單元測有蓋) |
+> | 5 冪等 | ✓ 說明 comment 只 1 則;awaiting 期間 description 未被重寫 |
+> | 6 審批中 assignee 開關不誤標 | ✓ 交人事件有進、無 inactive_set |
+>
+> 未實測(單元測已蓋,留後續):退回迴圈(使用者直接填對放行)、
+> ghost email 退回、G1 handoff kind=human 的 human_email 指派。
+> workspace 命名實證:`tickets/approval-demo__SCRUM-20__10019/ws/`(W1 §2)。
+
 > 目的:mock 蓋不到的三件事 —— **ADF description 往返保真**(分區段/hash 行經
 > Jira 讀寫不變形)、**email→accountId 解析**(approver + human_email)、
 > **人工填表/退回迴圈**(真人操作 Jira UI)。
