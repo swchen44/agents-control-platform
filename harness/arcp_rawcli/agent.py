@@ -300,5 +300,9 @@ class RawCLIAgent(AgentBase):
             self._got_terminal = True
             u = o.get("usage") or {}
             self._cost_usd = u.get("total_cost_usd") or self._cost_usd
+            # 瞬態 error(stream 斷線等)被 CLI 自己重連救回 → turn 仍完成,
+            # 不該污染 envelope(W3.1 實測:Reconnecting 3/5 後成功)。
+            # turn.failed 是終態、之後不會有 turn.completed,不受影響。
+            self._error = None
         elif t in ("turn.failed", "error"):
             self._error = str((o.get("error") or {}).get("message") or o)[:300]

@@ -21,15 +21,22 @@
 
 ## Checklist
 
-**Phase W3.1 — D2 codex 真跑驗證(rawcli 第二引擎)**
-- [ ] routes.yaml 加 `filechain-codex` profile(rawcli engine: codex、sandbox:
-      workspace-write、model 省成本檔)+ label route
-- [ ] `e2e_codex.py`(花 token):filechain 任務真跑 → envelope 契約欄位齊
-      (completed/session_id/cost_usd)+ resume 續跑驗證
-- [ ] `e2e_contract.py` 擴:codex `--output-schema <FILE>` G1 結構化真跑
-      (status/next 解析;對齊 claude 的 4/4)
-- [ ] 真 Jira 冒煙(選做):SCRUM 票 label 跑一張 SUCCESS
-- [ ] commit+push
+**Phase W3.1 — D2 codex 真跑驗證(rawcli 第二引擎)** ✅
+- [x] routes.yaml `filechain-codex` route+profile(engine: codex、sandbox:
+      workspace-write、**model 不填=帳號預設**——runner 修正:model 預設改
+      engine 相依,haiku 只給 claude,不再塞給 codex)
+- [x] `e2e_codex.py` 8/8 真跑 PASS:envelope 同形(completed/session_id=
+      thread_id/truly_resumed)+ **native resume 續同 thread**(a2 靠 session
+      上下文建 step2.txt=12);cost=None(codex 訂閱制不回報金額,契約允許)
+- [x] `e2e_contract.py` 擴雙引擎:claude 4/4 + codex 4/4 PASS。實測揪出並修:
+      (a) **CONTRACT_SCHEMA 改 OpenAI strict 形狀**(巢狀 object 都
+      additionalProperties:false + required 列全欄位、選填用 nullable)——
+      codex 後端否則 400 invalid_json_schema;claude 對超集合也接受,雙引擎共用;
+      (b) **瞬態 error 不污染 envelope**:codex stream 斷線 Reconnecting 3/5
+      自動救回後 turn.completed 到達 → 清 _error(turn.failed 終態不受影響)
+- [x] 真 Jira 冒煙:略(選做;dispatcher 鏈路已由 claude 版真 Jira 三票驗證,
+      envelope 同形即等價)
+- [x] commit+push
 
 **Phase W3.2 — A2 冪等分層(關一半副作用)**
 - [ ] **盤點文件**:列全部「外部寫入(Jira comment/assignee/description)× store 寫入」

@@ -49,9 +49,13 @@ def main() -> int:
                                 os.path.basename(job["events_path"])
                                 .replace(".events.jsonl", ".raw.jsonl"))
         resume_sid = job.get("resume_session_id")
+        engine = job.get("acp_server_engine", "claude")
+        # model 預設是 engine 相依的:haiku 是 claude 的;codex 不給 model
+        # (None → 不帶 --model,用帳號預設),避免 claude model 名塞給 codex
         agent = RawCLIAgent(
-            engine=job.get("acp_server_engine", "claude"),
-            model=job.get("acp_model") or "haiku",
+            engine=engine,
+            model=job.get("acp_model") or ("haiku" if engine == "claude"
+                                           else None),
             session_id=resume_sid,
             resume=bool(resume_sid),
             raw_events_path=raw_path,

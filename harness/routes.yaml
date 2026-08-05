@@ -52,6 +52,12 @@ outer_loop:
       profile: filechain-rawcli
       on_match: create_or_resume
 
+    - name: filechain-codex          # W3.1(D2):rawcli 第二引擎(codex exec)
+      when:
+        labels: ['filechain-codex']
+      profile: filechain-codex
+      on_match: create_or_resume
+
     - name: filechain-demo          # Phase 2 M2:第一條會「動手」的 route
       when:
         labels: ['filechain']
@@ -173,6 +179,30 @@ inner_loop:
             step1.txt: '1'
             extra.txt: null        # existence-only:missing-file feedback 不含
                                    # expected content,agent 無從得知(lesson #10)
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # W3.1(D2):同 filechain-rawcli 但 engine=codex——驗雙引擎同 envelope
+    # 契約。model 不填=用 codex 帳號預設(claude 的 model 名不適用於 codex);
+    # 隔離用 codex 內建 --sandbox workspace-write(os_sandbox 對 codex 是 no-op)。
+    filechain-codex:
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: codex
+        sandbox: workspace-write
+        venv: ../examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+      verify:
+        - name: filechain
+          files:
+            step1.txt: '1'
+            step2.txt: '12'
+            step3.txt: '123'
       loop:
         max_attempts: 2
         on_unknown: pending

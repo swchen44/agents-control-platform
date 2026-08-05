@@ -20,6 +20,10 @@ STATUS_VALUES = ["done", "failed", "need_human", "handoff"]
 NEXT_KIND = ["agent", "human"]
 
 # 傳給 claude --json-schema / 寫檔給 codex --output-schema 的 JSON Schema。
+# 形狀遵守 OpenAI strict structured-output 規則(codex 後端會 400 拒絕否則,
+# W3.1 實測):每個 object(含巢狀)都要 additionalProperties:false,且
+# required 列**全部** properties——「選填」以 nullable type 表達,不是缺 key。
+# claude 對此超集合也接受(實測),雙引擎共用同一份。
 CONTRACT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -31,9 +35,11 @@ CONTRACT_SCHEMA = {
                 "to": {"type": ["string", "null"]},
                 "kind": {"type": "string", "enum": NEXT_KIND},
             },
+            "required": ["to", "kind"],
+            "additionalProperties": False,
         },
     },
-    "required": ["reason", "status"],
+    "required": ["reason", "status", "next"],
     "additionalProperties": False,
 }
 

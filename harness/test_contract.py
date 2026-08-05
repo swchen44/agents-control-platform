@@ -54,8 +54,12 @@ check("C1 summarize 含 status/reason/next",
           {"reason": "交給人", "status": "handoff",
            "next": {"to": "swchen44", "kind": "human"}}))
       and "交給人" in s and "human:swchen44" in s)
-check("C1 schema required 有 reason+status",
-      set(CONTRACT_SCHEMA["required"]) == {"reason", "status"})
+check("C1 schema required 列全欄位(OpenAI strict,W3.1)",
+      set(CONTRACT_SCHEMA["required"]) == {"reason", "status", "next"})
+check("C1 巢狀 next 也 strict(additionalProperties:false)",
+      CONTRACT_SCHEMA["properties"]["next"]["additionalProperties"] is False
+      and set(CONTRACT_SCHEMA["properties"]["next"]["required"])
+      == {"to", "kind"})
 
 
 # -- C2/C3:dispatcher 整合 ------------------------------------------------- #
