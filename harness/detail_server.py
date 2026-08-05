@@ -11,8 +11,14 @@
 這正是 OpenHands GUI 給不了的視角:它只有 L3(conversation);L0/L2 的
 ticket 語意、grader 判準、成本是 harness 的。detail page 把兩者對齊。
 
-Usage: python3 detail_server.py [runtime_dir] [port]
-       (預設 runtime_live、8787;開瀏覽器看 http://127.0.0.1:8787/)
+W2.7 dashboard 擴充(F2 排隊 + C4 總覽 + 控制):index 加總覽卡(cost/outcome/
+失敗率/in-flight/queued)、狀態徽章(QUEUED 含 FIFO 位置 / INACTIVE / pending:*)、
+控制列(Pause/Resume/Reload → fetch POST 到 W2.6 control API,離線顯示提示);
+審批門 ticket 顯示審批狀態卡(sections 表單本體在 Jira description)。
+
+Usage: python3 detail_server.py [runtime_dir] [port] [control_url]
+       (預設 runtime_live、8788、http://127.0.0.1:8787;
+        亦可 env ARCP_CONTROL_URL 指 control API)
 """
 
 from __future__ import annotations
@@ -22,11 +28,14 @@ import json
 import os
 import sqlite3
 import sys
+from collections import Counter
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 ROOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else \
     os.path.abspath("./runtime_live")
-PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8787
+PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8788   # 8787 讓給 control API
+CONTROL = (sys.argv[3] if len(sys.argv) > 3
+           else os.environ.get("ARCP_CONTROL_URL", "http://127.0.0.1:8787"))
 
 
 def read_journal() -> list[dict]:
@@ -71,6 +80,14 @@ a{color:#58a6ff;text-decoration:none}main{padding:0 24px 40px;max-width:1100px}
 .badge{padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
 .SUCCESS{background:#1a4d2e;color:#7ee2a8}.FAILURE,.UNKNOWN,.ABORTED{background:#4d1a1a;color:#f2a8a8}
 .pending{background:#4d3d1a;color:#e2d07e}
+.queued{background:#1a2f4d;color:#7ea8e2}.inactive{background:#30363d;color:#8b949e}
+.running{background:#1a3a4d;color:#7ed0e2}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+.stat{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 18px;text-align:center;min-width:70px}
+.stat .n{font-size:20px;font-weight:700;color:#58a6ff}.stat .l{font-size:11px;color:#8b949e}
+.ctl{display:flex;gap:8px;align-items:center}
+.btn{padding:4px 14px;border-radius:6px;background:#21262d;cursor:pointer;border:1px solid #30363d;user-select:none}
+.btn:hover{background:#30363d}
 .ev{font-family:ui-monospace,monospace;font-size:12px;padding:3px 0;border-bottom:1px solid #21262d}
 .ev .t{color:#8b949e}.ev .k{color:#58a6ff}.layer{border-left:3px solid #30363d;padding-left:12px}
 .L0{border-color:#a371f7}.L1{border-color:#58a6ff}.L2{border-color:#3fb950}.L3{border-color:#d29922}
@@ -143,27 +160,123 @@ def render_conversation(items: list[dict]) -> str:
     return out or "<div class='sys'>(no conversation events)</div>"
 
 
+def queue_positions(sessions: dict[int, dict]) -> dict[int, int]:
+    """F2:queued sessions 依 queued_at FIFO 排 → {issue_id: 1-based 位置}。"""
+    q = [s for s in sessions.values()
+         if s.get("queued") and not s.get("outcome")]
+    q.sort(key=lambda s: s.get("queued_at") or 0)
+    return {s["issue_id"]: i + 1 for i, s in enumerate(q)}
+
+
+def session_status(s: dict, qpos: dict[int, int]) -> tuple[str, str]:
+    """→ (徽章文字, css class)。優先序:outcome > pending > queued > inactive。"""
+    oc = s.get("outcome")
+    if oc:
+        return oc, oc if oc in ("SUCCESS", "FAILURE", "UNKNOWN",
+                                "ABORTED") else ""
+    pr = s.get("pending_reason")
+    if pr:
+        return f"pending:{pr}", "pending"
+    if s.get("queued"):
+        return f"QUEUED #{qpos.get(s.get('issue_id'), '?')}", "queued"
+    if s.get("inactive"):
+        return "INACTIVE", "inactive"
+    return "active", "running"
+
+
+def overview_cards(sessions: dict[int, dict]) -> str:
+    """C4 總覽卡:cost / outcome 計數 / 失敗率 / in-flight / queued / inactive。"""
+    vals = list(sessions.values())
+    oc = Counter(s.get("outcome") for s in vals if s.get("outcome"))
+    succ, fail = oc.get("SUCCESS", 0), oc.get("FAILURE", 0)
+    done = succ + fail
+    fail_rate = f"{fail / done * 100:.0f}%" if done else "–"
+    in_flight = sum(1 for s in vals
+                    if not s.get("outcome") and not s.get("pending_reason")
+                    and not s.get("queued") and not s.get("inactive"))
+    live = [s for s in vals if not s.get("outcome")]
+    stats = [
+        (f"${sum(s.get('cost_usd') or 0 for s in vals):.4f}", "總 cost"),
+        (in_flight, "in-flight"),
+        (sum(1 for s in live if s.get("queued")), "queued"),
+        (sum(1 for s in live if s.get("inactive")), "inactive"),
+        (sum(1 for s in live if s.get("pending_reason")), "pending"),
+        (succ, "SUCCESS"), (fail, "FAILURE"), (fail_rate, "失敗率"),
+    ]
+    return "<div class='stats'>" + "".join(
+        f"<div class='stat'><div class='n'>{esc(n)}</div>"
+        f"<div class='l'>{esc(label)}</div></div>" for n, label in stats
+    ) + "</div>"
+
+
+def control_bar() -> str:
+    """控制列:Pause/Resume/Reload → fetch POST 到 control API(W2.6)。"""
+    return (
+        "<div class='ctl card'><b style='color:#8b949e'>Control</b>"
+        "<div class='btn' onclick=\"ctl('pause')\">⏸ Pause</div>"
+        "<div class='btn' onclick=\"ctl('resume')\">▶ Resume</div>"
+        "<div class='btn' onclick=\"ctl('reload')\">🔄 Reload</div>"
+        "<span id='ctl-state' style='color:#8b949e;font-size:12px'></span>"
+        "</div><script>"
+        "const CTL=" + json.dumps(CONTROL) + ";"
+        "const ST=document.getElementById('ctl-state');"
+        "function off(){ST.textContent='control 離線('+CTL+')';}"
+        "function ctl(a){fetch(CTL+'/'+a,{method:'POST'})"
+        ".then(r=>r.json()).then(j=>ST.textContent=JSON.stringify(j))"
+        ".catch(off);}"
+        "fetch(CTL+'/status').then(r=>r.json()).then(j=>{"
+        "ST.textContent=(j.paused?'⏸ paused':'▶ running')"
+        "+' · in-flight '+j.in_flight+' · queued '+j.queued;})"
+        ".catch(off);"
+        "</script>")
+
+
 def render_index(journal, sessions) -> str:
     ids = sorted({e["issue_id"] for e in journal} | set(sessions))
+    qpos = queue_positions(sessions)
     rows = ""
     for iid in ids:
         s = sessions.get(iid, {})
         key = s.get("key") or next((e["key"] for e in journal
                                     if e["issue_id"] == iid), f"#{iid}")
-        oc = s.get("outcome") or "-"
-        cls = oc if oc in ("SUCCESS", "FAILURE", "UNKNOWN", "ABORTED") else ""
+        label, cls = session_status(s, qpos) if s else ("-", "")
         rows += (f"<tr><td><a href='/ticket/{iid}'>{esc(key)}</a></td>"
                  f"<td>{esc(s.get('profile','-'))}</td>"
-                 f"<td><span class='badge {cls}'>{esc(oc)}</span></td>"
+                 f"<td><span class='badge {cls}'>{esc(label)}</span></td>"
                  f"<td>{esc(s.get('attempts',0))}</td>"
-                 f"<td>${s.get('cost_usd',0):.4f}</td></tr>")
-    return (f"<header><h1>ARCP Agent Detail · {esc(ROOT.split('/')[-1])}"
-            f"</h1></header><main><h2>Tickets</h2><div class='card'><table>"
+                 f"<td>${s.get('cost_usd',0) or 0:.4f}</td></tr>")
+    return (f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
+            f"</h1></header><main>"
+            f"{overview_cards(sessions)}{control_bar()}"
+            f"<h2>Tickets</h2><div class='card'><table>"
             f"<tr><td><b>ticket</b></td><td><b>profile</b></td>"
-            f"<td><b>outcome</b></td><td><b>attempts</b></td>"
+            f"<td><b>status</b></td><td><b>attempts</b></td>"
             f"<td><b>cost</b></td></tr>{rows}</table></div>"
             f"<p style='color:#8b949e'>四層 trace:L0 ticket · L1 attempt · "
             f"L2 envelope · L3 conversation events。點 ticket 展開。</p></main>")
+
+
+def render_approval(s: dict, evs: list[dict]) -> str:
+    """W2.3 審批門狀態卡。sections 表單本體在 Jira description(人在 Jira 填);
+    此頁顯示 store 側的審批軌跡(decision/退回次數)。"""
+    appr = [e for e in evs if e.get("type") == "approval"]
+    if (s.get("pending_reason") not in ("approval", "escalated")
+            and not s.get("approval_revisions") and not appr):
+        return ""
+    rows = "".join(
+        f"<div class='ev'><span class='k'>{esc(e.get('decision','?'))}</span> "
+        f"<span class='t'>revisions={esc(e.get('revisions', 0))}</span></div>"
+        for e in appr)
+    state = s.get("pending_reason") or "-"
+    return (f"<h2>審批門(W2.3)</h2><div class='card layer L0'>"
+            f"<div class='row'>"
+            f"<span class='kv'><b>狀態</b> <span class='badge pending'>"
+            f"{esc(state)}</span></span>"
+            f"<span class='kv'><b>退回次數</b> "
+            f"{esc(s.get('approval_revisions', 0))}</span>"
+            f"<span class='kv' style='color:#8b949e'>填表區段在 Jira "
+            f"description(human 段),assignee 交回機器人即放行</span>"
+            f"</div>{rows}</div>")
 
 
 def render_ticket(iid, journal, sessions) -> str:
@@ -200,7 +313,6 @@ def render_ticket(iid, journal, sessions) -> str:
             evp = os.path.join(ad, f"{n}.events.jsonl")
             if os.path.exists(evp):
                 items = [json.loads(l) for l in open(evp) if l.strip()]
-                from collections import Counter
                 hist = Counter(i.get("kind") or i.get("type") or "?"
                                for i in items)
                 rows = ""
@@ -241,6 +353,7 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<span class='kv'><b>cost</b> ${s.get('cost_usd',0):.4f}</span>"
             f"<span class='kv'><b>workspace</b> {esc(s.get('workspace','-'))}</span>"
             f"</div></div>"
+            f"{render_approval(s, evs)}"
             f"<div class='tabs'>"
             f"<div class='tab on' id='tab-convo' onclick='tab(\"convo\")'>💬 Conversation</div>"
             f"<div class='tab' id='tab-trace' onclick='tab(\"trace\")'>🔍 Trace (L0-L3)</div>"

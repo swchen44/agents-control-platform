@@ -42,6 +42,9 @@ class ControlAPI:
                 self.send_header("Content-Type",
                                  "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
+                # W2.7:dashboard(detail_server,另一 port)的 fetch 要能讀
+                # 回應;API 本身仍只綁 127.0.0.1(CORS 不放寬綁定範圍)
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body)
 

@@ -193,12 +193,20 @@ hash: a1b2c3d4e5f6
       不派工+resume 補派 —— 全綠;全套回歸無破
 - [ ] commit+push
 
-**Phase W2.7 — web dashboard(F2 排隊 + C4 總覽 + 控制,W14)**
-- [ ] 擴 `detail_server` 渲染(或合進 control_api):index 加 queued/inactive 狀態徽章 +
-      排隊位置(FIFO 序)+ 總覽卡(總 cost、各 outcome 計數、失敗率、in-flight/queued 數)
-- [ ] 控制按鈕:Pause/Resume/Reload → fetch POST 到 W2.6 端點;審批門 ticket 顯示 sections
-- [ ] 與 run_poller 同進程(control_api 服務頁+API)或獨立只讀頁 + 指向 control_api 的 POST
-- [ ] E2E `e2e_dashboard.py`(免 token,假資料):頁面渲染排隊/總覽、控制按鈕打通 API
+**Phase W2.7 — web dashboard(F2 排隊 + C4 總覽 + 控制,W14)** ✅
+- [x] 擴 `detail_server` 渲染:index 加狀態徽章(優先序 outcome > pending:* >
+      QUEUED #FIFO位置 > INACTIVE > active)+ C4 總覽卡(總 cost、in-flight、
+      queued、inactive、pending、SUCCESS/FAILURE、失敗率)
+- [x] 控制按鈕:Pause/Resume/Reload → fetch POST 到 W2.6 端點(control API 加
+      CORS header,跨 port 可讀回應;離線顯示提示);審批門 ticket 顯示**審批狀態卡**
+      (狀態/退回次數/decision 軌跡 —— sections 表單本體在 Jira description,
+      store 側無 description,故顯示狀態卡而非 sections 原文)
+- [x] 採「獨立只讀頁 + 指向 control_api 的 POST」:dashboard 免 poller 也能看;
+      detail_server 預設 port 8787→8788(讓給 control),control_url 由 argv[3]
+      / env ARCP_CONTROL_URL 指定
+- [x] E2E `e2e_dashboard.py`(免 token,假資料,15 checks):總覽卡數字、FIFO
+      排隊位置(queued_at 序)、各徽章、控制列指向、審批卡有無、POST /pause
+      契約、CORS —— 全 PASS
 - [ ] commit+push
 
 ## W2 明確不做(留後續)
