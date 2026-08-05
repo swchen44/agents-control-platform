@@ -103,6 +103,22 @@
       找不到執行檔、oneshot、config 互斥)全綠;19 測檔 + selftest + e2e 全綠
 - [x] commit+push
 
+**Phase W4.5 — hot reload / 關閉語意:專門文件 + 缺口補強(使用者 2026-08-06 追加)** ✅
+- [x] **`DESIGN_hotreload.md` 專門文件**:reload=引用替換非交易、範圍表
+      (✅routes/jql/concurrency/profiles/triggers/白名單/cancel_states;
+      ⚠️進行中 attempt 同輪混用、pin 名字不變;❌間隔/port/bot 身份/憑證/
+      程式碼)、graceful(/shutdown 當輪含壓縮自然跑完)、強制關閉語意
+      (Ctrl-C/kill -9 靠冪等+三態兜底)、重啟恢復、已知限制
+- [x] 缺口補強:reload 漏 **triggers** 補上、ExternalChangePolicy **舊 profiles
+      引用**同步、routes.yaml `allowed_commenters`/`cancel_states` **原 hardcode
+      未接線 → 接線且可 reload**;`make_reload` 抽成模組函數(可測)
+- [x] `POST /shutdown`(graceful:stopping 旗標,主迴圈當前輪跑完退出→
+      snapshotter/API/store 依序清理);/status 加 stopping;dashboard 按鈕
+      依使用者指示與 new dashboard 一起做(本波不動 UI)
+- [x] `test_hotreload.py` 2 tests(全範圍 swap、壞 config fail-safe 舊設定
+      原封)+ test_control_api +1(/shutdown)—— 20 測檔全綠
+- [x] commit+push
+
 ## W4 明確不做(留後續)
 
 - cchv-server 的 `--serve` WebUI 模式(我們只用 --export;dashboard 自己的)

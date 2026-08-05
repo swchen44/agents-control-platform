@@ -7,8 +7,11 @@
                   計數 + cost 彙總
   POST /pause   → poller.paused=True(graceful:只 watch 不派新工,正在跑的不中斷)
   POST /resume  → poller.paused=False
-  POST /reload  → reload_fn()(hot reload:routes/profiles/concurrency,
-                  壞 config 回 400、不弄死 poller)
+  POST /reload  → reload_fn()(hot reload:範圍見 DESIGN_hotreload.md;
+                  壞 config 回 400、舊設定續用、不弄死 poller)
+  POST /shutdown→ poller.stopping=True(W4.5 graceful:當前 poll 輪——含正在跑
+                  的 attempt / 壓縮打包——自然跑完後退出並清理;強制關閉語意
+                  見 DESIGN_hotreload.md)
 
 安全:預設綁 127.0.0.1(本機控制),無認證——不可綁公網。
 """
@@ -64,6 +67,10 @@ class ControlAPI:
                     api.poller.paused = False
                     log.info("control: resume")
                     return self._json(200, {"paused": False})
+                if self.path == "/shutdown":       # W4.5 graceful shutdown
+                    api.poller.stopping = True
+                    log.info("control: shutdown(當前輪跑完後退出)")
+                    return self._json(200, {"stopping": True})
                 if self.path == "/reload":
                     if api.reload_fn is None:
                         return self._json(501, {"error": "reload 未接線"})
@@ -97,6 +104,7 @@ class ControlAPI:
                 pending[s.pending_reason] = pending.get(s.pending_reason, 0) + 1
         return {
             "paused": bool(getattr(self.poller, "paused", False)),
+            "stopping": bool(getattr(self.poller, "stopping", False)),
             "in_flight": len(self.store.active_sessions()),
             "queued": sum(1 for s in sessions if s.queued),
             "inactive": sum(1 for s in sessions if s.inactive),

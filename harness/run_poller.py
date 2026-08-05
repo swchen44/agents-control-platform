@@ -54,6 +54,35 @@ def adopt_existing(source, store, routes, jql) -> int:
     return n
 
 
+def make_reload(loop, disp, cmds, ext, config_path: str = "routes.yaml"):
+    """W13/W4.5 hot reload(POST /reload):重讀 config、swap 引用。
+
+    範圍與限制的完整說明見 DESIGN_hotreload.md。壞 config → load_config/
+    load_profiles/load_triggers 擲 ConfigError → control API 回 400,
+    **舊設定原封續用**(fail-safe)。
+    """
+    def _reload():
+        s_cfg, new_routes = load_config(config_path)
+        new_profiles = load_profiles(config_path)
+        new_triggers = load_triggers(config_path, new_profiles)
+        loop.routes = new_routes
+        loop.jql = s_cfg["jql"]
+        loop.concurrency = s_cfg.get("concurrency") or loop.concurrency
+        loop.triggers = new_triggers                   # W4.5:triggers 可 reload
+        disp.profiles = new_profiles
+        cmds.profiles = new_profiles
+        ext.profiles = new_profiles                    # W4.5:離手定格查表同步
+        new_cmt = (s_cfg.get("commands") or {}).get("allowed_commenters")
+        if new_cmt:
+            cmds.allowed = new_cmt                     # W4.5:白名單可 reload
+        new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
+        if new_cancel:
+            ext.cancel_states = new_cancel             # W4.5:終止狀態可 reload
+        return {"routes": len(new_routes), "profiles": len(new_profiles),
+                "triggers": len(new_triggers)}
+    return _reload
+
+
 def main() -> int:
     minutes = float(sys.argv[1]) if len(sys.argv) > 1 else 30.0
     interval = float(sys.argv[2]) if len(sys.argv) > 2 else 15.0
@@ -72,26 +101,25 @@ def main() -> int:
               or src.myself().get("accountId", ""))
     disp = Dispatcher(src, store, profiles, root="./runtime_live",
                       approval=ApprovalGate(src, store, bot_id))
-    cmds = CommandHandler(src, store, ["Shao-wei Chen"], profiles=profiles)
+    # W4.5:allowed_commenters / cancel_states 從 config 接線(原 hardcode)
+    cmds = CommandHandler(
+        src, store,
+        (source_cfg.get("commands") or {}).get("allowed_commenters")
+        or ["Shao-wei Chen"],
+        profiles=profiles)
+    ext = ExternalChangePolicy(
+        src, store,
+        (source_cfg.get("external_change") or {}).get("cancel_states")
+        or ["完成", "Done", "Concluído"],
+        bot_account_id=bot_id, profiles=profiles)      # W4.3 離手定格
     loop = OuterLoop(
         src, store, routes, jql,
-        dispatcher=disp, commands=cmds,
-        external=ExternalChangePolicy(src, store, ["完成", "Done", "Concluído"],
-                                      bot_account_id=bot_id,
-                                      profiles=profiles),   # W4.3 離手定格
+        dispatcher=disp, commands=cmds, external=ext,
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
         triggers=load_triggers("routes.yaml", profiles))   # W3.4 scheduled
 
-    def _reload():                     # W13 hot reload(POST /reload)
-        s_cfg, new_routes = load_config("routes.yaml")
-        new_profiles = load_profiles("routes.yaml")
-        loop.routes = new_routes
-        loop.jql = s_cfg["jql"]
-        loop.concurrency = s_cfg.get("concurrency") or loop.concurrency
-        disp.profiles = new_profiles
-        cmds.profiles = new_profiles
-        return {"routes": len(new_routes), "profiles": len(new_profiles)}
+    _reload = make_reload(loop, disp, cmds, ext)       # W13/W4.5 hot reload
 
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,
@@ -114,6 +142,9 @@ def main() -> int:
     # (lesson:睡眠凍結行程但時鐘照走)
     cycles = max(1, int(minutes * 60 / interval))
     for i in range(cycles):
+        if loop.stopping:              # W4.5 graceful shutdown(POST /shutdown)
+            print("[poller] graceful shutdown(當前輪已完成)", flush=True)
+            break
         try:
             for e in loop.poll_once():
                 stamp = time.strftime("%H:%M:%S")

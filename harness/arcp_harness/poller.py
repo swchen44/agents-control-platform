@@ -41,6 +41,7 @@ class OuterLoop:
         self.triggers = triggers or []  # W3.4 內部觸發源(scheduled)
         self.max_running = max(1, max_running)  # v5 D10 (conc.1)
         self.paused = False            # W13 graceful:只 watch 不派新工
+        self.stopping = False          # W4.5 graceful shutdown:當前輪跑完就退
         self._cycles = 0               # W3.3 retention 掃描節流
         # F1 分層閘門;缺省退化成單層 max_running(向後相容)
         self.concurrency = concurrency or {

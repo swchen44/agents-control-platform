@@ -126,6 +126,19 @@ def test_reload_ok_and_error():
         api.stop()
 
 
+def test_shutdown_sets_stopping():
+    p = FakePoller()
+    api = _api(poller=p)
+    try:
+        code, body = _post(api, "/shutdown")
+        assert code == 200 and body["stopping"] is True
+        assert p.stopping is True                  # W4.5 graceful shutdown
+        _, st = _get(api, "/status")
+        assert st["stopping"] is True
+    finally:
+        api.stop()
+
+
 def test_unknown_paths_404():
     api = _api()
     try:
