@@ -19,6 +19,23 @@
 > 未實測(單元測已蓋,留後續):退回迴圈(使用者直接填對放行)、
 > ghost email 退回、G1 handoff kind=human 的 human_email 指派。
 > workspace 命名實證:`tickets/approval-demo__SCRUM-20__10019/ws/`(W1 §2)。
+>
+> ## ★ 補測結果(2026-08-05 22:58-23:25,SCRUM-21,Chrome 瀏覽器扮人類)— PASS
+>
+> 用 claude-in-chrome 在 Jira UI 實走**完整退回迴圈**:
+> 1. **空表交回** → 「agent_name 必填」comment + assignee 彈回審批者(revisions=1)✓
+> 2. **填 `ghost@nowhere.xx` 交回** → 「human_email 不是合法 Jira 帳號」comment
+>    + 彈回(revisions=2)—— **真 Jira user-search 校驗生效** ✓
+> 3. **修正 `swchen44@gmail.com` 交回** → 放行 → fork claude haiku → done.txt
+>    verify ✓ → SUCCESS($0.0345)→ 轉 Done ✓
+>
+> 全程 UI 編輯(rich editor)後 control 段 hash 皆未破壞(共 3 次人工編輯往返)。
+> G1 handoff kind=human 的 human_email 指派仍僅單元測(待有 handoff 情境的真實任務)。
+>
+> **UI 操作 lesson(供未來自動化/文件參考)**:Jira description 的 code block 內
+> `End`/`shift+End` 是「區塊級」選取(會吃掉整段)——瀏覽器自動化或教人填表時,
+> 用「游標點到位、直接打字/退格」的零選取編輯最安全;點欄位外空白會把鍵入誤觸
+> 成全域快捷鍵(i=assign to me 等)。
 
 > 目的:mock 蓋不到的三件事 —— **ADF description 往返保真**(分區段/hash 行經
 > Jira 讀寫不變形)、**email→accountId 解析**(approver + human_email)、
