@@ -29,6 +29,7 @@ from .inner_runner import run_attempt  # noqa: E402
 from .jira_source import JiraCloudSource  # noqa: E402
 from .logutil import get_logger  # noqa: E402
 from .profiles import Profile  # noqa: E402
+from .sections import parse as parse_sections  # noqa: E402
 from .store import Store, TicketSession  # noqa: E402
 from .ticket import Ticket  # noqa: E402
 from .workspace import health_check, provision  # noqa: E402
@@ -66,6 +67,25 @@ class Dispatcher:
         self.root = root
         self.server_manager = server_manager   # conc.3 long-lived shared server
         self.approval = approval               # W2.3 ApprovalGate | None
+
+    def _human_assignee(self, ticket: Ticket, profile: Profile) -> str | None:
+        """轉人類時的 assignee:description human 段 `human_email` →
+        profile.approver(fallback 鏈)。email 經 user-search 解析成 accountId,
+        解析不到 → 試下一候選;離線 mock(無 user-search)→ 原樣回。"""
+        _b, secs, _a = parse_sections(ticket.description or "")
+        email = next((str(s.data().get("human_email") or "").strip()
+                      for s in secs if s.owner == "human"), "")
+        find = getattr(self.source, "find_account_id", None)
+        for cand in (email, profile.approver or ""):
+            if not cand:
+                continue
+            if "@" in cand and find is not None:
+                acct = find(cand)
+                if acct:
+                    return acct
+                continue               # 解析不到 → fallback 下一候選
+            return cand                # 已是 accountId(或離線 mock)
+        return None
 
     def _effective_agent(self, profile: Profile) -> dict:
         """Inject shared-server info for openhands-server backend (conc.3)."""
@@ -213,11 +233,16 @@ class Dispatcher:
                         f"[agent] handoff→human:{summarize(res.structured)}\n"
                         f"請人工接手;要 agent 繼續請留言 @agent run。"
                         f"\n{_resume_hint(sess)}"))
-                    self.source.assign(ticket.id, str(nxt["to"]))
+                    # assignee 不信 agent 自由文字 next.to:human 段
+                    # human_email → approver(fallback);解析不到就不改
+                    assignee = self._human_assignee(ticket, profile)
+                    if assignee:
+                        self.source.assign(ticket.id, assignee)
                     events.append(self.store.journal(
                         "handoff", ticket.id, ticket.key, kind="human",
-                        to=nxt["to"]))
-                    log.info("%s handoff → human(%s)", ticket.key, nxt["to"])
+                        to=nxt["to"], assignee=assignee))
+                    log.info("%s handoff → human(assignee=%s)",
+                             ticket.key, assignee)
                     return events
                 target = str(nxt["to"])
                 if target in self.profiles and target != profile.name:

@@ -48,6 +48,12 @@
 3. **全掃描 + log**:每次讀 description **掃全部機器段驗 hash**(純 python 不花 token),
    不符=被誤寫 → 還原 + **log 記(段名 + 時間)** + comment 提示;human 段永遠尊重。
 4. hash:control/agent 段各附;human 無。命名 snake_case;附件 `key: attach:<檔名>`。
+5. **human 段 `human_email` 欄(2026-08-05 補)**:人類的 Jira email,agent 轉票給
+   人類時的 assignee 來源;**選填,空 → fallback profile.approver**。有填就即時打
+   Jira user-search 驗證可解析(`find_account_id`),解析不到當填表錯誤退回;
+   審批「退回」仍退 profile.approver(填表本身可能是錯誤來源);email→accountId
+   解析套用在所有 assign(approver 也是 email)。轉人類 fallback 鏈:
+   human_email → approver → 都無則不改 assignee(不信 agent 自由文字 next.to)。
 
 目標版面:
 

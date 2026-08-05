@@ -60,8 +60,10 @@ def _ticket(desc="原始需求", assignee_id=None):
                   assignee_id=assignee_id, description=desc)
 
 
-def _filled(agent_name):
+def _filled(agent_name, human_email=None):
     body = f"agent_name: {agent_name}" if agent_name else "agent_name:"
+    if human_email is not None:
+        body += f"\nhuman_email: {human_email}"
     # 定案版面:ARCP 區塊置頂,原始需求沉到區塊下方(after)
     return render("", [
         Section("control",
@@ -110,6 +112,46 @@ def test_reprompt_on_missing_agent_name():
     assert sess.approval_revisions == 1
     assert g.source.assigns[-1] == (1, "APPROVER")   # 退回審批者
     assert any("填表有誤" in c for _, c in g.source.comments)
+
+
+class MockSourceWithSearch(MockSource):
+    """真 Jira 語意的 mock:user-search 只認識 known 名單。"""
+    KNOWN = {"boss@x.tw": "ACCT-BOSS"}
+
+    def find_account_id(self, email):
+        return self.KNOWN.get(email)
+
+
+def test_human_email_valid_resolves():
+    g = ApprovalGate(MockSourceWithSearch(), Store(tempfile.mkdtemp()), BOT)
+    sess = _sess()
+    d = g.gate(_ticket(desc=_filled("myagent", human_email="boss@x.tw"),
+                       assignee_id=BOT), _profile(), sess)
+    assert d == "proceed"                      # 合法帳號 → 放行
+
+
+def test_human_email_unknown_reprompts():
+    g = ApprovalGate(MockSourceWithSearch(), Store(tempfile.mkdtemp()), BOT)
+    sess = _sess()
+    d = g.gate(_ticket(desc=_filled("myagent", human_email="ghost@x.tw"),
+                       assignee_id=BOT), _profile(), sess)
+    assert d == "reprompt"                     # user-search 解析不到 → 退回
+    assert any("不是合法 Jira 帳號" in c for _, c in g.source.comments)
+
+
+def test_human_email_empty_ok_fallback():
+    g = ApprovalGate(MockSourceWithSearch(), Store(tempfile.mkdtemp()), BOT)
+    d = g.gate(_ticket(desc=_filled("myagent"), assignee_id=BOT),
+               _profile(), _sess())
+    assert d == "proceed"                      # 選填:空=fallback 審批者
+
+
+def test_approver_email_resolved_on_assign():
+    # approver 是 email 時,assign 前經 user-search 解析成 accountId
+    g = ApprovalGate(MockSourceWithSearch(), Store(tempfile.mkdtemp()), BOT)
+    sess = _sess()
+    g.gate(_ticket(), _profile(approver="boss@x.tw"), sess)   # 首次貼 plan
+    assert g.source.assigns == [(1, "ACCT-BOSS")]
 
 
 def test_escalate_over_max_revisions():

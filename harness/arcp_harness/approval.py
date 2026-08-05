@@ -40,7 +40,9 @@ class ApprovalGate:
                 f"revisions: {session.approval_revisions}")
 
     def _human_body(self) -> str:
-        return "agent_name:            # ← 請填(snake_case)\nparam:"
+        return ("agent_name:            # ← 請填(snake_case)\n"
+                "human_email:           # 選填:接手人 Jira email(空=審批者)\n"
+                "param:")
 
     def _write_plan(self, ticket, profile, session) -> None:
         before, secs, after = parse(ticket.description or "")
@@ -60,7 +62,24 @@ class ApprovalGate:
         errs = [f"key 非 snake_case: {k}" for k in validate_keys(human)]
         if not str(human.data().get("agent_name") or "").strip():
             errs.append("agent_name 必填")
+        # human_email 選填(空=fallback 審批者);有填就即時驗證是合法 Jira 帳號
+        email = str(human.data().get("human_email") or "").strip()
+        if email:
+            find = getattr(self.source, "find_account_id", None)
+            if "@" not in email:
+                errs.append(f"human_email 不像 email: {email}")
+            elif find is not None and find(email) is None:
+                errs.append(f"human_email 不是合法 Jira 帳號: {email}")
         return errs
+
+    def _acct(self, value: str | None) -> str | None:
+        """email → accountId(assign API 收 accountId);已是 accountId /
+        離線 mock(無 user-search)→ 原樣。"""
+        if value and "@" in value:
+            find = getattr(self.source, "find_account_id", None)
+            if find is not None:
+                return find(value) or value
+        return value
 
     # -- 狀態機 ------------------------------------------------------------ #
     def gate(self, ticket, profile, session) -> str:
@@ -72,7 +91,7 @@ class ApprovalGate:
         if "control" not in by:                       # 首次:貼 plan、指派審批者
             self._write_plan(ticket, profile, session)
             self.source.add_comment(ticket.id, _INSTRUCTIONS)
-            self.source.assign(ticket.id, profile.approver)
+            self.source.assign(ticket.id, self._acct(profile.approver))
             session.pending_reason = "approval"
             log.info("%s 審批門:貼 plan,指派審批者 %s", ticket.key, profile.approver)
             return "awaiting"
@@ -99,7 +118,7 @@ class ApprovalGate:
         self.source.add_comment(
             ticket.id, "[agent] 填表有誤,請修正後把 assignee 交回機器人:\n"
                        + "\n".join(f"- {e}" for e in errs))
-        self.source.assign(ticket.id, profile.approver)
+        self.source.assign(ticket.id, self._acct(profile.approver))
         session.pending_reason = "approval"
         log.info("%s 審批退回(第 %d 次)", ticket.key, session.approval_revisions)
         return "reprompt"

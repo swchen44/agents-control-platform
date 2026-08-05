@@ -18,6 +18,7 @@ from arcp_harness.commands import CommandHandler  # noqa: E402
 from arcp_harness.dispatcher import Dispatcher  # noqa: E402
 from arcp_harness.inner_runner import AttemptResult  # noqa: E402
 from arcp_harness.profiles import Profile  # noqa: E402
+from arcp_harness.sections import Section, render  # noqa: E402
 from arcp_harness.store import Store, TicketSession  # noqa: E402
 from arcp_harness.ticket import Comment, Ticket  # noqa: E402
 
@@ -57,9 +58,9 @@ def _sess(**kw):
     return TicketSession(**base)
 
 
-def _ticket():
+def _ticket(desc="原始需求"):
     return Ticket(id=1, key="P-1", summary="s", state="To Do",
-                  assignee=None, assignee_id=BOT, description="原始需求")
+                  assignee=None, assignee_id=BOT, description=desc)
 
 
 def _comment(body):
@@ -162,19 +163,43 @@ def test_g1_handoff_to_agent():
 def test_g1_handoff_to_human():
     fork, calls = _fork_recorder(structured={
         "reason": "需要人工決策", "status": "handoff",
-        "next": {"to": "HUMAN-9", "kind": "human"}})
+        "next": {"to": "老闆", "kind": "human"}})
     dmod.run_attempt = fork
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     d = Dispatcher(MockSource(), store, dict(PROFILES), root=root)
-    ev = d.handle(_ticket(), "p")
+    # assignee 來源 = human 段 human_email(不信 agent 自由文字 next.to)
+    desc = render("", [Section("human",
+                               "agent_name: p\nhuman_email: boss@x.tw")],
+                  "原始需求")
+    ev = d.handle(_ticket(desc=desc), "p")
     assert any(e["type"] == "handoff" and e.get("kind") == "human"
                for e in ev)
     sess = store.get_session(1)
     assert sess.pending_reason == "human-decision"  # 交人,不排 agent 隊列
     assert sess.profile == "p"                      # 不換 profile
     assert sess.session_id == "s-new"               # session 留著可 resume
-    assert d.source.assigns == [(1, "HUMAN-9")]
+    assert d.source.assigns == [(1, "boss@x.tw")]   # 離線 mock:原樣 email
+
+
+def test_g1_handoff_to_human_fallback_approver():
+    # 無 human_email → fallback profile.approver;兩者皆無 → 不改 assignee
+    fork, _ = _fork_recorder(structured={
+        "reason": "x", "status": "handoff",
+        "next": {"to": "誰", "kind": "human"}})
+    dmod.run_attempt = fork
+    root = tempfile.mkdtemp()
+    store = Store(os.path.join(root, "s"))
+    profiles = {"p": _profile("p", approver="APPR-ACCT")}
+    d = Dispatcher(MockSource(), store, profiles, root=root)
+    d.handle(_ticket(), "p")                        # description 無 human 段
+    assert d.source.assigns == [(1, "APPR-ACCT")]
+
+    store2 = Store(os.path.join(root, "s2"))
+    d2 = Dispatcher(MockSource(), store2, dict(PROFILES), root=root)
+    d2.handle(_ticket(), "p")                       # 無 email、無 approver
+    assert d2.source.assigns == []                  # 不亂指派
+    assert store2.get_session(1).pending_reason == "human-decision"
 
 
 def test_handoff_to_approval_profile_regates():

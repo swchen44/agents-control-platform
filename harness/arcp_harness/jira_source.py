@@ -144,6 +144,20 @@ class JiraCloudSource:
     def myself(self) -> dict:
         return self._request("GET", "/rest/api/3/myself")
 
+    def find_account_id(self, email: str) -> str | None:
+        """email → accountId(user-search API)。優先 emailAddress 精確比對;
+        GDPR 隱藏 email 時若唯一命中則取之。解析不到 → None(呼叫端當
+        填表錯誤/換 fallback)。"""
+        users = self._request(
+            "GET", "/rest/api/3/user/search?query="
+                   + urllib.parse.quote(email))
+        if not isinstance(users, list):
+            return None
+        exact = [u for u in users
+                 if (u.get("emailAddress") or "").lower() == email.lower()]
+        pool = exact or (users if len(users) == 1 else [])
+        return pool[0].get("accountId") if pool else None
+
     def search(self, jql: str, max_results: int = 50) -> list[Ticket]:
         params = {"jql": jql, "fields": _FIELDS, "maxResults": max_results}
         try:

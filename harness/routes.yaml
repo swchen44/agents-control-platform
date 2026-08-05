@@ -83,6 +83,12 @@ outer_loop:
       profile: faultdead            # 10s timeout → 快速進 pending:unknown
       on_match: create_or_resume
 
+    - name: approval-demo           # W2a 真 Jira 實測:審批門 + human_email
+      when:
+        labels: ['approval-demo']
+      profile: approval-demo
+      on_match: create_or_resume
+
 # Inner loop(v5 §4.2):profile 決定 workspace/skills/agent/verify/loop。
 # agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
 inner_loop:
@@ -161,6 +167,33 @@ inner_loop:
             step1.txt: '1'
             extra.txt: null        # existence-only:missing-file feedback 不含
                                    # expected content,agent 無從得知(lesson #10)
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # W2a 真 Jira 實測:審批門(貼 plan→人填表→放行→fork)+ human_email 解析。
+    # 任務極小(建 done.txt)、haiku 省成本;approver=人類帳號(email,啟動時
+    # user-search 解析成 accountId)。
+    approval-demo:
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        venv: ../examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+      verify:
+        - name: done-file
+          files:
+            done.txt: null         # existence-only
+      approval:
+        required: true
+        approver: swchen44@gmail.com
+        max_revisions: 3
       loop:
         max_attempts: 2
         on_unknown: pending
