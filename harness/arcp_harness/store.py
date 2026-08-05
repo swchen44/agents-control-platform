@@ -87,6 +87,12 @@ class Store:
                 approval_revisions INTEGER NOT NULL DEFAULT 0,
                 finished_at    REAL NOT NULL DEFAULT 0
             )""")
+        # W3.4:內部觸發源(scheduled)的 last_run 水位
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS trigger_state (
+                name     TEXT PRIMARY KEY,
+                last_run REAL NOT NULL DEFAULT 0
+            )""")
         self._migrate()
         self._db.commit()
 
@@ -210,6 +216,22 @@ class Store:
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
                   s.approval_revisions, s.finished_at))
+
+    # -- W3.4 trigger last_run 水位 ---------------------------------------- #
+    def trigger_last_run(self, name: str) -> float:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT last_run FROM trigger_state WHERE name=?",
+                (name,)).fetchone()
+        return row[0] if row else 0.0
+
+    def set_trigger_last_run(self, name: str, ts: float) -> None:
+        with self._lock, self._db:
+            self._db.execute("BEGIN IMMEDIATE")
+            self._db.execute("""
+                INSERT INTO trigger_state (name, last_run) VALUES (?,?)
+                ON CONFLICT(name) DO UPDATE SET last_run=excluded.last_run
+            """, (name, ts))
 
     def close(self) -> None:
         self._db.close()

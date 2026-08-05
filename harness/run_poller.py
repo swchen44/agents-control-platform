@@ -25,6 +25,7 @@ from arcp_harness.poller import OuterLoop
 from arcp_harness.profiles import load_profiles
 from arcp_harness.routing import load_config, match
 from arcp_harness.store import Store, TicketSession, TicketWatch
+from arcp_harness.triggers import load_triggers
 
 
 def adopt_existing(source, store, routes, jql) -> int:
@@ -76,7 +77,8 @@ def main() -> int:
         external=ExternalChangePolicy(src, store, ["完成", "Done", "Concluído"],
                                       bot_account_id=bot_id),
         max_running=source_cfg.get("max_running", 1),
-        concurrency=source_cfg.get("concurrency"))
+        concurrency=source_cfg.get("concurrency"),
+        triggers=load_triggers("routes.yaml", profiles))   # W3.4 scheduled
 
     def _reload():                     # W13 hot reload(POST /reload)
         s_cfg, new_routes = load_config("routes.yaml")

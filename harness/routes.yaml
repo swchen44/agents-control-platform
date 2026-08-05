@@ -21,6 +21,17 @@ outer_loop:
     host: 127.0.0.1
     port: 8787
 
+  # W3.4 內部觸發源(scheduled/oneshot,不經 Jira 票、不經審批門;config 即授權)
+  # folder = {agent}__{run_name}__{timestamp};結果進 journal/dashboard。
+  # 範例(打開即生效——scheduled 由 poller 檢 due;省略 every = 只能
+  # `python3 run_trigger.py <name>` oneshot 觸發):
+  # triggers:
+  #   - name: nightly-maintain
+  #     profile: filechain-rawcli
+  #     run_name: nightly          # 必填,[a-z0-9-](防 path 注入)
+  #     every: 24h                 # N[mhd] 級距;省略=oneshot only
+  #     prompt: "檢查工作區並整理暫存檔,完成後回覆 TASK_DONE。"
+
   # Phase 3:指令通道與外部變更政策
   commands:
     allowed_commenters: ['Shao-wei Chen']   # displayName 或 accountId(§6-13)

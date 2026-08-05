@@ -21,6 +21,7 @@ from .logutil import get_logger
 from .retention import reclaim
 from .routing import Route, match
 from .store import Store, TicketWatch
+from .triggers import due, run_trigger
 
 log = get_logger("poller")
 
@@ -29,7 +30,7 @@ class OuterLoop:
     def __init__(self, source: JiraCloudSource, store: Store,
                  routes: list[Route], jql: str, dispatcher=None,
                  commands=None, external=None, max_running: int = 1,
-                 concurrency: dict | None = None):
+                 concurrency: dict | None = None, triggers=None):
         self.source = source
         self.store = store
         self.routes = routes
@@ -37,6 +38,7 @@ class OuterLoop:
         self.dispatcher = dispatcher   # None = pure grey mode (Phase 1)
         self.commands = commands       # CommandHandler (Phase 3)
         self.external = external       # ExternalChangePolicy (Phase 3)
+        self.triggers = triggers or []  # W3.4 內部觸發源(scheduled)
         self.max_running = max(1, max_running)  # v5 D10 (conc.1)
         self.paused = False            # W13 graceful:只 watch 不派新工
         self._cycles = 0               # W3.3 retention 掃描節流
@@ -61,6 +63,9 @@ class OuterLoop:
                 events.extend(reclaim(self.store, self.dispatcher.profiles))
             except Exception as e:
                 log.warning("retention 掃描失敗:%s", e)
+        # W3.4:內部觸發源(scheduled)——due 且額度有餘才跑;paused 也不跑
+        if self.triggers and self.dispatcher is not None and not self.paused:
+            events.extend(self._run_due_triggers())
         to_dispatch: list = []  # (ticket, profile_name) collected serially
         for t in self.source.search(self.jql):
             prev = self.store.get(t.id)
@@ -141,6 +146,33 @@ class OuterLoop:
                     events.append(self.store.journal(
                         "dispatch_error", 0, "?", error=str(e)[:200]))
         return events
+
+    def _run_due_triggers(self) -> list[dict]:
+        """W3.4:due 的 scheduled trigger 與票共用 F1 額度(global+per-engine);
+        額滿跳過本輪(不標 QUEUED,下輪重評——trigger 沒有票面可展示排隊)。"""
+        evs: list[dict] = []
+        profiles = self.dispatcher.profiles
+        for tr in self.triggers:
+            if not due(tr, self.store):
+                continue
+            active = self.store.active_sessions()
+            prof = profiles.get(tr.profile)
+            eng = engine_of(prof) if prof is not None else "claude"
+            cap = (self.concurrency.get("per_engine") or {}).get(eng)
+            eng_used = sum(1 for s in active if s.profile in profiles
+                           and engine_of(profiles[s.profile]) == eng)
+            if (len(active) >= self.concurrency.get("max_running", 1)
+                    or (cap is not None and eng_used >= cap)):
+                log.debug("trigger %s due 但額滿,下輪再試", tr.name)
+                continue
+            try:
+                evs.extend(run_trigger(tr, profiles, self.store,
+                                       self.dispatcher.root))
+            except Exception as e:      # 單一 trigger 壞不擋 poll
+                evs.append(self.store.journal(
+                    "trigger_error", 0, tr.name, error=str(e)[:200]))
+                log.warning("trigger %s 失敗:%s", tr.name, e)
+        return evs
 
     def _gate(self, to_dispatch, events):
         """F1:分層額度閘門(FIFO,to_dispatch 已是 created ASC)。

@@ -64,15 +64,22 @@
       —— 全綠;全套 13 測檔 + selftest + e2e_gate 無回歸
 - [x] commit+push
 
-**Phase W3.4 — scheduled/oneshot 內部觸發源(W20)**
-- [ ] routes.yaml `triggers:`:`- name/profile/run_name/every:`(cron-like 簡化:
-      `every: 24h` 級距即可)+ oneshot:`python3 run_trigger.py <trigger名>`(CLI)
-- [ ] `arcp_harness/triggers.py`:due 判定(store 記 last_run)→ 走 provision
-      (folder=`{agent}__{run_name}__{timestamp}`,run_name 校驗 `[a-z0-9-]`)→ fork
-      → grade → journal(無 Jira 面;prompt 來自 trigger config)
-- [ ] poller 每輪順檢 triggers due;dispatcher/gate 額度共用(佔 per-engine 額度)
-- [ ] `test_triggers.py`:due 判定/run_name 校驗/folder 命名/last_run 冪等(不重跑)
-- [ ] commit+push
+**Phase W3.4 — scheduled/oneshot 內部觸發源(W20)** ✅
+- [x] routes.yaml `outer_loop.triggers`(name/profile/run_name/every N[mhd]/prompt;
+      樣例註解入檔)+ oneshot CLI `run_trigger.py <名>`(忽略 every/last_run)
+- [x] `arcp_harness/triggers.py`:fail-fast load(run_name [a-z0-9-] 防注入、
+      profile 存在、every 格式)、due 判定(store trigger_state 水位;oneshot
+      永不自動 due)、run_trigger 迷你派工:**pseudo-Ticket(id=timestamp、
+      key=run_name)整包重用 provision** → folder 自然 = `{agent}__{run_name}__{ts}`
+      + TICKET.md 渲染 prompt;證據迴圈同 dispatcher 語意(SUCCESS/FAILURE/
+      UNKNOWN 不自動重試);**先記水位再跑 = at-most-once**(呼應 W3.2);
+      session 存 TicketSession(timestamp id 不與 Jira 衝突)→ dashboard 可見、
+      retention 照收
+- [x] poller 每輪檢 due;與票**共用 F1 額度**(global+per-engine,額滿跳過本輪
+      不記水位);paused 不跑;單一 trigger 壞不擋 poll
+- [x] `test_triggers.py`(7 tests):載入/校驗、every 單位、due/oneshot、命名+
+      水位冪等、失敗證據迴圈、UNKNOWN 停、額滿跳過 —— 全綠;14 測檔全綠
+- [x] commit+push
 
 **Phase W3.5 — C3 KPI 人力估算(W21)**
 - [ ] profile `human_minutes_est`(選填);SUCCESS 時 journal `human_minutes_saved`
