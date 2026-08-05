@@ -13,14 +13,20 @@
   命名 `agent__key__issue_id`)、A3 Jira 限速退避、A4 budget 上限、G1 agent 結構化契約
   `{reason,status,next}`(claude `--json-schema`/codex `--output-schema`,真跑驗過)、
   F1 分層資源閘門(全局+per-engine+per-profile+QUEUED+inactive)。6/6 綠。
-- **W2 進行中(3/7)** `harness/PLAN_wave2.md`:✅ W2.1 logging+ruff baseline、W2.2 分區段
-  +hash(⚠️ 初版,待按 2026-08-05 定案版面重構:ARCP 區塊置頂+human 前置+結束標記
-  `<!-- /ARCP:sections -->`+全掃描機器段驗 hash 並 log+區塊外不碰)、W2.3 起點審批門
-  (plan 寫分區段/填表放行/退回迴圈/escalate)。
-- **恢復起點**:(a) W2.2 `sections.py` 按定案版面重構;(b) W2.4 assignee=資源開關
-  (`on_assignee_changed`→inactive/resume、`handle` skip inactive);(c) W2.5 F3 換手
-  (`@agent next`/G1 next 驅動);(d) W2b:W2.6 REST 控制面(內嵌 http.server、hot reload/
-  pause)+ W2.7 web dashboard(擴 `detail_server.py`:排隊 F2+總覽 C4+控制)。
+- **W2 全部完成 ✅(M11+M12)** `harness/PLAN_wave2.md`:W2.1 logging+ruff baseline、
+  W2.2 分區段+hash(**已按 2026-08-05 定案版面重構**:ARCP 區塊置頂+human 前置+結束
+  標記+全掃描驗 hash 並 log+區塊外不碰)、W2.3 起點審批門(plan 寫分區段/填表放行/
+  退回迴圈/escalate)、W2.4 assignee=資源開關(交人=inactive 讓出額度、回機器人=
+  resume;bot 身份 config/myself() 解析;審批中不誤標)、W2.5 F3 換手(`@agent next`
+  +G1 next 驅動;**session pin 優先於 route**;換手到審批 profile 重走門)、
+  W2.6 REST 控制面(內嵌 daemon:/status /health /pause /resume /reload,hot reload
+  壞 config 不死)、W2.7 web dashboard(狀態徽章+FIFO 排隊位+C4 總覽卡+控制列+
+  審批卡;獨立只讀頁 8788,control 8787,CORS 打通)。11 個 test_*.py + selftest +
+  e2e_gate + e2e_dashboard 全綠,ruff clean。
+- **恢復起點(W3 候選,見 BACKLOG)**:(a) **真 Jira 實測 W2a**(審批門 ADF 往返、
+  approver email→accountId、`@agent next`、assignee 開關 —— mock 蓋不到);
+  (b) retention 回收(DESIGN §3,default 270 天);(c) A2 冪等分層、E3 evict、
+  scheduled/oneshot 內部觸發源(DESIGN §5,run name)。
 - **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
   venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
   `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
