@@ -89,6 +89,7 @@ def load_config(path: str) -> tuple[dict, list[Route]]:
         "per_engine": dict(conc.get("per_engine") or {}),
         "per_profile": dict(conc.get("per_profile") or {}),
     }
+    src["control"] = dict(outer.get("control") or {})    # W2.6 控制面
     return src, routes
 
 

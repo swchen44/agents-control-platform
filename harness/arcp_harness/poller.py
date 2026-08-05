@@ -37,6 +37,7 @@ class OuterLoop:
         self.commands = commands       # CommandHandler (Phase 3)
         self.external = external       # ExternalChangePolicy (Phase 3)
         self.max_running = max(1, max_running)  # v5 D10 (conc.1)
+        self.paused = False            # W13 graceful:只 watch 不派新工
         # F1 分層閘門;缺省退化成單層 max_running(向後相容)
         self.concurrency = concurrency or {
             "max_running": self.max_running, "per_engine": {},
@@ -106,6 +107,10 @@ class OuterLoop:
 
         # -- F1 分層資源閘門 + 並行 dispatch (v5 D10) ---------------------- #
         if not to_dispatch:
+            return events
+        if self.paused:                # W13:pause 只擋新派工,watch 照常
+            log.debug("paused: skip dispatch of %d candidate(s)",
+                      len(to_dispatch))
             return events
         selected = self._gate(to_dispatch, events)      # 額滿標 QUEUED
         if not selected:

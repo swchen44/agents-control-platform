@@ -18,6 +18,7 @@ import time
 from arcp_harness.approval import ApprovalGate
 from arcp_harness.commands import CommandHandler, ExternalChangePolicy
 from arcp_harness.config import jira_credentials
+from arcp_harness.control_api import ControlAPI
 from arcp_harness.dispatcher import Dispatcher
 from arcp_harness.jira_source import JiraCloudSource
 from arcp_harness.poller import OuterLoop
@@ -66,16 +67,34 @@ def main() -> int:
     # config 可覆寫(source.bot_account_id),否則啟動時 myself() 解析一次。
     bot_id = (source_cfg.get("bot_account_id")
               or src.myself().get("accountId", ""))
+    disp = Dispatcher(src, store, profiles, root="./runtime_live",
+                      approval=ApprovalGate(src, store, bot_id))
+    cmds = CommandHandler(src, store, ["Shao-wei Chen"], profiles=profiles)
     loop = OuterLoop(
         src, store, routes, jql,
-        dispatcher=Dispatcher(src, store, profiles, root="./runtime_live",
-                              approval=ApprovalGate(src, store, bot_id)),
-        commands=CommandHandler(src, store, ["Shao-wei Chen"],
-                                profiles=profiles),
+        dispatcher=disp, commands=cmds,
         external=ExternalChangePolicy(src, store, ["完成", "Done", "Concluído"],
                                       bot_account_id=bot_id),
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"))
+
+    def _reload():                     # W13 hot reload(POST /reload)
+        s_cfg, new_routes = load_config("routes.yaml")
+        new_profiles = load_profiles("routes.yaml")
+        loop.routes = new_routes
+        loop.jql = s_cfg["jql"]
+        loop.concurrency = s_cfg.get("concurrency") or loop.concurrency
+        disp.profiles = new_profiles
+        cmds.profiles = new_profiles
+        return {"routes": len(new_routes), "profiles": len(new_profiles)}
+
+    ctl = source_cfg.get("control") or {}
+    api = ControlAPI(loop, store, reload_fn=_reload,
+                     host=ctl.get("host", "127.0.0.1"),
+                     port=int(ctl.get("port", 8787)))
+    api.start()
+    print(f"[poller] control API on http://{ctl.get('host', '127.0.0.1')}:"
+          f"{api.port} (/status /health /pause /resume /reload)", flush=True)
 
     adopted = adopt_existing(src, store, routes, jql)
     print(f"[poller] adopted {adopted} pre-existing ticket(s); "
@@ -98,6 +117,7 @@ def main() -> int:
                   f"retry next cycle", flush=True)
         time.sleep(interval)
     print("[poller] timebox ended", flush=True)
+    api.stop()
     store.close()
     return 0
 

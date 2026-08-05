@@ -16,6 +16,11 @@ outer_loop:
     per_engine: {claude: 3, codex: 2}  # 各引擎進程上限(機器 CPU/memory)
     per_profile: {}                    # 可選:個別 profile 上限
 
+  # W2.6 控制面(REST,只綁本機):GET /status /health;POST /pause /resume /reload
+  control:
+    host: 127.0.0.1
+    port: 8787
+
   # Phase 3:指令通道與外部變更政策
   commands:
     allowed_commenters: ['Shao-wei Chen']   # displayName 或 accountId(§6-13)

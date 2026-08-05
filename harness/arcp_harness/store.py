@@ -168,6 +168,14 @@ class Store:
                 " AND inactive=0 AND queued=0").fetchall()
         return [self._row_to_session(r) for r in rows]
 
+    def all_sessions(self) -> list[TicketSession]:
+        """全部 session(控制面/dashboard 彙總用),issue_id 排序。"""
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {self._SESSION_COLS} FROM ticket_session"
+                " ORDER BY issue_id").fetchall()
+        return [self._row_to_session(r) for r in rows]
+
     def upsert_session(self, s: TicketSession) -> None:
         with self._lock, self._db:
             self._db.execute("BEGIN IMMEDIATE")

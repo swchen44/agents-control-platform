@@ -178,13 +178,19 @@ hash: a1b2c3d4e5f6
       換手到審批 profile 重走門 —— 全綠;全套回歸無破
 - [ ] commit+push
 
-**Phase W2.6 — REST 控制面(hot reload / graceful,W13)**
-- [ ] `arcp_harness/control_api.py`:stdlib http.server,run_poller 起 daemon 線程;持 poller 引用
-- [ ] 端點:`GET /status`(JSON:paused、in-flight、queued、cost 彙總)、`GET /health`、
-      `POST /reload`(重 load_config+profiles→更新 poller.routes/dispatcher.profiles/concurrency)、
-      `POST /pause`(poller.paused=True)、`POST /resume`
-- [ ] `poller.paused`:poll_once dispatch 階段跳過(只 watch,不派新工);正在跑的不中斷
-- [ ] 單元測 `test_control_api.py`:reload 換 config 生效、pause 後不 dispatch、status JSON 正確
+**Phase W2.6 — REST 控制面(hot reload / graceful,W13)** ✅
+- [x] `arcp_harness/control_api.py`:stdlib ThreadingHTTPServer,daemon 線程;持 poller
+      引用;預設綁 127.0.0.1(無認證,不可綁公網);port=0 支援 ephemeral(測試)
+- [x] 端點:`GET /status`(paused/in_flight/queued/inactive/outcomes/pending 計數 +
+      cost 彙總;新增 `store.all_sessions()` 支援)、`GET /health`、`POST /reload`
+      (reload_fn 閉包:重 load_config+load_profiles → 更新 loop.routes/jql/concurrency
+      + disp.profiles + cmds.profiles;壞 config 回 400 不弄死 poller)、
+      `POST /pause`、`POST /resume`
+- [x] `poller.paused`:poll_once dispatch 階段跳過(只 watch,不派新工);正在跑的不中斷;
+      routes.yaml `control: {host, port}`(load_config 透傳);run_poller 啟動/結束接線
+- [x] 單元測 `test_control_api.py`(6 tests,真 HTTP ephemeral port):health、status
+      彙總、pause/resume、reload 生效+壞 config 400 後仍活、404、paused 只 watch
+      不派工+resume 補派 —— 全綠;全套回歸無破
 - [ ] commit+push
 
 **Phase W2.7 — web dashboard(F2 排隊 + C4 總覽 + 控制,W14)**
