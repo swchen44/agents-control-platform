@@ -40,7 +40,8 @@ def adopt_existing(source, store, routes, jql) -> int:
             issue_id=t.id, key=t.key,
             last_comment_id=max([0] + [c.id for c in comments]),
             last_state=t.state, last_assignee_id=t.assignee_id or "",
-            route_name=route.name if route else None))
+            route_name=route.name if route else None,
+            last_assignee=t.assignee or ""))
         if (route and route.on_match == "create_or_resume"
                 and store.get_session(t.id) is None):
             store.upsert_session(TicketSession(

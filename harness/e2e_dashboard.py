@@ -21,7 +21,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp_harness.control_api import ControlAPI  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
+from arcp_harness.store import Store, TicketSession, TicketWatch  # noqa: E402
 
 ok = True
 
@@ -61,7 +61,12 @@ store.upsert_session(sess(7, pending_reason="approval",
                           approval_revisions=1))
 for iid in range(1, 8):
     store.journal("new_issue", iid, f"P-{iid}")
+    store.upsert(TicketWatch(                      # W4.1:assignee/created 來源
+        issue_id=iid, key=f"P-{iid}", last_comment_id=0, last_state="To Do",
+        last_assignee_id="", route_name=None,
+        last_assignee="fox44" if iid == 3 else ""))
 store.journal("approval", 7, "P-7", decision="reprompt", revisions=1)
+store.journal("handoff", 3, "P-3", kind="agent", to="other")   # 換手起點
 
 
 class FakePoller:
@@ -105,6 +110,16 @@ try:
           all(x in index for x in ("Pause", "Resume", "Reload")))
     check("控制列:指向 control API", json.dumps(ctl_url) in index)
 
+    # W4.1:新欄位 + 工具列 + 分頁 JS
+    check("欄位:assignee/created/finished/換手起點",
+          all(x in index for x in ("assignee", "created", "finished",
+                                   "換手起點")))
+    check("欄位值:P-3 assignee=fox44", ">fox44</td>" in index)
+    check("工具列:kw/status/psize/分頁", all(
+        x in index for x in ("id='kw'", "id='st'", "id='psize'", "pg(1)")))
+    check("index 無整頁 meta refresh", "http-equiv" not in index)
+    check("index 有局部更新 JS", "DOMParser" in index)
+
     # 審批門 ticket 卡
     t7 = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/ticket/7", timeout=5).read().decode()
@@ -113,6 +128,10 @@ try:
     t1 = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/ticket/1", timeout=5).read().decode()
     check("非審批票:無審批卡", "審批門" not in t1)
+    # W4.1:detail 頁修 auto-collapse(無 meta refresh、fetch 局部更新保展開)
+    check("detail 無整頁 meta refresh", "http-equiv" not in t1)
+    check("detail 有展開保留更新 JS",
+          "DOMParser" in t1 and "details" in t1)
 
     # 按鈕背後的端點契約(JS fetch 打的就是這些)
     req = urllib.request.Request(f"{ctl_url}/pause", method="POST")

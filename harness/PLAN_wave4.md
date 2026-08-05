@@ -48,12 +48,18 @@
 - [x] 清掉 cchv(prebuilt 下載已 rm;未進過 git)
 - [x] commit+push
 
-**Phase W4.1 — C:dashboard 分頁+filter+欄位+bug 修**
-- [ ] index 表格加欄:assignee / created / finished / 最新換手起點(W28 資料源)
-- [ ] 前端 JS:分頁(每頁數量可設定,預設 20)+ status 下拉 filter + keyword 搜尋
-- [ ] detail 頁去 meta refresh → fetch 局部更新(保展開/捲動);index 頁保留自動更新
-- [ ] E2E `e2e_dashboard.py` 擴:新欄位渲染、filter/分頁 DOM 存在、detail 無 meta refresh
-- [ ] commit+push
+**Phase W4.1 — C:dashboard 分頁+filter+欄位+bug 修** ✅
+- [x] index 加欄:assignee(watch 新欄 `last_assignee` displayName,poller/adopt
+      順存,store migration)/ created(first_seen_ts)/ finished(finished_at)
+      / 最新換手起點(journal handoff+inactive_cleared 最近 ts)
+- [x] 前端 JS:分頁(10/20/50/100,預設 20)+ status 下拉(值自表格收集)+
+      keyword 搜尋;狀態存 localStorage
+- [x] **index 也去 meta refresh** → fetch 局部更新(只換統計卡+表身,輸入框
+      不被打斷);detail 頁 fetch 局部更新 + `<details>` 展開狀態按序還原 +
+      tab 保留(**auto-collapse bug 修**)
+- [x] `e2e_dashboard.py` 22 checks(+7:新欄位/工具列/無 meta refresh/局部更新
+      JS/detail 展開保留)全 PASS;全套回歸綠
+- [x] commit+push
 
 **Phase W4.2 — B2:close 打包 + final HTML + 下載連結**
 - [ ] `arcp_harness/transcript.py`:`snapshot(session)→latest.html`、

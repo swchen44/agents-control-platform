@@ -61,6 +61,43 @@ def read_sessions() -> dict[int, dict]:
     return out
 
 
+def read_watch() -> dict[int, dict]:
+    """W4.1:assignee(displayName)/created(first_seen_ts)來源。舊庫缺欄容錯。"""
+    db = os.path.join(ROOT, "harness.db")
+    out: dict[int, dict] = {}
+    if not os.path.exists(db):
+        return out
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    try:
+        for r in con.execute("SELECT * FROM ticket_watch"):
+            out[r["issue_id"]] = dict(r)
+    except sqlite3.OperationalError:
+        pass
+    con.close()
+    return out
+
+
+def fmt_ts(ts) -> str:
+    """epoch → 'MM-DD HH:MM';0/None → '-'。"""
+    if not ts:
+        return "-"
+    import datetime
+    return datetime.datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
+
+
+def handoff_starts(journal: list[dict]) -> dict[int, float]:
+    """W4.1「最新換手起點」:每票最近一次 handoff / inactive_cleared 的時間
+    (換手或交回機器人後重新開跑的起點)。"""
+    out: dict[int, float] = {}
+    for e in journal:
+        if e.get("type") in ("handoff", "inactive_cleared"):
+            iid = e.get("issue_id")
+            if isinstance(iid, int):
+                out[iid] = max(out.get(iid, 0), e.get("ts") or 0)
+    return out
+
+
 def attempt_dir(issue_id: int) -> str:
     return os.path.join(ROOT, "tickets", str(issue_id), "attempts")
 
@@ -253,29 +290,112 @@ def control_bar() -> str:
         "</script>")
 
 
-def render_index(journal, sessions) -> str:
+_INDEX_JS = """
+<script>
+const LS='arcp-idx';
+function state(){try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}}
+function save(s){localStorage.setItem(LS,JSON.stringify(s));}
+function applyFilters(){
+  const s=state();
+  const kw=(s.kw||'').toLowerCase(), st=s.st||'', size=+(s.size||20);
+  let page=+(s.page||0);
+  const rows=[...document.querySelectorAll('#tix tbody tr')];
+  const vis=rows.filter(r=>{
+    const okKw=!kw||r.textContent.toLowerCase().includes(kw);
+    const okSt=!st||(r.dataset.status===st);
+    return okKw&&okSt;});
+  rows.forEach(r=>r.style.display='none');
+  const pages=Math.max(1,Math.ceil(vis.length/size));
+  if(page>=pages)page=pages-1;
+  vis.slice(page*size,(page+1)*size).forEach(r=>r.style.display='');
+  document.getElementById('pginfo').textContent=
+    vis.length+' 筆 · 第 '+(page+1)+'/'+pages+' 頁';
+  s.page=page;save(s);
+}
+function initIdx(){
+  const s=state();
+  const sel=document.getElementById('st');
+  const sts=[...new Set([...document.querySelectorAll('#tix tbody tr')]
+    .map(r=>r.dataset.status))].sort();
+  sts.forEach(v=>{const o=document.createElement('option');
+    o.value=v;o.textContent=v;sel.appendChild(o);});
+  document.getElementById('kw').value=s.kw||'';
+  sel.value=s.st||'';
+  document.getElementById('psize').value=s.size||20;
+  document.getElementById('kw').addEventListener('input',e=>{
+    const s=state();s.kw=e.target.value;s.page=0;save(s);applyFilters();});
+  sel.addEventListener('change',e=>{
+    const s=state();s.st=e.target.value;s.page=0;save(s);applyFilters();});
+  document.getElementById('psize').addEventListener('change',e=>{
+    const s=state();s.size=+e.target.value;s.page=0;save(s);applyFilters();});
+  applyFilters();
+}
+function pg(d){const s=state();s.page=Math.max(0,(+(s.page||0))+d);save(s);applyFilters();}
+initIdx();
+// 局部更新(W4.1):只換統計卡與表身,工具列/輸入框不動——打字不被打斷
+setInterval(async()=>{try{
+  const r=await fetch(location.pathname);
+  const doc=new DOMParser().parseFromString(await r.text(),'text/html');
+  const nb=doc.querySelector('#tix tbody'), ob=document.querySelector('#tix tbody');
+  if(nb&&ob&&nb.innerHTML!==ob.innerHTML){ob.innerHTML=nb.innerHTML;}
+  const ns=doc.querySelector('.stats'), os=document.querySelector('.stats');
+  if(ns&&os&&ns.innerHTML!==os.innerHTML){os.innerHTML=ns.innerHTML;}
+  applyFilters();
+}catch(e){}},5000);
+</script>"""
+
+
+def render_index(journal, sessions, watch=None) -> str:
+    watch = watch or {}
     ids = sorted({e["issue_id"] for e in journal} | set(sessions))
     qpos = queue_positions(sessions)
+    hs = handoff_starts(journal)
     rows = ""
     for iid in ids:
         s = sessions.get(iid, {})
-        key = s.get("key") or next((e["key"] for e in journal
-                                    if e["issue_id"] == iid), f"#{iid}")
+        w = watch.get(iid, {})
+        key = s.get("key") or w.get("key") or next(
+            (e["key"] for e in journal if e["issue_id"] == iid), f"#{iid}")
         label, cls = session_status(s, qpos) if s else ("-", "")
-        rows += (f"<tr><td><a href='/ticket/{iid}'>{esc(key)}</a></td>"
+        rows += (f"<tr data-status='{esc(label)}'>"
+                 f"<td><a href='/ticket/{iid}'>{esc(key)}</a></td>"
                  f"<td>{esc(s.get('profile','-'))}</td>"
                  f"<td><span class='badge {cls}'>{esc(label)}</span></td>"
-                 f"<td>{esc(s.get('attempts',0))}</td>"
-                 f"<td>${s.get('cost_usd',0) or 0:.4f}</td></tr>")
+                 f"<td>{esc(w.get('last_assignee') or '-')}</td>"
+                 f"<td>{esc(fmt_ts(w.get('first_seen_ts')))}</td>"
+                 f"<td>{esc(fmt_ts(s.get('finished_at')))}</td>"
+                 f"<td>{esc(fmt_ts(hs.get(iid)))}</td>"
+                 f"<td>{esc(s.get('attempts', 0))}</td>"
+                 f"<td>${s.get('cost_usd', 0) or 0:.4f}</td></tr>")
+    toolbar = (
+        "<div class='ctl card'>"
+        "<input id='kw' placeholder='keyword…' style='background:#0d1117;"
+        "color:#c9d1d9;border:1px solid #30363d;border-radius:6px;"
+        "padding:4px 10px'>"
+        "<select id='st' style='background:#0d1117;color:#c9d1d9;"
+        "border:1px solid #30363d;border-radius:6px;padding:4px'>"
+        "<option value=''>全部狀態</option></select>"
+        "<select id='psize' style='background:#0d1117;color:#c9d1d9;"
+        "border:1px solid #30363d;border-radius:6px;padding:4px'>"
+        "<option>10</option><option selected>20</option>"
+        "<option>50</option><option>100</option></select>"
+        "<div class='btn' onclick='pg(-1)'>‹ 上頁</div>"
+        "<div class='btn' onclick='pg(1)'>下頁 ›</div>"
+        "<span id='pginfo' style='color:#8b949e;font-size:12px'></span></div>")
     return (f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
             f"</h1></header><main>"
             f"{overview_cards(sessions, journal)}{control_bar()}"
-            f"<h2>Tickets</h2><div class='card'><table>"
+            f"<h2>Tickets</h2>{toolbar}<div class='card'>"
+            f"<table id='tix'><thead>"
             f"<tr><td><b>ticket</b></td><td><b>profile</b></td>"
-            f"<td><b>status</b></td><td><b>attempts</b></td>"
-            f"<td><b>cost</b></td></tr>{rows}</table></div>"
+            f"<td><b>status</b></td><td><b>assignee</b></td>"
+            f"<td><b>created</b></td><td><b>finished</b></td>"
+            f"<td><b>換手起點</b></td><td><b>attempts</b></td>"
+            f"<td><b>cost</b></td></tr></thead><tbody>{rows}</tbody>"
+            f"</table></div>"
             f"<p style='color:#8b949e'>四層 trace:L0 ticket · L1 attempt · "
-            f"L2 envelope · L3 conversation events。點 ticket 展開。</p></main>")
+            f"L2 envelope · L3 conversation events。點 ticket 展開。</p>"
+            f"{_INDEX_JS}</main>")
 
 
 def render_approval(s: dict, evs: list[dict]) -> str:
@@ -394,12 +514,28 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/ticket/"):
             iid = int(self.path.split("/")[-1])
             body = render_ticket(iid, journal, sessions)
+            # W4.1 修 auto-collapse bug:原 <meta refresh> 整頁重載會重置
+            # 展開/捲動 → 改 fetch 局部更新,保留 <details> 展開狀態與分頁籤
+            body += ("<script>setInterval(async()=>{try{"
+                     "const r=await fetch(location.pathname);"
+                     "const doc=new DOMParser().parseFromString("
+                     "await r.text(),'text/html');"
+                     "const nu=doc.querySelector('main'),"
+                     "cur=document.querySelector('main');"
+                     "if(!nu||!cur||nu.innerHTML===cur.innerHTML)return;"
+                     "const open=[...cur.querySelectorAll('details')]"
+                     ".map(d=>d.open);"
+                     "cur.innerHTML=nu.innerHTML;"
+                     "[...cur.querySelectorAll('details')].forEach((d,i)=>{"
+                     "if(open[i])d.open=true});"
+                     "if(typeof tab==='function')"
+                     "tab((location.hash||'#convo').slice(1));"
+                     "}catch(e){}},5000);</script>")
         else:
-            body = render_index(journal, sessions)
-        # live 刷新:每 5s 自動重載(只讀頁,最簡可靠;live conversation 進行中
-        # 也能看到事件逐步增加)
-        refresh = "<meta http-equiv='refresh' content='5'>"
-        page = (f"<!doctype html><html><head><meta charset='utf-8'>{refresh}"
+            body = render_index(journal, sessions, read_watch())
+        # live 更新一律走 fetch 局部替換(index 表身/統計卡、ticket main),
+        # 不再整頁 meta refresh(W4.1)
+        page = (f"<!doctype html><html><head><meta charset='utf-8'>"
                 f"<title>ARCP Detail</title><style>{CSS}</style></head>"
                 f"<body>{body}</body></html>")
         self.send_response(200)

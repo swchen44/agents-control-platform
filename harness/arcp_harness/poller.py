@@ -112,7 +112,8 @@ class OuterLoop:
                 last_comment_id=new_watermark,
                 last_state=t.state,
                 last_assignee_id=t.assignee_id or "",
-                route_name=route.name if route else None))
+                route_name=route.name if route else None,
+                last_assignee=t.assignee or ""))       # W4.1 dashboard 顯示
 
             # collect dispatch AFTER watch state is persisted (idempotency
             # first: a crash mid-dispatch must not replay watch events)
