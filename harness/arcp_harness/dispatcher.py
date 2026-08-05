@@ -98,6 +98,7 @@ class Dispatcher:
         if (profile.require_approval and self.approval is not None
                 and (sess is None
                      or (sess.session_id is None and sess.outcome is None
+                         and not sess.inactive
                          and sess.pending_reason in (None, "approval")))):
             if sess is None:
                 sess = TicketSession(
@@ -115,8 +116,10 @@ class Dispatcher:
             self.store.upsert_session(sess)
 
         if sess and (sess.outcome in ("SUCCESS", "ABORTED")
-                     or sess.pending_reason):
-            return events  # done/cancelled or awaiting a human — nothing to do
+                     or sess.pending_reason or sess.inactive):
+            # done/cancelled、awaiting a human,或 W12 inactive(assignee 在
+            # 人類手上 = 資源開關關閉,不派工)— nothing to do
+            return events
 
         if sess is None:
             ws = provision(self.root, ticket, profile)

@@ -11,9 +11,13 @@ comment 只以 comment_added 事件出現一次);自家 [agent] 前綴留言不�
   stop   交還人工:pending:human-decision
   cancel 撤銷:outcome=ABORTED,此後不再派工
 
-External-change policy(v5 §6-10/11):
+External-change policy(v5 §6-10/11 + W12 假設更新):
   status → 終止類狀態(人在看板上直接關票)= out-of-band 撤銷 → ABORTED
-  assignee 改走 = 隱含撤銷授權 → pending:external
+  assignee = 資源開關(DESIGN §6):交人類 → inactive(不再派工、讓出 F1 額度);
+  回機器人 → 清 inactive(下輪 resume)。未配置 bot_account_id 時退回舊語義
+  (任何 assignee 變更 = 撤銷授權 → pending:external)。
+  註:同步架構下 inactive=「不再拉起」(agent 每 attempt 跑完自然釋放進程);
+  實時 killpg 長駐 agent 留未來異步架構(§6 完整版)。
 """
 
 from __future__ import annotations
@@ -21,8 +25,11 @@ from __future__ import annotations
 import re
 
 from .jira_source import JiraCloudSource
+from .logutil import get_logger
 from .store import Store
 from .ticket import Comment, Ticket
+
+log = get_logger("commands")
 
 _COMMANDS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)^@agent\s+run\b"), "run"),
@@ -93,10 +100,13 @@ class CommandHandler:
 
 class ExternalChangePolicy:
     def __init__(self, source: JiraCloudSource, store: Store,
-                 cancel_states: list[str]):
+                 cancel_states: list[str],
+                 bot_account_id: str | None = None):
         self.source = source
         self.store = store
         self.cancel_states = cancel_states
+        # W12:知道機器人 accountId 才能判 assignee 方向;None = 舊語義
+        self.bot_account_id = bot_account_id
 
     def on_status_changed(self, t: Ticket, new_state: str) -> list[dict]:
         sess = self.store.get_session(t.id)
@@ -110,7 +120,9 @@ class ExternalChangePolicy:
 
     def on_assignee_changed(self, t: Ticket) -> list[dict]:
         sess = self.store.get_session(t.id)
-        if sess and sess.outcome is None:  # 進行中被改走 = 撤銷授權
+        if sess is None or sess.outcome is not None:
+            return []                       # 無 session / 已終態:不管
+        if self.bot_account_id is None:     # 舊語義:變更 = 撤銷授權
             sess.pending_reason = "external"
             self.store.upsert_session(sess)
             self.source.add_comment(
@@ -118,4 +130,28 @@ class ExternalChangePolicy:
                       "要繼續請留言 @agent run")
             return [self.store.journal("external_pending", t.id, t.key,
                                        reason="assignee-changed")]
-        return []
+
+        # W12 assignee=資源開關(DESIGN §6)。審批中的票除外:審批流自己用
+        # assignee 當放行信號(W2.3 指派審批者/交回機器人),不可誤標 inactive。
+        if sess.pending_reason == "approval":
+            return []
+        if (t.assignee_id or "") == self.bot_account_id:
+            if not sess.inactive:
+                return []                   # 本來就 active,無事
+            sess.inactive = False
+            self.store.upsert_session(sess)
+            self.source.add_comment(
+                t.id, "[agent] assignee 回到機器人 → 恢復 active,"
+                      "下輪 resume 續跑。")
+            log.info("%s assignee 回機器人 → active(resume)", t.key)
+            return [self.store.journal("inactive_cleared", t.id, t.key)]
+        if sess.inactive:
+            return []                       # 已 inactive(人→人)不重複
+        sess.inactive = True
+        self.store.upsert_session(sess)
+        self.source.add_comment(
+            t.id, "[agent] assignee 交給人類 → inactive:不再派工、讓出並發"
+                  "額度(不占 CPU/memory)。把 assignee 改回機器人即恢復續跑。")
+        log.info("%s assignee 交人類 → inactive(讓出額度)", t.key)
+        return [self.store.journal("inactive_set", t.id, t.key,
+                                   assignee=t.assignee or "")]

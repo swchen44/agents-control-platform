@@ -8,6 +8,7 @@ outer_loop:
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
     write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
+    # bot_account_id: '...'   # 可選(W12):機器人 accountId;不填→啟動 myself() 解析
 
   # 併發/分層資源閘門(F1,v5 D10):怕系統不夠用,管制同時跑的 agent 數
   concurrency:

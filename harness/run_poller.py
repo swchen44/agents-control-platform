@@ -15,6 +15,7 @@ from __future__ import annotations
 import sys
 import time
 
+from arcp_harness.approval import ApprovalGate
 from arcp_harness.commands import CommandHandler, ExternalChangePolicy
 from arcp_harness.config import jira_credentials
 from arcp_harness.dispatcher import Dispatcher
@@ -61,11 +62,17 @@ def main() -> int:
     profiles = load_profiles("routes.yaml")
     store = Store("./runtime_live")          # 持久,絕不 wipe(lesson #9)
     jql = source_cfg["jql"]
+    # W12/W2.3:機器人身份(assignee 方向判定 + 審批放行偵測)。
+    # config 可覆寫(source.bot_account_id),否則啟動時 myself() 解析一次。
+    bot_id = (source_cfg.get("bot_account_id")
+              or src.myself().get("accountId", ""))
     loop = OuterLoop(
         src, store, routes, jql,
-        dispatcher=Dispatcher(src, store, profiles, root="./runtime_live"),
+        dispatcher=Dispatcher(src, store, profiles, root="./runtime_live",
+                              approval=ApprovalGate(src, store, bot_id)),
         commands=CommandHandler(src, store, ["Shao-wei Chen"]),
-        external=ExternalChangePolicy(src, store, ["完成", "Done", "Concluído"]),
+        external=ExternalChangePolicy(src, store, ["完成", "Done", "Concluído"],
+                                      bot_account_id=bot_id),
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"))
 

@@ -144,14 +144,19 @@ hash: a1b2c3d4e5f6
       超上限→escalate、純 resume 不審
 - [ ] commit+push
 
-**Phase W2.4 — assignee=資源開關(§6/W12)**
-- [ ] `dispatcher.handle` skip 條件加 `or sess.inactive`
-- [ ] `ExternalChangePolicy.on_assignee_changed`:assignee≠機器人 → `inactive=True`+comment
-      (讓出 F1 額度、下輪不 dispatch);assignee=機器人 → 清 inactive(下輪 resume)
-- [ ] 機器人身份:config `bot_account_id`(或 email→myself() 解析);比對 t.assignee_id
-- [ ] (實時 killpg 長駐 agent = 未來異步;同步架構下 inactive 已達「不再拉起=不占資源」,註記)
-- [ ] 單元測 `test_lifecycle.py`:assignee→人類=inactive+讓出額度(active_sessions 排除)、
-      assignee→機器人=清 inactive+可 resume、inactive 期間不 dispatch
+**Phase W2.4 — assignee=資源開關(§6/W12)** ✅
+- [x] `dispatcher.handle` skip 條件加 `or sess.inactive`(審批門條件也加 `not inactive` 保險)
+- [x] `ExternalChangePolicy.on_assignee_changed`:assignee≠機器人 → `inactive=True`+comment
+      (讓出 F1 額度、下輪不 dispatch);assignee=機器人 → 清 inactive(下輪 resume);
+      **pending:approval 除外**(審批流自己用 assignee 當放行信號,不可誤標);
+      未配置 bot_account_id → 舊語義 pending:external(向後相容,selftest 不動)
+- [x] 機器人身份:`source.bot_account_id` config 可覆寫,否則 run_poller 啟動 `myself()`
+      解析一次;比對 t.assignee_id;順接 run_poller 掛上 W2.3 `ApprovalGate`(先前未接線)
+- [x] (實時 killpg 長駐 agent = 未來異步;同步架構下 inactive 已達「不再拉起=不占資源」,
+      註記於 commands.py docstring)
+- [x] 單元測 `test_lifecycle.py`(8 tests):assignee→人類=inactive+讓出額度(active_sessions
+      排除)、assignee→機器人=清 inactive+session_id 留存可 resume、人→人不重複留言、
+      審批中不誤標、legacy 語義、無 session/終態不管、inactive 期間 dispatcher 不派工 —— 全綠
 - [ ] commit+push
 
 **Phase W2.5 — F3 換手(G1 next 驅動)**
