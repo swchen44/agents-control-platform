@@ -119,6 +119,17 @@
       原封)+ test_control_api +1(/shutdown)—— 20 測檔全綠
 - [x] commit+push
 
+**Phase W4.6 — trigger 排程 crontab 格式(使用者 2026-08-06 追加)** ✅
+- [x] `cron:` 五欄位 crontab(分 時 日 月 週;`*` `,` `-` `*/N`;週日 7≡0;
+      dom/dow 都受限時 vixie OR 規則);純 python 解析,不引依賴;load 時
+      fail-fast(ConfigError)
+- [x] due 牆鐘語意:分鐘粒度掃 (last_run, now];**cron 與 every 並存 → cron
+      優先 + warning**(使用者定案);首次啟動不回溯只看當下分鐘;停機錯過
+      補跑一次(回溯上限 2 天);與「先記水位」at-most-once 相容(同分鐘不重發)
+- [x] routes.yaml 樣例;test_triggers +4(解析/牆鐘 due/vixie OR/並存優先)
+      全綠;20 測檔全綠
+- [x] commit+push
+
 ## W4 明確不做(留後續)
 
 - cchv-server 的 `--serve` WebUI 模式(我們只用 --export;dashboard 自己的)

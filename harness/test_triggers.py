@@ -150,6 +150,62 @@ def test_run_trigger_unknown_stops():
     assert sess.pending_reason == "unknown"
 
 
+# -- W4.6 cron 排程 --------------------------------------------------------- #
+def test_cron_parse_and_validate():
+    from arcp_harness.triggers import parse_cron
+    c = parse_cron("*/15 3 1,15 * 1-5")
+    assert c["min"] == {0, 15, 30, 45} and c["hour"] == {3}
+    assert c["dom"] == {1, 15} and c["dow"] == {1, 2, 3, 4, 5}
+    assert parse_cron("0 0 * * 7")["dow"] >= {0, 7}   # 週日 7≡0
+    for bad in ("0 3 * *", "61 * * * *", "* * 0 * *", "*/0 * * * *",
+                "a b c d e"):
+        try:
+            parse_cron(bad)
+            raise AssertionError(f"應拒絕 {bad!r}")
+        except ConfigError:
+            pass
+
+
+def test_cron_due_wall_clock():
+    import datetime
+
+    from arcp_harness.triggers import _cron_due, parse_cron
+    c = parse_cron("0 3 * * *")                       # 每天 03:00
+    day = datetime.datetime(2026, 8, 6, 3, 0)
+    at_3am = day.timestamp()
+    # 昨天跑過 → 今天 03:00:05 due;同分鐘跑完後不重複 due
+    assert _cron_due(c, at_3am - 86400, at_3am + 5) is True
+    assert _cron_due(c, at_3am + 5, at_3am + 30) is False
+    # 02:59 還不 due
+    assert _cron_due(c, at_3am - 86400, at_3am - 60) is False
+    # 首跑(last_run=0):不回溯,只看當下分鐘
+    assert _cron_due(c, 0, at_3am + 7200) is False    # 05:00 啟動 → 不補跑
+    assert _cron_due(c, 0, at_3am + 10) is True       # 03:00 當下啟動 → due
+    # 停機跨過 03:00 → 補跑一次(回溯 2 天內)
+    assert _cron_due(c, at_3am - 3600, at_3am + 7200) is True
+
+
+def test_cron_dow_dom_vixie_or():
+    import datetime
+
+    from arcp_harness.triggers import _cron_matches, parse_cron
+    c = parse_cron("0 0 13 * 5")                      # 13 號「或」週五
+    fri = datetime.datetime(2026, 8, 7, 0, 0)         # 週五、非 13 號
+    d13 = datetime.datetime(2026, 8, 13, 0, 0)        # 13 號、週四
+    other = datetime.datetime(2026, 8, 12, 0, 0)      # 都不是
+    assert _cron_matches(c, fri) and _cron_matches(c, d13)
+    assert not _cron_matches(c, other)
+
+
+def test_cron_wins_over_every_with_warning():
+    p = _yaml("outer_loop:\n  triggers:\n"
+              "    - {name: a, script: '/bin/true', run_name: ok,"
+              " every: 1h, cron: '0 3 * * *'}")
+    t = load_triggers(p, PROFILES)[0]
+    assert t.cron == "0 3 * * *" and t.cron_spec is not None
+    assert t.every_sec is None                        # cron 優先,every 忽略
+
+
 def test_poller_skips_when_quota_full():
     from arcp_harness.poller import OuterLoop
 

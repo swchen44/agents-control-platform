@@ -37,6 +37,12 @@ outer_loop:
   #     run_name: disk
   #     every: 24h
   #     timeout_sec: 600           # stdout/stderr 存 transcript/,完跑打 run.tgz
+  #   - name: nightly-clean        # W4.6 牆鐘排程:五欄位 crontab(分 時 日 月 週)
+  #     script: "uvx some-cleaner"
+  #     run_name: clean
+  #     cron: "0 3 * * 1-5"        # 平日 03:00;支援 * , - */N;cron 與 every
+  #                                # 並存時 cron 優先(warning);分鐘粒度,
+  #                                # 停機錯過補跑一次(回溯上限 2 天)
 
   # Phase 3:指令通道與外部變更政策
   commands:
