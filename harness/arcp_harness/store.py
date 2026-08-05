@@ -44,6 +44,7 @@ class TicketSession:
     queued_at: float = 0.0         # FIFO 排序時間
     inactive: bool = False         # DESIGN §6:assignee 不在機器人手上→不占額度(W2 置位)
     approval_revisions: int = 0    # W2.3 審批退回重填次數
+    finished_at: float = 0.0       # W3.3:進終態時間戳(retention 回收判定基準)
 
 
 class Store:
@@ -83,7 +84,8 @@ class Store:
                 queued         INTEGER NOT NULL DEFAULT 0,
                 queued_at      REAL NOT NULL DEFAULT 0,
                 inactive       INTEGER NOT NULL DEFAULT 0,
-                approval_revisions INTEGER NOT NULL DEFAULT 0
+                approval_revisions INTEGER NOT NULL DEFAULT 0,
+                finished_at    REAL NOT NULL DEFAULT 0
             )""")
         self._migrate()
         self._db.commit()
@@ -97,7 +99,8 @@ class Store:
                           ("queued_at", "REAL NOT NULL DEFAULT 0"),
                           ("inactive", "INTEGER NOT NULL DEFAULT 0"),
                           ("approval_revisions",
-                           "INTEGER NOT NULL DEFAULT 0")):
+                           "INTEGER NOT NULL DEFAULT 0"),
+                          ("finished_at", "REAL NOT NULL DEFAULT 0")):
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -139,7 +142,7 @@ class Store:
 
     _SESSION_COLS = ("issue_id, key, profile, workspace, session_id, attempts,"
                      " outcome, pending_reason, cost_usd, queued, queued_at,"
-                     " inactive, approval_revisions")
+                     " inactive, approval_revisions, finished_at")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -148,7 +151,7 @@ class Store:
             session_id=row[4], attempts=row[5], outcome=row[6],
             pending_reason=row[7], cost_usd=row[8], queued=bool(row[9]),
             queued_at=row[10], inactive=bool(row[11]),
-            approval_revisions=row[12])
+            approval_revisions=row[12], finished_at=row[13])
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -177,14 +180,22 @@ class Store:
         return [self._row_to_session(r) for r in rows]
 
     def upsert_session(self, s: TicketSession) -> None:
+        # W3.3:終態時間戳由 store 統一蓋章(所有寫入路徑都經這裡——dispatcher/
+        # commands/external policy 不必各自記);outcome 清空(retry)→ 歸零
+        if s.outcome in ("SUCCESS", "ABORTED", "FAILURE", "UNKNOWN"):
+            if not s.finished_at:
+                s.finished_at = time.time()
+        else:
+            s.finished_at = 0.0
         with self._lock, self._db:
             self._db.execute("BEGIN IMMEDIATE")
             self._db.execute("""
                 INSERT INTO ticket_session
                     (issue_id, key, profile, workspace, session_id,
                      attempts, outcome, pending_reason, cost_usd,
-                     queued, queued_at, inactive, approval_revisions)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     queued, queued_at, inactive, approval_revisions,
+                     finished_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
@@ -193,11 +204,12 @@ class Store:
                     pending_reason=excluded.pending_reason,
                     cost_usd=excluded.cost_usd, queued=excluded.queued,
                     queued_at=excluded.queued_at, inactive=excluded.inactive,
-                    approval_revisions=excluded.approval_revisions
+                    approval_revisions=excluded.approval_revisions,
+                    finished_at=excluded.finished_at
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
-                  s.approval_revisions))
+                  s.approval_revisions, s.finished_at))
 
     def close(self) -> None:
         self._db.close()

@@ -50,14 +50,19 @@
       crash 持久 + escalate 上限有效、首貼不重貼、指令重放狀態冪等 —— 全綠
 - [x] commit+push
 
-**Phase W3.3 — retention 回收(W19)**
-- [ ] profile/config `retention_days`(default 270;`0` = 不回收)
-- [ ] `arcp_harness/retention.py`:掃終態 session(outcome SUCCESS/ABORTED/FAILURE)
-      + 完成時間過期 → 刪 workspace 目錄(store/journal 留);journal `workspace_reclaimed`
-- [ ] store 加 `finished_at`(終態時間戳;migration ALTER)——回收判定基準
-- [ ] poller 每輪輕量掃(或每 N 輪);run_poller 接線
-- [ ] `test_retention.py`:過期刪/未過期留/0=不回收/刪後 journal 有記
-- [ ] commit+push
+**Phase W3.3 — retention 回收(W19)** ✅
+- [x] profile `retention_days`(default 270;`0` = 不回收)
+- [x] `arcp_harness/retention.py`:掃終態(含 UNKNOWN)+ 過期 → 刪**整個
+      instance**(base 含 ws/ + attempts/;journal/store 留稽核);刪後
+      workspace 置哨值 `(reclaimed)`(retry 時 health 失敗→重 provision);
+      哨值路徑安全跳過;profile 不在(改名)→ default 270
+- [x] store `finished_at`(migration ALTER):**由 upsert_session 統一蓋章**
+      (終態自動 stamp、outcome 清空自動歸零——所有寫入路徑免各自記)
+- [x] poller 首輪 + 每 240 輪(≈每小時)輕量掃;失敗不擋 poll
+- [x] `test_retention.py`(8 tests):蓋章/歸零、過期刪整 instance、未過期留、
+      0 不回收、非終態不動、哨值安全、未知 profile 用 default、舊庫 migration
+      —— 全綠;全套 13 測檔 + selftest + e2e_gate 無回歸
+- [x] commit+push
 
 **Phase W3.4 — scheduled/oneshot 內部觸發源(W20)**
 - [ ] routes.yaml `triggers:`:`- name/profile/run_name/every:`(cron-like 簡化:

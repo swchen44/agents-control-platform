@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .gate import engine_of, select_dispatchable
 from .jira_source import JiraCloudSource
 from .logutil import get_logger
+from .retention import reclaim
 from .routing import Route, match
 from .store import Store, TicketWatch
 
@@ -38,6 +39,7 @@ class OuterLoop:
         self.external = external       # ExternalChangePolicy (Phase 3)
         self.max_running = max(1, max_running)  # v5 D10 (conc.1)
         self.paused = False            # W13 graceful:只 watch 不派新工
+        self._cycles = 0               # W3.3 retention 掃描節流
         # F1 分層閘門;缺省退化成單層 max_running(向後相容)
         self.concurrency = concurrency or {
             "max_running": self.max_running, "per_engine": {},
@@ -51,6 +53,14 @@ class OuterLoop:
         Store is thread-safe (conc.1 lock); dispatch is the slow part.
         """
         events: list[dict] = []
+        # W3.3 retention:首輪 + 每 240 輪(15s 間隔 ≈ 每小時)輕量掃;
+        # 失敗不擋 poll(下輪再試)
+        self._cycles += 1
+        if self.dispatcher is not None and self._cycles % 240 == 1:
+            try:
+                events.extend(reclaim(self.store, self.dispatcher.profiles))
+            except Exception as e:
+                log.warning("retention 掃描失敗:%s", e)
         to_dispatch: list = []  # (ticket, profile_name) collected serially
         for t in self.source.search(self.jql):
             prev = self.store.get(t.id)

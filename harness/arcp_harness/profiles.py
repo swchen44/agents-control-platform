@@ -39,6 +39,7 @@ class Profile:
     require_approval: bool = False    # W2.3 起點審批門(per-profile)
     approver: str | None = None       # 審批者 email/accountId
     max_revisions: int = 3            # 退回重填上限
+    retention_days: int = 270         # W3.3:終態後保留天數(0=不回收;DESIGN §3)
 
 
 def load_profiles(path: str) -> dict[str, Profile]:
@@ -93,5 +94,6 @@ def load_profiles(path: str) -> dict[str, Profile]:
                             if loop.get("max_budget_usd") is not None else None),
             require_approval=bool(appr.get("required", False)),
             approver=appr.get("approver"),
-            max_revisions=int(appr.get("max_revisions", 3)))
+            max_revisions=int(appr.get("max_revisions", 3)),
+            retention_days=int(p.get("retention_days", 270)))
     return profiles
