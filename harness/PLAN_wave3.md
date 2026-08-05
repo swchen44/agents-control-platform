@@ -38,15 +38,17 @@
       envelope 同形即等價)
 - [x] commit+push
 
-**Phase W3.2 — A2 冪等分層(關一半副作用)**
-- [ ] **盤點文件**:列全部「外部寫入(Jira comment/assignee/description)× store 寫入」
-      crash 窗口(dispatcher/approval/commands/poller),每個標:重放後果 + 現有防護
-      (watermark/hash/journal)+ 缺口
-- [ ] 高風險缺口補防重:至少 (a) dispatcher 終態 comment(SUCCESS/FAILURE/pending)
-      冪等 key——crash 後重跑不重複留言;(b) approval 首貼說明/plan 寫入的窗口收斂
-- [ ] `test_idempotency.py`:模擬 crash 窗口(寫外部成功、store 未寫)→ 重跑一輪
-      → 不重複副作用
-- [ ] commit+push
+**Phase W3.2 — A2 冪等分層(關一半副作用)** ✅
+- [x] **盤點文件 `DESIGN_idempotency.md`**:9 條路徑 × crash 窗口 × 防護/判定
+      (at-most-once / at-least-once+冪等 handler);缺口只剩 #5 attempt 中途
+      harness crash(sid 預派 + attempt_started → 缺 envelope 判 UNKNOWN,留 W4+)
+- [x] 盤點結論:dispatcher 全部「先 upsert 再外寫」= at-most-once **本來就對**
+      (W1 排序即防護,測試固化);真缺口在 **approval.gate**——外寫在 gate 內、
+      session 靠 dispatcher 返回後才持久化 → 修:gate 每次變更先 upsert 再外寫
+      (revisions/escalate 上限跨 crash 有效);首貼冪等 key = control 段存在
+- [x] `test_idempotency.py`(4 tests):終態重跑不重派不重留言、revisions 跨
+      crash 持久 + escalate 上限有效、首貼不重貼、指令重放狀態冪等 —— 全綠
+- [x] commit+push
 
 **Phase W3.3 — retention 回收(W19)**
 - [ ] profile/config `retention_days`(default 270;`0` = 不回收)

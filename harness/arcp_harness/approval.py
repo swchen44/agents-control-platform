@@ -84,41 +84,52 @@ class ApprovalGate:
     # -- 狀態機 ------------------------------------------------------------ #
     def gate(self, ticket, profile, session) -> str:
         """回 proceed | awaiting | reprompt | escalate;副作用:寫 description/
-        comment/assignee + 改 session(pending_reason/approval_revisions)。"""
+        comment/assignee + 改 session(pending_reason/approval_revisions)。
+
+        A2(W3.2):session 變更**先持久化、再外寫**(comment/assign/description)
+        ——crash 在外寫途中,revisions/pending 已落 store,重跑不會重置退回計數
+        (escalate 上限跨 crash 有效);首貼的冪等 key = description 已有 control
+        段(重跑走 awaiting 分支,不重貼)。
+        """
         _before, secs, _after = parse(ticket.description or "")
         by = {s.owner: s for s in secs}
 
         if "control" not in by:                       # 首次:貼 plan、指派審批者
+            session.pending_reason = "approval"
+            self.store.upsert_session(session)        # 先持久化(A2)
             self._write_plan(ticket, profile, session)
             self.source.add_comment(ticket.id, _INSTRUCTIONS)
             self.source.assign(ticket.id, self._acct(profile.approver))
-            session.pending_reason = "approval"
             log.info("%s 審批門:貼 plan,指派審批者 %s", ticket.key, profile.approver)
             return "awaiting"
 
         if (ticket.assignee_id or "") != self.bot_account_id:
             session.pending_reason = "approval"       # 還在人手上,繼續等
+            self.store.upsert_session(session)
             return "awaiting"
 
         errs = self._validate_human(by.get("human"))  # 交回機器人 → 校驗
         if not errs:
             session.pending_reason = None
+            self.store.upsert_session(session)
             log.info("%s 審批通過,放行", ticket.key)
             return "proceed"
 
         session.approval_revisions += 1
         if session.approval_revisions > profile.max_revisions:
             session.pending_reason = "escalated"
+            self.store.upsert_session(session)        # 先持久化(A2)
             self.source.add_comment(
                 ticket.id, f"[agent] 審批退回超過 {profile.max_revisions} 次,"
                            f"需人工介入(escalate)。")
             log.info("%s 審批 escalate", ticket.key)
             return "escalate"
 
+        session.pending_reason = "approval"
+        self.store.upsert_session(session)            # 先持久化(A2)
         self.source.add_comment(
             ticket.id, "[agent] 填表有誤,請修正後把 assignee 交回機器人:\n"
                        + "\n".join(f"- {e}" for e in errs))
         self.source.assign(ticket.id, self._acct(profile.approver))
-        session.pending_reason = "approval"
         log.info("%s 審批退回(第 %d 次)", ticket.key, session.approval_revisions)
         return "reprompt"
