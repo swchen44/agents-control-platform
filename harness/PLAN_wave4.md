@@ -75,13 +75,18 @@
       26 checks(+4:卡連結/HTML 可讀/tgz header/traversal 404)全 PASS
 - [x] commit+push
 
-**Phase W4.3 — B1+B3:快照器(active 每 N 秒 + 離手 final)**
-- [ ] `snapshot_interval_sec` config(預設 60);背景 daemon thread 掃 active
-      session → snapshot;run_poller 起停
-- [ ] 離手事件點(handoff 換 agent/交人、assignee 交人 inactive、pending 交人)
-      同步 finalize(輕量版:產 final.html,不打包——打包只在 close)
-- [ ] 單元測:interval 觸發、離手觸發、thread 起停乾淨
-- [ ] commit+push
+**Phase W4.3 — B1+B3:快照器(active 每 N 秒 + 離手 final)** ✅
+- [x] `arcp_harness/snapshotter.py`:daemon thread 每 `snapshot_interval_sec`
+      (routes.yaml source 區,預設 60)掃 active(有 sid、非哨值 ws)→
+      transcript.snapshot;profiles_getter callable(hot reload 相容);
+      run_poller 起停。限制註記:首 attempt sid 未持久 → 首輪快照落空
+      (根治=sid 預派,DESIGN_idempotency #5)
+- [x] 離手事件 finalize(pack=False):dispatcher handoff kind=human/agent
+      (agent 換手前先定格舊 sid)、commands `@agent next`、assignee 交人
+      inactive —— 四點全接
+- [x] `test_snapshotter.py` 5 tests:tick 過濾(sid/哨值/終態)、interval
+      多輪+stop 乾淨、三個離手點 finalize —— 全綠;18 測檔全綠
+- [x] commit+push
 
 **Phase W4.4 — A:script trigger 萬用化 + log 保存/tgz**
 - [ ] trigger config `script:`(argv list 或字串)與 `profile:` 互斥;cwd=

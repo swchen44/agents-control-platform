@@ -31,8 +31,17 @@ from .jira_source import JiraCloudSource
 from .logutil import get_logger
 from .store import Store
 from .ticket import Comment, Ticket
+from .transcript import engine_of_agent
+from .transcript import finalize as finalize_transcript
 
 log = get_logger("commands")
+
+
+def _finalize_leaving(sess, profiles: dict | None) -> None:
+    """W4.3 離手定格:session 交出去(換手/交人)前產 final HTML(不打包)。"""
+    prof = (profiles or {}).get(sess.profile)
+    engine = engine_of_agent(prof.agent) if prof is not None else "claude"
+    finalize_transcript(sess.session_id, engine, sess.workspace, pack=False)
 
 _COMMANDS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)^@agent\s+run\b"), "run"),
@@ -103,6 +112,7 @@ class CommandHandler:
                     t.id, f"[agent] next 目標 profile 無效:'{target}'。{avail}")
                 return [self.store.journal("command_rejected", t.id, t.key,
                                            command="next", target=target)]
+            _finalize_leaving(sess, self.profiles)   # W4.3 換手前定格
             # 重置 session、pin 新 profile;下輪 poll 經 gate 重新排隊,目標
             # require_approval 則重走審批門;workspace 哨值→下輪重 provision
             sess.profile = target
@@ -136,12 +146,14 @@ class CommandHandler:
 class ExternalChangePolicy:
     def __init__(self, source: JiraCloudSource, store: Store,
                  cancel_states: list[str],
-                 bot_account_id: str | None = None):
+                 bot_account_id: str | None = None,
+                 profiles: dict | None = None):
         self.source = source
         self.store = store
         self.cancel_states = cancel_states
         # W12:知道機器人 accountId 才能判 assignee 方向;None = 舊語義
         self.bot_account_id = bot_account_id
+        self.profiles = profiles       # W4.3:離手定格的 engine 查表
 
     def on_status_changed(self, t: Ticket, new_state: str) -> list[dict]:
         sess = self.store.get_session(t.id)
@@ -189,6 +201,7 @@ class ExternalChangePolicy:
             return []                       # 已 inactive(人→人)不重複
         sess.inactive = True
         self.store.upsert_session(sess)
+        _finalize_leaving(sess, self.profiles)   # W4.3 交人前定格
         if not quiet:
             self.source.add_comment(
                 t.id, "[agent] assignee 交給人類 → inactive:不再派工、讓出並發"

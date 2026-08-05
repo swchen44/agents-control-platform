@@ -243,6 +243,10 @@ class Dispatcher:
                 if nxt.get("kind") == "human":
                     sess.pending_reason = "human-decision"
                     self.store.upsert_session(sess)
+                    # W4.3 離手定格:交人前 final HTML(不打包,close 才打包)
+                    finalize_transcript(sess.session_id,
+                                        engine_of_agent(profile.agent),
+                                        sess.workspace, pack=False)
                     self.source.add_comment(ticket.id, (
                         f"[agent] handoff→human:{summarize(res.structured)}\n"
                         f"請人工接手;要 agent 繼續請留言 @agent run。"
@@ -261,6 +265,11 @@ class Dispatcher:
                 target = str(nxt["to"])
                 if target in self.profiles and target != profile.name:
                     old = profile.name
+                    # W4.3 離手定格:換手前把舊 agent 的 session 定格(sid/ws
+                    # 即將被 reset,先取)
+                    finalize_transcript(sess.session_id,
+                                        engine_of_agent(profile.agent),
+                                        sess.workspace, pack=False)
                     sess.profile = target
                     sess.session_id = None
                     sess.attempts = 0
