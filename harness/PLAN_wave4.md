@@ -88,15 +88,20 @@
       多輪+stop 乾淨、三個離手點 finalize —— 全綠;18 測檔全綠
 - [x] commit+push
 
-**Phase W4.4 — A:script trigger 萬用化 + log 保存/tgz**
-- [ ] trigger config `script:`(argv list 或字串)與 `profile:` 互斥;cwd=
-      `runs/{trigger}__{run_name}__{ts}/`;timeout;run_name 校驗沿用
-- [ ] 執行:stdout/stderr 各自存檔(`stdout.log`/`stderr.log`);結束 rc/耗時
-      journal;tgz(gzip -9)+ dashboard 下載連結;oneshot CLI 同支援
-- [ ] dashboard:script run 列表/詳情(log 檢視 + tgz 下載)
-- [ ] 單元測 `test_script_trigger.py`:.sh/.py 真跑(本機)、stdout/stderr 保存、
-      tgz 內容、rc 非零=FAILURE、timeout
-- [ ] commit+push
+**Phase W4.4 — A:script trigger 萬用化 + log 保存/tgz** ✅
+- [x] trigger config `script:`(字串 shlex 或 argv 列表,uvx/npx/.sh/.py 任意
+      執行檔)與 `profile:` 恰好擇一(fail-fast);`timeout_sec`(預設 600);
+      run_name 校驗沿用;routes.yaml 樣例
+- [x] 執行:cwd=`runs/{name}__{run_name}__{ts}/ws/`(產物留原地,retention
+      照收);stdout/stderr 各存 `transcript/*.log`;完跑 `run.tgz`(gzip -9);
+      rc/timeout/耗時 journal;**結束註冊 TicketSession(profile=script:<名>)
+      → dashboard 列表/徽章/transcript 卡(log 檢視+tgz 下載)/retention 全
+      自動重用**;oneshot CLI(run_trigger 委派)同支援
+- [x] poller:script trigger 不占 agent 引擎額度(非 agent 進程);/tfile 加
+      `.log` → text/plain 檢視
+- [x] `test_script_trigger.py` 7 tests(.py/.sh 真跑、log/tgz、rc≠0、timeout、
+      找不到執行檔、oneshot、config 互斥)全綠;19 測檔 + selftest + e2e 全綠
+- [x] commit+push
 
 ## W4 明確不做(留後續)
 

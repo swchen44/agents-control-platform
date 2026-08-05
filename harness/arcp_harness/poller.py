@@ -156,6 +156,15 @@ class OuterLoop:
         for tr in self.triggers:
             if not due(tr, self.store):
                 continue
+            if tr.script is not None:               # W4.4:script 非 agent
+                try:                                # 進程,不占引擎額度
+                    evs.extend(run_trigger(tr, profiles, self.store,
+                                           self.dispatcher.root))
+                except Exception as e:
+                    evs.append(self.store.journal(
+                        "trigger_error", 0, tr.name, error=str(e)[:200]))
+                    log.warning("trigger %s 失敗:%s", tr.name, e)
+                continue
             active = self.store.active_sessions()
             prof = profiles.get(tr.profile)
             eng = engine_of(prof) if prof is not None else "claude"

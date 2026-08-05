@@ -556,6 +556,9 @@ class Handler(BaseHTTPRequestHandler):
                 if name.endswith(".html"):
                     self.send_header("Content-Type",
                                      "text/html; charset=utf-8")
+                elif name.endswith(".log"):        # W4.4 script log 檢視
+                    self.send_header("Content-Type",
+                                     "text/plain; charset=utf-8")
                 else:
                     self.send_header("Content-Type", "application/gzip")
                     self.send_header("Content-Disposition",

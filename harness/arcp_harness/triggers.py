@@ -17,6 +17,7 @@ provision→fork→grade 管線,差別只在:
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -42,10 +43,12 @@ _UNIT_SEC = {"m": 60, "h": 3600, "d": 86400}
 @dataclass
 class Trigger:
     name: str
-    profile: str
+    profile: str | None          # 與 script 互斥
     run_name: str
     prompt: str
     every_sec: float | None      # None = 只能 oneshot(CLI)
+    script: list[str] | None = None   # W4.4:任意執行檔 argv(uvx/npx/.sh/.py…)
+    timeout_sec: float = 600.0        # script 用
 
 
 def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
@@ -61,10 +64,21 @@ def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
             raise ConfigError(f"trigger {name}: run_name 必填且限 [a-z0-9-]"
                               f"(拿到 {run_name!r})")
         prof = t.get("profile")
-        if prof not in profiles:
-            raise ConfigError(f"trigger {name}: profile 不存在: {prof!r}")
-        if not str(t.get("prompt") or "").strip():
-            raise ConfigError(f"trigger {name}: prompt 必填")
+        script = t.get("script")
+        if (prof is None) == (script is None):        # W4.4:恰好其一
+            raise ConfigError(f"trigger {name}: profile 與 script 擇一必填")
+        if script is not None:                        # 萬用 script(argv)
+            if isinstance(script, str):
+                import shlex
+                script = shlex.split(script)
+            if not (isinstance(script, list) and script
+                    and all(isinstance(x, str) for x in script)):
+                raise ConfigError(f"trigger {name}: script 需字串或字串列表")
+        else:
+            if prof not in profiles:
+                raise ConfigError(f"trigger {name}: profile 不存在: {prof!r}")
+            if not str(t.get("prompt") or "").strip():
+                raise ConfigError(f"trigger {name}: prompt 必填")
         every = t.get("every")
         every_sec = None
         if every is not None:
@@ -74,7 +88,9 @@ def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
                                   f"(拿到 {every!r})")
             every_sec = int(m.group(1)) * _UNIT_SEC[m.group(2)]
         out.append(Trigger(name=name, profile=prof, run_name=run_name,
-                           prompt=str(t["prompt"]), every_sec=every_sec))
+                           prompt=str(t.get("prompt") or ""),
+                           every_sec=every_sec, script=script,
+                           timeout_sec=float(t.get("timeout_sec", 600))))
     return out
 
 
@@ -86,14 +102,73 @@ def due(trigger: Trigger, store, now: float | None = None) -> bool:
     return now - store.trigger_last_run(trigger.name) >= trigger.every_sec
 
 
+def run_script_trigger(trigger: Trigger, store, root: str,
+                       now: float | None = None) -> list[dict]:
+    """W4.4 萬用 script trigger:任意執行檔(uvx/npx/.sh/.py…)argv 直接跑。
+
+    run dir = <root>/runs/{name}__{run_name}__{ts}/:
+        ws/                script 的 cwd(產物留原地,retention 照收)
+        transcript/        stdout.log / stderr.log / run.tgz(gzip -9)
+    結束後註冊 TicketSession(issue_id=ts、profile=script:<name>)→ dashboard
+    列表/徽章/transcript 卡(log 檢視+tgz 下載)/retention 全部自動重用。
+    rc==0 → SUCCESS;rc!=0 或 timeout → FAILURE(journal 記 rc/timeout)。
+    """
+    import subprocess
+    import tarfile
+    now = time.time() if now is None else now
+    ts = int(now)
+    store.set_trigger_last_run(trigger.name, now)    # 先記水位(at-most-once)
+    base = f"{root}/runs/{trigger.name}__{trigger.run_name}__{ts}"
+    ws = f"{base}/ws"
+    tdir = f"{base}/transcript"
+    os.makedirs(ws, exist_ok=True)
+    os.makedirs(tdir, exist_ok=True)
+    events = [store.journal("script_run_started", ts, trigger.run_name,
+                            trigger=trigger.name, script=trigger.script,
+                            cwd=ws)]
+    log.info("script trigger %s 啟動:%s", trigger.name, trigger.script)
+    rc: int | None = None
+    timed_out = False
+    t0 = time.time()
+    with open(f"{tdir}/stdout.log", "wb") as so, \
+            open(f"{tdir}/stderr.log", "wb") as se:
+        try:
+            rc = subprocess.run(trigger.script, cwd=ws, stdout=so, stderr=se,
+                                stdin=subprocess.DEVNULL,
+                                timeout=trigger.timeout_sec).returncode
+        except subprocess.TimeoutExpired:
+            timed_out = True
+        except OSError as e:                        # 找不到執行檔等
+            se.write(f"[arcp] 無法執行:{e}".encode())
+    dur = time.time() - t0
+    with tarfile.open(f"{tdir}/run.tgz", "w:gz", compresslevel=9) as tf:
+        for n in ("stdout.log", "stderr.log"):
+            tf.add(f"{tdir}/{n}", arcname=n)
+    outcome = "SUCCESS" if rc == 0 else "FAILURE"
+    from .store import TicketSession
+    store.upsert_session(TicketSession(
+        issue_id=ts, key=trigger.run_name, profile=f"script:{trigger.name}",
+        workspace=ws, session_id=None, attempts=1, outcome=outcome,
+        pending_reason=None, cost_usd=0.0))
+    events.append(store.journal(
+        "script_run_finished", ts, trigger.run_name, trigger=trigger.name,
+        rc=rc, timeout=timed_out, duration_sec=round(dur, 1),
+        outcome=outcome))
+    log.info("script trigger %s %s(rc=%s%s,%.1fs)", trigger.name, outcome,
+             rc, ",timeout" if timed_out else "", dur)
+    return events
+
+
 def run_trigger(trigger: Trigger, profiles: dict[str, Profile], store,
                 root: str, now: float | None = None) -> list[dict]:
     """跑一輪 trigger:pseudo-ticket → provision → 證據迴圈 → journal。
 
     迷你派工(dispatcher 減去 Jira 面):同 grader/三態語意;session 存
     TicketSession(issue_id=timestamp,不與 Jira id 衝突)→ dashboard 可見、
-    retention 照收。
+    retention 照收。script 型 trigger(W4.4)委派 run_script_trigger。
     """
+    if trigger.script is not None:                  # W4.4 萬用 script
+        return run_script_trigger(trigger, store, root, now)
     now = time.time() if now is None else now
     ts = int(now)
     profile = profiles[trigger.profile]

@@ -32,6 +32,11 @@ outer_loop:
   #     run_name: nightly          # 必填,[a-z0-9-](防 path 注入)
   #     every: 24h                 # N[mhd] 級距;省略=oneshot only
   #     prompt: "檢查工作區並整理暫存檔,完成後回覆 TASK_DONE。"
+  #   - name: disk-report          # W4.4 萬用 script(與 profile 擇一):
+  #     script: "./scripts/report.sh --fast"   # 字串或 argv 列表;uvx/npx/.py 均可
+  #     run_name: disk
+  #     every: 24h
+  #     timeout_sec: 600           # stdout/stderr 存 transcript/,完跑打 run.tgz
 
   # Phase 3:指令通道與外部變更政策
   commands:
