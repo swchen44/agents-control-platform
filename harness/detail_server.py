@@ -421,6 +421,36 @@ def render_approval(s: dict, evs: list[dict]) -> str:
             f"</div>{rows}</div>")
 
 
+def transcript_dir_of(workspace: str) -> str:
+    """W4.2:instance transcript 目錄(workspace=<base>/ws → <base>/transcript)。"""
+    base = os.path.dirname(workspace) if workspace.endswith("/ws") \
+        else workspace
+    return os.path.join(base, "transcript")
+
+
+def render_transcript_card(iid: int, s: dict) -> str:
+    """W4.2:transcript 產物卡(HTML 檢視連結 + tgz 下載)。無產物不顯卡。"""
+    ws = s.get("workspace") or ""
+    if not ws or ws.startswith("("):
+        return ""
+    d = transcript_dir_of(ws)
+    if not os.path.isdir(d):
+        return ""
+    names = sorted(f for f in os.listdir(d)
+                   if os.path.isfile(os.path.join(d, f))
+                   and not f.startswith("."))
+    if not names:
+        return ""
+    links = "".join(
+        f"<a class='btn' style='text-decoration:none' "
+        f"href='/tfile/{iid}/{esc(n)}'"
+        f"{' download' if n.endswith('.tgz') else ' target=_blank'}>"
+        f"{'📦 ' if n.endswith('.tgz') else '📄 '}{esc(n)}</a>"
+        for n in names)
+    return (f"<h2>Transcript(可視化 / 下載)</h2>"
+            f"<div class='card'><div class='ctl'>{links}</div></div>")
+
+
 def render_ticket(iid, journal, sessions) -> str:
     s = sessions.get(iid, {})
     key = s.get("key") or f"#{iid}"
@@ -495,6 +525,7 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<span class='kv'><b>cost</b> ${s.get('cost_usd',0):.4f}</span>"
             f"<span class='kv'><b>workspace</b> {esc(s.get('workspace','-'))}</span>"
             f"</div></div>"
+            f"{render_transcript_card(iid, s)}"
             f"{render_approval(s, evs)}"
             f"<div class='tabs'>"
             f"<div class='tab on' id='tab-convo' onclick='tab(\"convo\")'>💬 Conversation</div>"
@@ -511,6 +542,31 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         journal, sessions = read_journal(), read_sessions()
+        if self.path.startswith("/tfile/"):        # W4.2 transcript 產物服務
+            try:
+                _, _, iid_s, name = self.path.split("/", 3)
+                iid = int(iid_s)
+                name = os.path.basename(name)      # 防 traversal
+                ws = (sessions.get(iid) or {}).get("workspace") or ""
+                p = os.path.join(transcript_dir_of(ws), name)
+                if not (ws and os.path.isfile(p)):
+                    raise FileNotFoundError(p)
+                data = open(p, "rb").read()
+                self.send_response(200)
+                if name.endswith(".html"):
+                    self.send_header("Content-Type",
+                                     "text/html; charset=utf-8")
+                else:
+                    self.send_header("Content-Type", "application/gzip")
+                    self.send_header("Content-Disposition",
+                                     f"attachment; filename={name}")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception:
+                self.send_response(404)
+                self.end_headers()
+            return
         if self.path.startswith("/ticket/"):
             iid = int(self.path.split("/")[-1])
             body = render_ticket(iid, journal, sessions)

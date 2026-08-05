@@ -32,6 +32,8 @@ from .profiles import Profile  # noqa: E402
 from .sections import parse as parse_sections  # noqa: E402
 from .store import Store, TicketSession  # noqa: E402
 from .ticket import Ticket  # noqa: E402
+from .transcript import engine_of_agent  # noqa: E402
+from .transcript import finalize as finalize_transcript  # noqa: E402
 from .workspace import health_check, provision  # noqa: E402
 
 BASE_PROMPT = ("請先閱讀工作目錄裡的 TICKET.md,完成其中「描述」段落交付的任務。"
@@ -67,6 +69,17 @@ class Dispatcher:
         self.root = root
         self.server_manager = server_manager   # conc.3 long-lived shared server
         self.approval = approval               # W2.3 ApprovalGate | None
+
+    def _pack_transcript(self, sess: TicketSession, profile: Profile,
+                         ticket: Ticket, events: list[dict]) -> None:
+        """W4.2(B2):close(成敗都)定格 final HTML + tgz 打包;失敗不擋流程。"""
+        arts = finalize_transcript(sess.session_id,
+                                   engine_of_agent(profile.agent),
+                                   sess.workspace, pack=True)
+        if arts:
+            events.append(self.store.journal(
+                "transcript_packed", ticket.id, ticket.key,
+                files=[os.path.basename(a) for a in arts]))
 
     def _human_assignee(self, ticket: Ticket, profile: Profile) -> str | None:
         """轉人類時的 assignee:description human 段 `human_email` →
@@ -216,6 +229,7 @@ class Dispatcher:
                     f"請人工檢查後下指令。\n{_resume_hint(sess)}"))
                 events.append(self.store.journal(
                     "pending", ticket.id, ticket.key, reason="unknown"))
+                self._pack_transcript(sess, profile, ticket, events)  # W4.2
                 return events
 
             # F3/G1(W2.5):agent 自報 handoff(status=handoff + next)→ 不
@@ -283,6 +297,7 @@ class Dispatcher:
                     attempts=sess.attempts, cost_usd=sess.cost_usd, **kpi))
                 log.info("%s SUCCESS attempt=%d cost=$%.4f",
                          ticket.key, sess.attempts, sess.cost_usd)
+                self._pack_transcript(sess, profile, ticket, events)  # W4.2
                 return events
 
             feedback = verdict.summary()
@@ -316,4 +331,5 @@ class Dispatcher:
             "pending", ticket.id, ticket.key, reason="max-attempts"))
         log.info("%s FAILURE (max-attempts=%d, cost=$%.4f)",
                  ticket.key, profile.max_attempts, sess.cost_usd)
+        self._pack_transcript(sess, profile, ticket, events)          # W4.2
         return events

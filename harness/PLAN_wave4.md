@@ -61,14 +61,19 @@
       JS/detail 展開保留)全 PASS;全套回歸綠
 - [x] commit+push
 
-**Phase W4.2 — B2:close 打包 + final HTML + 下載連結**
-- [ ] `arcp_harness/transcript.py`:`snapshot(session)→latest.html`、
-      `finalize(session)→final.html + transcript.tgz(gzip -9,含主/子 session
-      jsonl + html)`;cchv 缺席時優雅降級(journal 警告,不擋流程)
-- [ ] dispatcher 終態點(SUCCESS/FAILURE/UNKNOWN/ABORTED)呼 finalize
-- [ ] dashboard ticket 頁:transcript 卡(latest/final HTML 連結 + tgz 下載)
-- [ ] 單元測 `test_transcript.py`(fake cchv 腳本):產物路徑/tgz 內容/降級
-- [ ] commit+push
+**Phase W4.2 — B2:close 打包 + final HTML + 下載連結** ✅
+- [x] `arcp_harness/transcript.py`:`snapshot→latest*.html`、`finalize→
+      final*.html(+sub-*)`、`pack→transcript.tgz`(tarfile gzip
+      compresslevel=9:主/子 session jsonl 原檔 + final HTML);renderer =
+      tools/cclog wrapper 直接 import(注入點供測試);缺席/失敗優雅降級
+- [x] dispatcher 終態點(SUCCESS/FAILURE/UNKNOWN)呼 `_pack_transcript` +
+      journal `transcript_packed`(ABORTED 走 commands/external,留 W4.3 離手
+      快照涵蓋)
+- [x] dashboard ticket 頁 transcript 卡(HTML target=_blank / tgz download)
+      + `/tfile/<iid>/<name>` 靜態服務(basename 白名單防 traversal)
+- [x] `test_transcript.py` 6 tests(fake renderer 注入)全綠;e2e_dashboard
+      26 checks(+4:卡連結/HTML 可讀/tgz header/traversal 404)全 PASS
+- [x] commit+push
 
 **Phase W4.3 — B1+B3:快照器(active 每 N 秒 + 離手 final)**
 - [ ] `snapshot_interval_sec` config(預設 60);背景 daemon thread 掃 active

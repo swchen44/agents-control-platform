@@ -49,7 +49,14 @@ def sess(iid, **kw):
 # -- 假 runtime ------------------------------------------------------------- #
 root = tempfile.mkdtemp()
 store = Store(root)
-store.upsert_session(sess(1, session_id="s1", attempts=2,
+ws1 = os.path.join(root, "tickets", "1", "ws")        # W4.2 transcript 產物
+os.makedirs(os.path.join(root, "tickets", "1", "transcript"), exist_ok=True)
+os.makedirs(ws1, exist_ok=True)
+open(os.path.join(root, "tickets", "1", "transcript", "final.html"),
+     "w").write("<html>FINAL-TRANSCRIPT</html>")
+open(os.path.join(root, "tickets", "1", "transcript", "transcript.tgz"),
+     "wb").write(b"\x1f\x8b_fake")
+store.upsert_session(sess(1, session_id="s1", attempts=2, workspace=ws1,
                           outcome="SUCCESS", cost_usd=1.25))
 store.upsert_session(sess(2, outcome="FAILURE",
                           pending_reason="max-attempts", cost_usd=0.5))
@@ -132,6 +139,23 @@ try:
     check("detail 無整頁 meta refresh", "http-equiv" not in t1)
     check("detail 有展開保留更新 JS",
           "DOMParser" in t1 and "details" in t1)
+    # W4.2:transcript 卡 + /tfile 服務
+    check("transcript 卡:HTML/tgz 連結",
+          "/tfile/1/final.html" in t1 and "/tfile/1/transcript.tgz" in t1)
+    fh = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/tfile/1/final.html", timeout=5)
+    check("tfile:HTML 內容可讀",
+          "FINAL-TRANSCRIPT" in fh.read().decode())
+    th = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/tfile/1/transcript.tgz", timeout=5)
+    check("tfile:tgz 下載 header",
+          "attachment" in (th.headers.get("Content-Disposition") or ""))
+    try:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/tfile/1/..%2f..%2fsecret", timeout=5)
+        check("tfile:traversal 擋掉", False)
+    except urllib.error.HTTPError as e:
+        check("tfile:traversal 擋掉", e.code == 404)
 
     # 按鈕背後的端點契約(JS fetch 打的就是這些)
     req = urllib.request.Request(f"{ctl_url}/pause", method="POST")
