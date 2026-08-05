@@ -23,10 +23,20 @@
   壞 config 不死)、W2.7 web dashboard(狀態徽章+FIFO 排隊位+C4 總覽卡+控制列+
   審批卡;獨立只讀頁 8788,control 8787,CORS 打通)。11 個 test_*.py + selftest +
   e2e_gate + e2e_dashboard 全綠,ruff clean。
-- **恢復起點(W3 候選,見 BACKLOG)**:(a) **真 Jira 實測 W2a**(審批門 ADF 往返、
-  approver email→accountId、`@agent next`、assignee 開關 —— mock 蓋不到);
-  (b) retention 回收(DESIGN §3,default 270 天);(c) A2 冪等分層、E3 evict、
-  scheduled/oneshot 內部觸發源(DESIGN §5,run name)。
+- **W3 全部完成 ✅(M13+M14,2026-08-06)** `harness/PLAN_wave3.md`:W3.1 codex
+  第二引擎真跑(envelope 同形+native resume+G1 雙引擎契約;揪出並修 OpenAI
+  strict schema、瞬態 error 污染 envelope)、W3.2 A2 冪等分層
+  (`DESIGN_idempotency.md` 9 路徑盤點;approval gate 先持久化後外寫)、
+  W3.3 retention 回收(finished_at store 蓋章、270 天、poller 每小時掃)、
+  W3.4 scheduled/oneshot 觸發源(pseudo-ticket 重用 provision、
+  `{agent}__{run_name}__{ts}`、F1 額度共用、run_trigger.py oneshot CLI)、
+  W3.5 C3 KPI(human_minutes_est→節省人時卡+時薪對比)、W3.6 D1 隔離介面
+  (provider 可插拔、`DESIGN_isolation.md`、介面先行不實驗)。
+  16 個 test_*.py + selftest + e2e_gate/dashboard/codex/contract 全綠。
+- **恢復起點(W4 候選)**:(a) 冪等盤點 #5——attempt 中途 harness crash
+  (sid 預派 + attempt_started 標記 → 缺 envelope 判 UNKNOWN);(b) E3 evict/
+  rehydrate 對照 + 實時 killpg(異步架構);(c) openhands-acp/server 的 codex
+  對照(quota);(d) landlock/docker 隔離實作;(e) 量產 python 標準結構另開 repo。
 - **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
   venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
   `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
