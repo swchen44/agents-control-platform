@@ -37,13 +37,16 @@
 - [x] sub-agent 枚舉方式確定:新版 Claude Code 子代理在
       `<proj>/<session-id>/subagents/agent-<id>.jsonl` 獨立檔(glob 即得
       sub-agent id);列入 DESIGN_transcript.md
-- [ ] vendor:copy claude-code-log 必要模組 → `harness/tools/cclog/`
-      (NOTICE 註明出處/版本/MIT;剝 TUI/瀏覽器/git 部分);專用 .venv 裝依賴
-- [ ] 薄 wrapper `render_transcript.py`:claude session → HTML、
-      subagents/agent-*.jsonl → 各自 HTML、codex thread → HTML
-- [ ] 真 session 實測三種都產出可開 HTML;`DESIGN_transcript.md` 記錄用法/限制
-- [ ] 清掉 cchv(tools/cchv 目錄與 .gitignore 項)
-- [ ] commit+push
+- [x] vendor:`claude_code_log/` **整包 zero-diff copy** → `harness/tools/cclog/`
+      (內部耦合深,拆片段風險高;NOTICE.md 註明出處/v1.5.0/commit 0a3327d/MIT
+      + LICENSE.upstream;2.1MB/58 檔進 git);依賴裝 `tools/cclog/.venv`
+      (gitignore;NOTICE 記重建指令)
+- [x] 薄 wrapper `render_transcript.py`(ARCP 自寫,不混上游):session id→檔案
+      定位、subagents glob、codex rollout→thread id;subprocess 呼 vendored cli
+- [x] 真 session 實測三種全通:claude SCRUM-22(229KB)、claude+**72 個
+      sub-agent HTML**(travel-osaka)、codex e2e thread(245KB);樣品已交付
+- [x] 清掉 cchv(prebuilt 下載已 rm;未進過 git)
+- [x] commit+push
 
 **Phase W4.1 — C:dashboard 分頁+filter+欄位+bug 修**
 - [ ] index 表格加欄:assignee / created / finished / 最新換手起點(W28 資料源)

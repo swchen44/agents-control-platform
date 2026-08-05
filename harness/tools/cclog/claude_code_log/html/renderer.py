@@ -1,0 +1,1850 @@
+"""HTML renderer implementation for Claude Code transcripts."""
+
+from __future__ import annotations
+
+from pathlib import Path
+import re
+from typing import TYPE_CHECKING, Any, Optional, Tuple, cast
+
+if TYPE_CHECKING:
+    from ..dag import SessionTree
+
+from ..cache import get_library_version
+from ..models import (
+    AssistantTextMessage,
+    AwaySummaryMessage,
+    BashInputMessage,
+    BashOutputMessage,
+    CommandOutputMessage,
+    CompactedSummaryMessage,
+    RenderingDepth,
+    HookAttachmentMessage,
+    HookSummaryMessage,
+    ImageContent,
+    SessionHeaderMessage,
+    SlashCommandMessage,
+    SystemMessage,
+    TaskNotificationMessage,
+    TeammateMessage,
+    ThinkingMessage,
+    ToolResultMessage,
+    ToolUseMessage,
+    TranscriptEntry,
+    UnknownMessage,
+    UserMemoryMessage,
+    UserSlashCommandMessage,
+    UserTextMessage,
+    WorkflowAgentMessage,
+    WorkflowPhaseMessage,
+    # Tool input types
+    AskUserQuestionInput,
+    AskUserQuestionItem,
+    BashInput,
+    DeleteInput,
+    EditInput,
+    ExitPlanModeInput,
+    GlobInput,
+    GrepInput,
+    MultiEditInput,
+    ReadInput,
+    SendMessageInput,
+    TaskCreateInput,
+    TaskInput,
+    TaskListInput,
+    TaskOutputInput,
+    TaskStopInput,
+    TaskUpdateInput,
+    TeamCreateInput,
+    TeamDeleteInput,
+    TodoWriteInput,
+    ToolUseContent,
+    ToolExecutionInput,
+    SkillInput,
+    WebSearchInput,
+    ArtifactInput,
+    WebFetchInput,
+    WorkflowToolInput,
+    MonitorInput,
+    MonitorOutput,
+    ScheduleWakeupInput,
+    ScheduleWakeupOutput,
+    CronCreateInput,
+    CronCreateOutput,
+    CronListInput,
+    CronListOutput,
+    CronDeleteInput,
+    CronDeleteOutput,
+    WriteInput,
+    # Tool output types
+    AskUserQuestionOutput,
+    BashOutput,
+    DeleteOutput,
+    EditOutput,
+    ExitPlanModeOutput,
+    ReadOutput,
+    SendMessageOutput,
+    TaskCreateOutput,
+    TaskListOutput,
+    TaskOutput,
+    TaskOutputResult,
+    TaskStopOutput,
+    TaskUpdateOutput,
+    TeamCreateOutput,
+    TeamDeleteOutput,
+    ToolResultContent,
+    ToolExecutionOutput,
+    WebSearchOutput,
+    ArtifactOutput,
+    WebFetchOutput,
+    WriteOutput,
+)
+from ..renderer import (
+    Renderer,
+    RenderingContext,
+    TemplateMessage,
+    generate_template_messages,
+    prepare_projects_index,
+    title_for_projects_index,
+)
+from ..renderer_timings import (
+    DEBUG_TIMING,
+    log_timing,
+    report_timing_statistics,
+    set_timing_var,
+)
+from ..utils import format_timestamp, split_websearch_queries
+from .system_formatters import (
+    format_away_summary_content,
+    format_hook_attachment_content,
+    format_hook_summary_content,
+    format_session_header_content,
+    format_system_content,
+)
+from .user_formatters import (
+    format_bash_input_content,
+    format_bash_output_content,
+    format_command_output_content,
+    format_compacted_summary_content,
+    format_slash_command_content,
+    format_user_memory_content,
+    format_user_slash_command_content,
+    format_user_text_model_content,
+    format_workflow_sidechannel_user_content,
+)
+from .assistant_formatters import (
+    format_assistant_text_content,
+    format_thinking_content,
+    format_unknown_content,
+)
+from .teammate_formatter import (
+    format_sendmessage_input as _format_sendmessage_input,
+    format_sendmessage_output as _format_sendmessage_output,
+    format_task_input_teammate_extras,
+    format_task_output_teammate_extras,
+    format_taskcreate_input as _format_taskcreate_input,
+    format_taskcreate_output as _format_taskcreate_output,
+    format_tasklist_output as _format_tasklist_output,
+    format_taskupdate_input as _format_taskupdate_input,
+    format_taskupdate_output as _format_taskupdate_output,
+    format_teamcreate_input as _format_teamcreate_input,
+    format_teamcreate_output as _format_teamcreate_output,
+    format_teamdelete_input as _format_teamdelete_input,
+    format_teamdelete_output as _format_teamdelete_output,
+    format_teammate_content,
+)
+from .async_formatter import (
+    format_task_notification_content as _format_task_notification_content,
+    format_taskoutput_input as _format_taskoutput_input,
+    format_taskoutput_output as _format_taskoutput_output,
+)
+from .tool_formatters import (
+    format_askuserquestion_input,
+    format_askuserquestion_output,
+    format_bash_input,
+    format_bash_output,
+    format_delete_input,
+    format_delete_output,
+    format_edit_input,
+    format_edit_output,
+    format_exitplanmode_input,
+    format_exitplanmode_output,
+    format_multiedit_input,
+    format_read_input,
+    format_read_output,
+    format_task_input,
+    format_task_output,
+    format_taskstop_input,
+    format_taskstop_output,
+    format_todowrite_input,
+    format_tool_result_content_raw,
+    format_tool_execution_input,
+    format_tool_execution_output,
+    format_grep_input,
+    format_websearch_input,
+    format_websearch_output,
+    format_artifact_input,
+    format_artifact_output,
+    format_webfetch_input,
+    format_workflow_input,
+    format_workflow_phase_content,
+    format_workflow_agent_content,
+    format_webfetch_output,
+    format_monitor_input,
+    format_monitor_output,
+    format_schedulewakeup_input,
+    format_schedulewakeup_output,
+    format_croncreate_input,
+    format_croncreate_output,
+    format_cronlist_input,
+    format_cronlist_output,
+    format_crondelete_input,
+    format_crondelete_output,
+    format_write_input,
+    format_write_output,
+    render_params_table,
+)
+from .utils import (
+    css_class_from_message,
+    escape_html,
+    get_message_emoji,
+    get_template_environment,
+    is_memory_path,
+    is_session_header,
+    memory_short_path,
+    render_markdown_collapsible,
+)
+
+if TYPE_CHECKING:
+    from ..cache import CacheManager
+
+
+def check_html_version(html_file_path: Path) -> Optional[str]:
+    """Check the version of an existing HTML file from its comment.
+
+    Returns:
+        The version string if found, None if no version comment or file doesn't exist.
+    """
+    # is_file() (not exists()) so a non-regular destination — e.g.
+    # /dev/stdout, which is a pipe when stdout is piped — is treated as
+    # "no version" rather than opened read-only, which would deadlock the
+    # version sniff on readline() (issue #223).
+    if not html_file_path.is_file():
+        return None
+
+    try:
+        with open(html_file_path, "r", encoding="utf-8") as f:
+            # Read only the first few lines to find the version comment
+            for _ in range(5):  # Check first 5 lines
+                line = f.readline()
+                if not line:
+                    break
+                # Look for comment like: <!-- Generated by claude-code-log v0.3.4 -->
+                if "<!-- Generated by claude-code-log v" in line:
+                    # Extract version between 'v' and ' -->'
+                    start = line.find("v") + 1
+                    end = line.find(" -->")
+                    if start > 0 and end > start:
+                        return line[start:end]
+    except (IOError, UnicodeDecodeError):
+        pass
+
+    return None
+
+
+def _build_html_project_tree(template_projects: list[Any]) -> dict[str, Any]:
+    """Build a nested directory tree from project paths for the HTML index.
+
+    Each project lands at the directory level of its ``html_file``'s
+    parent (i.e. the rel-dest directory under the index root). The
+    returned shape is a recursive dict:
+
+    ::
+
+        {
+          "_projects": [TemplateProject, ...],   # leaves at this level
+          "<subdir-name>": <subtree>,
+        }
+
+    Directories are sorted alphabetically by the recursive template
+    macro; the ``_projects`` lists keep their insertion order (which
+    is the by-last-modified order set in ``prepare_projects_index``).
+    """
+
+    def _to_posix(s: str) -> str:
+        return s.replace("\\", "/")
+
+    root: dict[str, Any] = {}
+    for project in template_projects:
+        # Use html_file's parent path components as the directory chain.
+        url = _to_posix(project.html_file)
+        parts = url.split("/")
+        node = root
+        # All but the last component are directories.
+        for part in parts[:-1]:
+            if not part:
+                continue
+            if part not in node or not isinstance(node[part], dict):
+                node[part] = {}
+            node = node[part]
+        node.setdefault("_projects", []).append(project)
+    return root
+
+
+class HtmlRenderer(Renderer):
+    """HTML renderer for Claude Code transcripts."""
+
+    # Consulted by Renderer._dispatch_format Strategy 2: plugin-defined
+    # content classes contributing a ``format_html`` method get picked up
+    # here. See dev-docs/plugins.md §5 for the resolution order.
+    #
+    # v1 contract: ``format_html`` MUST return a real string. The
+    # absence of the method on a plugin class drives the fallback —
+    # ``_dispatch_format`` (overridden below) synthesizes HTML from
+    # the class-side ``format_markdown`` via mistune when only the
+    # Markdown side is implemented. There is no None-as-sentinel.
+    _class_dispatch_format: str = "html"
+
+    def _dispatch_format(self, obj: Any, message: "TemplateMessage") -> str:
+        """HtmlRenderer-specific dispatch with Markdown→HTML synthesis.
+
+        Resolution order on the actual class (`type(obj)`):
+
+        1. Class defines ``format_html`` in its ``__dict__`` → use it
+           verbatim. The return MUST be a real string (no None sentinel).
+        2. Class defines ``format_markdown`` (but not ``format_html``)
+           in its ``__dict__`` → synthesize HTML by rendering the
+           Markdown via mistune, wrapped in ``<div class="markdown">``
+           so theme rules scoped under ``.markdown`` fire. By
+           definition the synthesized output is Markdown-derived, so
+           the wrap is automatic — plugin authors don't need
+           ``has_markdown = True`` for this path.
+        3. Neither on the actual class → defer to the base MRO walk
+           (which finds renderer-side ``format_<ClassName>`` methods
+           for built-in content classes, or class-side methods on
+           ancestors).
+
+        Step 2 deliberately wins over an ancestor's renderer-side
+        ``format_<ClassName>``: a plugin author who defined
+        ``format_markdown`` on their subclass meant for their Markdown
+        to drive the rendering, not for the parent class's built-in
+        renderer behaviour to take over.
+        """
+        from .utils import render_markdown
+
+        # ``obj`` is intentionally untyped (``Any``); the class-side
+        # methods we look up on its ``__dict__`` are plugin-defined.
+        obj_cls = cast("type[object]", type(obj))
+        html_method = obj_cls.__dict__.get("format_html")
+        if html_method is not None:
+            return cast(str, html_method(obj, self, message))
+        md_method = obj_cls.__dict__.get("format_markdown")
+        if md_method is not None:
+            md_source = cast(str, md_method(obj, self, message))
+            return f'<div class="markdown">{render_markdown(md_source)}</div>'
+        return super()._dispatch_format(obj, message)
+
+    def __init__(self, image_export_mode: str = "embedded"):
+        """Initialize the HTML renderer.
+
+        Args:
+            image_export_mode: Image export mode - "placeholder", "embedded", or "referenced".
+        """
+        super().__init__()
+        self.image_export_mode = image_export_mode
+        self._output_dir: Path | None = None
+        self._image_counter = 0
+        # session_id -> {teammate_id -> color}, snapshotted from the
+        # RenderingContext at the start of each render. Formatters look
+        # up the per-session map via self._colors_for(message) so
+        # combined transcripts don't cross-contaminate teammate colors
+        # between sessions.
+        self._teammate_colors_by_session: dict[str, dict[str, str]] = {}
+        # session_id -> {task_id -> subject}, populated by
+        # `_populate_task_metadata` from TaskCreate/TaskList tool_results
+        # so TaskCreate / TaskUpdate tool_use titles can surface the
+        # human-readable subject. Empty for sessions without task
+        # activity.
+        self._task_subjects_by_session: dict[str, dict[str, str]] = {}
+        # session_id -> {tool_use_id -> task_id}, populated alongside
+        # task_subjects so the TaskCreate tool_use title can render the
+        # backend-assigned ``#N`` (TaskCreateInput itself doesn't carry
+        # the id; it's minted on creation and only appears on the
+        # tool_result).
+        self._task_id_by_tool_use: dict[str, dict[str, str]] = {}
+        # RenderingContext snapshot for the current render, so format methods
+        # can resolve a message's pair partner (pair_first/pair_last) by index
+        # — mirrors MarkdownRenderer._ctx. Reset each render.
+        self._ctx: Optional[RenderingContext] = None
+
+    # -------------------------------------------------------------------------
+    # Private Utility Methods
+    # -------------------------------------------------------------------------
+
+    def _colors_for(self, message: TemplateMessage) -> dict[str, str]:
+        """Return the teammate_id→color map scoped to *message*'s session.
+
+        Empty dict when the session has no known teammate colors yet.
+        Scoping matters for combined transcripts (see
+        RenderingContext.teammate_colors).
+        """
+        sid = message.meta.session_id if message.meta else ""
+        return self._teammate_colors_by_session.get(sid, {})
+
+    def _askuserquestion_questions_for(
+        self, message: TemplateMessage
+    ) -> dict[str, "AskUserQuestionItem"]:
+        """Map question-text → original question for *message*'s pair partner.
+
+        Used by the AskUserQuestion result formatter to recover the offered
+        options/header when its own structured data lacks them (text-fallback
+        and clarify-rejection paths), by reaching into the paired tool_use's
+        ``AskUserQuestionInput``.
+        """
+        if self._ctx is None or message.pair_first is None:
+            return {}
+        pair_msg = self._ctx.get(message.pair_first)
+        if pair_msg is None or not isinstance(pair_msg.content, ToolUseMessage):
+            return {}
+        input_content = pair_msg.content.input
+        if not isinstance(input_content, AskUserQuestionInput):
+            return {}
+        return {q.question: q for q in input_content.questions if q.question}
+
+    def _collapse_askuserquestion_pairs(self, ctx: RenderingContext) -> None:
+        """Make answered AskUserQuestion results self-contained, single cards.
+
+        For each result paired with its tool_use: bake the offered
+        options/header/multiSelect from the input onto the result's answers (so
+        the result card shows the full question even on the text-fallback and
+        clarify-rejection paths), then drop the result's pair role so it renders
+        as a standalone card. The paired input card is ghosted separately by
+        ``format_AskUserQuestionInput`` / ``title_ToolUseMessage`` — its
+        ``pair_last`` link stays intact so that ghosting still fires (#180).
+        """
+        for msg in ctx.messages:
+            if msg is None:
+                continue  # ghosted slot (ghosting epic Phase 1)
+            content = msg.content
+            if not isinstance(content, ToolResultMessage):
+                continue
+            output = content.output
+            if not isinstance(output, AskUserQuestionOutput):
+                continue
+            if msg.pair_first is None:
+                continue
+            input_msg = ctx.get(msg.pair_first)
+            if input_msg is None or not isinstance(input_msg.content, ToolUseMessage):
+                continue
+            input_content = input_msg.content.input
+            if not isinstance(input_content, AskUserQuestionInput):
+                continue
+            qmap = {q.question: q for q in input_content.questions if q.question}
+            for ans in output.answers:
+                q = qmap.get(ans.question)
+                if q is None:
+                    continue
+                if not ans.options:
+                    ans.options = list(q.options)
+                if ans.header is None:
+                    ans.header = q.header
+                if not ans.multi_select:
+                    ans.multi_select = q.multiSelect
+            # Render the result standalone — no dangling "second half of a pair"
+            # merge band now that its companion input card is ghosted.
+            msg.pair_first = None
+            msg.pair_duration = None
+
+    def _paired_answer_supersedes(self, message: TemplateMessage) -> bool:
+        """True when *message* (an AskUserQuestion tool_use) is paired with a
+        result that already re-renders the questions + the user's choice.
+
+        In that case the input card is pure duplication and is ghosted. When
+        there is no such pair (e.g. a transcript captured while still blocked
+        on the question), the input card stays.
+        """
+        if self._ctx is None or not message.is_first_in_pair:
+            return False
+        result_msg = self._ctx.get(message.pair_last) if message.pair_last else None
+        if result_msg is None or not isinstance(result_msg.content, ToolResultMessage):
+            return False
+        return isinstance(result_msg.content.output, AskUserQuestionOutput)
+
+    def _format_image(self, image: ImageContent) -> str:
+        """Format image based on export mode."""
+        from ..image_export import export_image
+
+        self._image_counter += 1
+        src = export_image(
+            image,
+            self.image_export_mode,
+            output_dir=self._output_dir,
+            counter=self._image_counter,
+        )
+        if src is None:
+            return "[Image]"
+        return f'<img src="{src}" alt="image" class="uploaded-image" />'
+
+    # -------------------------------------------------------------------------
+    # System Content Formatters
+    # -------------------------------------------------------------------------
+
+    def format_SystemMessage(self, content: SystemMessage, _: TemplateMessage) -> str:
+        return format_system_content(content)
+
+    def format_HookSummaryMessage(
+        self, content: HookSummaryMessage, _: TemplateMessage
+    ) -> str:
+        return format_hook_summary_content(content)
+
+    def format_HookAttachmentMessage(
+        self, content: HookAttachmentMessage, _: TemplateMessage
+    ) -> str:
+        return format_hook_attachment_content(content)
+
+    def format_AwaySummaryMessage(
+        self, content: AwaySummaryMessage, _: TemplateMessage
+    ) -> str:
+        return format_away_summary_content(content)
+
+    def format_SessionHeaderMessage(
+        self, content: SessionHeaderMessage, _: TemplateMessage
+    ) -> str:
+        return format_session_header_content(content)
+
+    # -------------------------------------------------------------------------
+    # User Content Formatters
+    # -------------------------------------------------------------------------
+
+    def format_UserTextMessage(
+        self, content: UserTextMessage, message: TemplateMessage
+    ) -> str:
+        # User prompts grafted from a workflow agent's side-channel are large
+        # prose+JSON hybrids: render them as collapsible Markdown with the
+        # embedded JSON blocks extracted into params tables (#174 follow-up).
+        if message.in_workflow_sidechannel:
+            return format_workflow_sidechannel_user_content(
+                content, image_formatter=self._format_image
+            )
+        return format_user_text_model_content(
+            content, image_formatter=self._format_image
+        )
+
+    def format_UserSlashCommandMessage(
+        self, content: UserSlashCommandMessage, _: TemplateMessage
+    ) -> str:
+        return format_user_slash_command_content(content)
+
+    def format_SlashCommandMessage(
+        self, content: SlashCommandMessage, _: TemplateMessage
+    ) -> str:
+        return format_slash_command_content(content)
+
+    def format_CommandOutputMessage(
+        self, content: CommandOutputMessage, _: TemplateMessage
+    ) -> str:
+        return format_command_output_content(content)
+
+    def format_BashInputMessage(
+        self, content: BashInputMessage, _: TemplateMessage
+    ) -> str:
+        return format_bash_input_content(content)
+
+    def format_BashOutputMessage(
+        self, content: BashOutputMessage, _: TemplateMessage
+    ) -> str:
+        return format_bash_output_content(content)
+
+    def format_CompactedSummaryMessage(
+        self, content: CompactedSummaryMessage, _: TemplateMessage
+    ) -> str:
+        return format_compacted_summary_content(content)
+
+    def format_UserMemoryMessage(
+        self, content: UserMemoryMessage, _: TemplateMessage
+    ) -> str:
+        return format_user_memory_content(content)
+
+    def format_TeammateMessage(
+        self, content: TeammateMessage, _: TemplateMessage
+    ) -> str:
+        """Format → one colored card per <teammate-message> block.
+
+        Passes the session-wide teammate_colors map so blocks without an
+        inline color still inherit the teammate's learned color.
+        """
+        return format_teammate_content(content, self._colors_for(_))
+
+    def format_TaskNotificationMessage(
+        self, content: TaskNotificationMessage, _: TemplateMessage
+    ) -> str:
+        """Format → metadata `<dl>` + collapsible Markdown body for an
+        async-agent ``<task-notification>`` user entry (issue #90).
+
+        At ``RenderingDepth.AGENT`` a duplicate-flagged notification renders
+        empty so the rendering loop's "skip empty messages" elision
+        drops the card — the spawn-fold already shows the answer in
+        place, and "ghosting" via empty output avoids the index-remap
+        cascade that deleting the message would trigger (ancestry
+        classes, backlinks, session nav anchors).
+        """
+        if self.depth == RenderingDepth.AGENT and content.result_is_duplicate:
+            return ""
+        return _format_task_notification_content(content)
+
+    # -------------------------------------------------------------------------
+    # Assistant Content Formatters
+    # -------------------------------------------------------------------------
+
+    def format_AssistantTextMessage(
+        self, content: AssistantTextMessage, _: TemplateMessage
+    ) -> str:
+        return format_assistant_text_content(
+            content, image_formatter=self._format_image
+        )
+
+    def format_ThinkingMessage(
+        self, content: ThinkingMessage, _: TemplateMessage
+    ) -> str:
+        """Format → <details class='thinking'>...</details> (foldable if >10 lines)."""
+        return format_thinking_content(content, line_threshold=10)
+
+    def format_UnknownMessage(self, content: UnknownMessage, _: TemplateMessage) -> str:
+        """Format → <pre class='unknown'>JSON dump</pre>."""
+        return format_unknown_content(content)
+
+    def format_WorkflowPhaseMessage(
+        self, content: WorkflowPhaseMessage, _: TemplateMessage
+    ) -> str:
+        """Format → spliced workflow phase card body (depth + agent count)."""
+        return format_workflow_phase_content(content)
+
+    def format_WorkflowAgentMessage(
+        self, content: WorkflowAgentMessage, _: TemplateMessage
+    ) -> str:
+        """Format → spliced workflow agent card body (meta line + result)."""
+        return format_workflow_agent_content(content)
+
+    # -------------------------------------------------------------------------
+    # Tool Input Formatters
+    # -------------------------------------------------------------------------
+
+    def format_BashInput(self, input: BashInput, _: TemplateMessage) -> str:
+        """Format → <pre>$ command</pre>."""
+        return format_bash_input(input)
+
+    def format_ReadInput(self, input: ReadInput, _: TemplateMessage) -> str:
+        """Format → <table class='params'>file_path | ...</table>."""
+        return format_read_input(input)
+
+    def format_WriteInput(self, input: WriteInput, _: TemplateMessage) -> str:
+        """Format → file path + syntax-highlighted content preview."""
+        return format_write_input(input)
+
+    def format_DeleteInput(self, input: DeleteInput, _: TemplateMessage) -> str:
+        """Format → empty body; the path is shown in the title."""
+        return format_delete_input(input)
+
+    def format_EditInput(self, input: EditInput, _: TemplateMessage) -> str:
+        """Format → file path + diff of old_string/new_string."""
+        return format_edit_input(input)
+
+    def format_MultiEditInput(self, input: MultiEditInput, _: TemplateMessage) -> str:
+        """Format → file path + multiple diffs."""
+        return format_multiedit_input(input)
+
+    def format_TaskInput(self, input: TaskInput, _: TemplateMessage) -> str:
+        """Format → prompt text, plus teammate-spawn extras when relevant."""
+        base = format_task_input(input)
+        extras = format_task_input_teammate_extras(input, self._colors_for(_))
+        return base + extras if extras else base
+
+    def format_TodoWriteInput(self, input: TodoWriteInput, _: TemplateMessage) -> str:
+        """Format → <ul class='todo-list'>...</ul>."""
+        return format_todowrite_input(input)
+
+    def format_AskUserQuestionInput(
+        self, input: AskUserQuestionInput, message: TemplateMessage
+    ) -> str:
+        """Format → questions as definition list.
+
+        Ghosted (empty) when a paired result already re-renders the questions
+        plus the user's choice — see ``_paired_answer_supersedes``.
+        """
+        if self._paired_answer_supersedes(message):
+            return ""
+        return format_askuserquestion_input(input)
+
+    def format_ExitPlanModeInput(
+        self, input: ExitPlanModeInput, _: TemplateMessage
+    ) -> str:
+        """Format → empty string (no content)."""
+        return format_exitplanmode_input(input)
+
+    def format_GrepInput(self, input: GrepInput, _: TemplateMessage) -> str:
+        """Format → params table (path, glob, type, etc.) without pattern."""
+        return format_grep_input(input)
+
+    def format_WebSearchInput(self, input: WebSearchInput, _: TemplateMessage) -> str:
+        """Format → search query display."""
+        return format_websearch_input(input)
+
+    def format_SkillInput(self, _input: SkillInput, _: TemplateMessage) -> str:
+        """Format → empty: skill name moves to the title, body folds in via skill_body."""
+        return ""
+
+    # --- Teammate-feature tool inputs --------------------------------------
+
+    def format_TeamCreateInput(self, input: TeamCreateInput, _: TemplateMessage) -> str:
+        """Format → team-card with team_name / description / agent_type."""
+        return _format_teamcreate_input(input)
+
+    def format_TeamDeleteInput(self, input: TeamDeleteInput, _: TemplateMessage) -> str:
+        """Format → empty placeholder (TeamDelete takes no meaningful params)."""
+        return _format_teamdelete_input(input)
+
+    def format_TaskCreateInput(self, input: TaskCreateInput, _: TemplateMessage) -> str:
+        """Format → task-create card."""
+        return _format_taskcreate_input(input)
+
+    def format_TaskUpdateInput(self, input: TaskUpdateInput, _: TemplateMessage) -> str:
+        """Format → task-update card (colored owner badge when present)."""
+        return _format_taskupdate_input(input, self._colors_for(_))
+
+    def format_TaskListInput(self, input: TaskListInput, _: TemplateMessage) -> str:
+        """Format → empty placeholder (TaskList takes no params)."""
+        del input  # TaskListInput has no surfaces worth rendering
+        return ""
+
+    def format_SendMessageInput(
+        self, input: SendMessageInput, _: TemplateMessage
+    ) -> str:
+        """Format → send-message card with colored recipient badge."""
+        return _format_sendmessage_input(input, self._colors_for(_))
+
+    def format_TaskOutputInput(self, input: TaskOutputInput, _: TemplateMessage) -> str:
+        """Format → minimal TaskOutput input card (block / timeout if set)."""
+        return _format_taskoutput_input(input)
+
+    def format_TaskStopInput(self, input: TaskStopInput, _: TemplateMessage) -> str:
+        """Format → empty (id lives in the title, no further params)."""
+        return format_taskstop_input(input)
+
+    def format_ToolUseContent(self, content: ToolUseContent, _: TemplateMessage) -> str:
+        """Format → <table class='params'>key | value rows</table>."""
+        return render_params_table(content.input)
+
+    def format_ToolUseMessage(
+        self, content: ToolUseMessage, message: TemplateMessage
+    ) -> str:
+        """Format Skill tool_use with folded skill body (issue #93).
+
+        For every other tool_use, delegate to the base dispatcher
+        (→ params table). For Skill, append the expanded skill body —
+        set by `_pair_skill_tool_uses` from the matching isMeta=True
+        slash-command entry — as collapsible markdown below the params.
+        """
+        rendered = super().format_ToolUseMessage(content, message)
+        if content.skill_body:
+            body_html = render_markdown_collapsible(
+                content.skill_body,
+                "skill-body",
+                line_threshold=30,
+                preview_line_count=10,
+            )
+            rendered = f"{rendered}\n{body_html}"
+        return rendered
+
+    # -------------------------------------------------------------------------
+    # Tool Output Formatters
+    # -------------------------------------------------------------------------
+
+    def format_ReadOutput(self, output: ReadOutput, _: TemplateMessage) -> str:
+        """Format → syntax-highlighted file content."""
+        return format_read_output(output)
+
+    def format_WriteOutput(self, output: WriteOutput, _: TemplateMessage) -> str:
+        """Format → status message (e.g. 'Wrote 42 bytes')."""
+        return format_write_output(output)
+
+    def format_DeleteOutput(self, output: DeleteOutput, _: TemplateMessage) -> str:
+        """Format → deletion status message."""
+        return format_delete_output(output)
+
+    def format_EditOutput(self, output: EditOutput, _: TemplateMessage) -> str:
+        """Format → status message (e.g. 'Applied edit')."""
+        return format_edit_output(output)
+
+    def format_BashOutput(self, output: BashOutput, _: TemplateMessage) -> str:
+        """Format → <pre>stdout/stderr</pre>."""
+        return format_bash_output(output)
+
+    def format_TaskOutput(self, output: TaskOutput, _: TemplateMessage) -> str:
+        """Format → markdown of task result plus teammate-metadata extras."""
+        base = format_task_output(output)
+        extras = format_task_output_teammate_extras(output, self._colors_for(_))
+        return base + extras if extras else base
+
+    def format_AskUserQuestionOutput(
+        self, output: AskUserQuestionOutput, message: TemplateMessage
+    ) -> str:
+        """Format → each question with its options, the chosen one highlighted.
+
+        Options/headers missing from the result's own data (text-fallback and
+        clarify-rejection paths) are recovered from the paired tool_use input.
+        """
+        return format_askuserquestion_output(
+            output, self._askuserquestion_questions_for(message)
+        )
+
+    def format_ExitPlanModeOutput(
+        self, output: ExitPlanModeOutput, _: TemplateMessage
+    ) -> str:
+        """Format → status message."""
+        return format_exitplanmode_output(output)
+
+    def format_WebSearchOutput(
+        self, output: WebSearchOutput, _: TemplateMessage
+    ) -> str:
+        """Format → list of clickable search result links."""
+        return format_websearch_output(output)
+
+    # --- Teammate-feature tool outputs -------------------------------------
+
+    def format_TeamCreateOutput(
+        self, output: TeamCreateOutput, _: TemplateMessage
+    ) -> str:
+        """Format → team-card with team_name / lead / config path."""
+        return _format_teamcreate_output(output)
+
+    def format_TeamDeleteOutput(
+        self, output: TeamDeleteOutput, _: TemplateMessage
+    ) -> str:
+        """Format → success/refused notice; active members listed when blocked."""
+        return _format_teamdelete_output(output, self._colors_for(_))
+
+    def format_TaskCreateOutput(
+        self, output: TaskCreateOutput, _: TemplateMessage
+    ) -> str:
+        """Format → created task id + subject."""
+        return _format_taskcreate_output(output)
+
+    def format_TaskUpdateOutput(
+        self, output: TaskUpdateOutput, _: TemplateMessage
+    ) -> str:
+        """Format → task id + updated fields (+ transition if present)."""
+        return _format_taskupdate_output(output)
+
+    def format_TaskListOutput(self, output: TaskListOutput, _: TemplateMessage) -> str:
+        """Format → <table class='task-list'> with id/status/subject/owner."""
+        return _format_tasklist_output(output, self._colors_for(_))
+
+    def format_SendMessageOutput(
+        self, output: SendMessageOutput, _: TemplateMessage
+    ) -> str:
+        """Format → sent/failed notice with colored target badge + request id."""
+        return _format_sendmessage_output(output, self._colors_for(_))
+
+    def format_TaskOutputResult(
+        self, output: TaskOutputResult, _: TemplateMessage
+    ) -> str:
+        """Format → minimal TaskOutput result card (metadata only, no transcript)."""
+        return _format_taskoutput_output(output)
+
+    def format_TaskStopOutput(self, output: TaskStopOutput, _: TemplateMessage) -> str:
+        """Format → ``Stopped`` / ``Not stopped`` badge + message body."""
+        return format_taskstop_output(output)
+
+    def format_ToolResultContent(
+        self, output: ToolResultContent, _: TemplateMessage
+    ) -> str:
+        """Format → <pre>raw content</pre> (fallback for unknown tools)."""
+        return format_tool_result_content_raw(output)
+
+    def format_WebFetchInput(self, input: WebFetchInput, _: TemplateMessage) -> str:
+        """Format → prompt text if long, empty if shown in title."""
+        return format_webfetch_input(input)
+
+    def format_WorkflowToolInput(
+        self, input: WorkflowToolInput, _: TemplateMessage
+    ) -> str:
+        """Format → meta header (name/description/phases) + highlighted JS script."""
+        return format_workflow_input(input)
+
+    def format_ToolExecutionInput(
+        self, input: ToolExecutionInput, _: TemplateMessage
+    ) -> str:
+        """Format opaque Codex JavaScript as an execution snippet."""
+        return format_tool_execution_input(input)
+
+    def format_ToolExecutionOutput(
+        self, output: ToolExecutionOutput, _: TemplateMessage
+    ) -> str:
+        """Format execution status and labelled result emissions."""
+        return format_tool_execution_output(output)
+
+    def title_ToolExecutionInput(
+        self, _input: ToolExecutionInput, message: TemplateMessage
+    ) -> str:
+        """Title → code-oriented execution, distinct from Workflow."""
+        return self._tool_title(message, "⚙️")
+
+    def format_WebFetchOutput(self, output: WebFetchOutput, _: TemplateMessage) -> str:
+        """Format → collapsible markdown with metadata badge."""
+        return format_webfetch_output(output)
+
+    def format_ArtifactInput(self, input: ArtifactInput, _: TemplateMessage) -> str:
+        """Format → description + favicon/label/redeploy meta line."""
+        return format_artifact_input(input)
+
+    def format_ArtifactOutput(self, output: ArtifactOutput, _: TemplateMessage) -> str:
+        """Format → 'Published <title> → <url>' with scheme-guarded link."""
+        return format_artifact_output(output)
+
+    def format_MonitorInput(self, input: MonitorInput, _: TemplateMessage) -> str:
+        """Format → 4-row params table with collapsible command."""
+        return format_monitor_input(input)
+
+    def format_MonitorOutput(self, output: MonitorOutput, _: TemplateMessage) -> str:
+        """Format → start-confirmation paragraph verbatim."""
+        return format_monitor_output(output)
+
+    # -- ScheduleWakeup / Cron* family ---------------------------------------
+
+    def format_ScheduleWakeupInput(
+        self, input: ScheduleWakeupInput, _: TemplateMessage
+    ) -> str:
+        """Format → 3-row grid (delaySeconds, reason, collapsible prompt)."""
+        return format_schedulewakeup_input(input)
+
+    def format_ScheduleWakeupOutput(
+        self, output: ScheduleWakeupOutput, _: TemplateMessage
+    ) -> str:
+        """Format → ``Next wakeup scheduled for …`` paragraph verbatim."""
+        return format_schedulewakeup_output(output)
+
+    def format_CronCreateInput(self, input: CronCreateInput, _: TemplateMessage) -> str:
+        """Format → grid (cron, recurring?, durable?, collapsible prompt)."""
+        return format_croncreate_input(input)
+
+    def format_CronCreateOutput(
+        self, output: CronCreateOutput, _: TemplateMessage
+    ) -> str:
+        """Format → confirmation paragraph verbatim."""
+        return format_croncreate_output(output)
+
+    def format_CronListInput(self, input: CronListInput, _: TemplateMessage) -> str:
+        """Format → empty (no inputs)."""
+        return format_cronlist_input(input)
+
+    def format_CronListOutput(self, output: CronListOutput, _: TemplateMessage) -> str:
+        """Format → table when parseable, raw text otherwise."""
+        return format_cronlist_output(output)
+
+    def format_CronDeleteInput(self, input: CronDeleteInput, _: TemplateMessage) -> str:
+        """Format → empty (id is in the title)."""
+        return format_crondelete_input(input)
+
+    def format_CronDeleteOutput(
+        self, output: CronDeleteOutput, _: TemplateMessage
+    ) -> str:
+        """Format → confirmation paragraph verbatim."""
+        return format_crondelete_output(output)
+
+    # -------------------------------------------------------------------------
+    # Tool Input Title Methods (for Renderer.title_ToolUseMessage dispatch)
+    # -------------------------------------------------------------------------
+
+    def _tool_title(
+        self, message: TemplateMessage, icon: str, summary: Optional[str] = None
+    ) -> str:
+        """Format tool title with icon and optional summary."""
+        content = cast(ToolUseMessage, message.content)
+        escaped_name = escape_html(content.tool_name)
+        prefix = f"{icon} " if icon else ""
+        if summary:
+            escaped_summary = escape_html(summary)
+            return f"{prefix}{escaped_name} <span class='tool-summary'>{escaped_summary}</span>"
+        return f"{prefix}{escaped_name}"
+
+    def title_TodoWriteInput(
+        self, _input: TodoWriteInput, _message: TemplateMessage
+    ) -> str:
+        """Title → '📝 Todo List'."""
+        return "📝 Todo List"
+
+    def title_AskUserQuestionInput(
+        self, _input: AskUserQuestionInput, _message: TemplateMessage
+    ) -> str:
+        """Title → '❓ Asking questions...'."""
+        return "❓ Asking questions..."
+
+    def title_ToolUseMessage(
+        self, content: ToolUseMessage, message: TemplateMessage
+    ) -> str:
+        """Tool-use title, with one ghost case: an AskUserQuestion whose paired
+        result already re-renders the questions returns an empty title so the
+        whole input card elides (empty title + empty body + no children) —
+        ``title_ToolUseMessage`` otherwise falls back to the tool name, which
+        would leave a bare residual card."""
+        if isinstance(
+            content.input, AskUserQuestionInput
+        ) and self._paired_answer_supersedes(message):
+            return ""
+        # Specialized tools dispatch to a title_*Input method that escapes via
+        # ``_tool_title``. Tools with NO specialized method (generic / mcp__* /
+        # ToolSearch / custom) fall back to the raw tool name — which is
+        # attacker-controllable and lands live in the header span. Escape it
+        # here rather than in the shared base ``title_ToolUseMessage`` (the
+        # Markdown renderer must not get HTML-entity-escaped titles). #245 XSS.
+        if title := self._dispatch_title(content.input, message):
+            return title
+        return escape_html(content.tool_name)
+
+    def title_ToolResultMessage(
+        self, content: ToolResultMessage, message: TemplateMessage
+    ) -> str:
+        """Tool-result title, plus the fully-collapsed-transcript marker
+        (#213 visual layer): when a nested Task/Agent spawn's entire
+        transcript deduped away (the sub-agent answered directly, no tool
+        calls), tag the result so it reads as 'this IS the whole transcript'
+        rather than a spawn that produced nothing."""
+        base = super().title_ToolResultMessage(content, message)
+        if message.spawns_collapsed_transcript:
+            marker = (
+                "<span class='spawn-collapsed-marker'"
+                " title='The sub-agent answered directly (no tool calls); its"
+                " full transcript was just the prompt and this result'>"
+                "≡ full transcript</span>"
+            )
+            return f"{base} {marker}" if base else marker
+        return base
+
+    # Title overrides that escape their transcript-derived field for the HTML
+    # header span. These titles are built on the shared base ``Renderer`` (also
+    # used by the Markdown renderer, which must NOT receive HTML-entity-escaped
+    # titles), so the escaping lives on the HTML path only — mirroring how
+    # ``_tool_title`` escapes the tool name for specialized tools. #245 XSS.
+
+    def title_HookAttachmentMessage(
+        self, content: HookAttachmentMessage, _: TemplateMessage
+    ) -> str:
+        # ``hook_name`` (e.g. "PostToolUse:TaskUpdate") is transcript-derived
+        # and lands in the header; escape it.
+        label = content.hook_name or content.hook_event or content.kind
+        return f"Hook · {escape_html(label)}"
+
+    def title_WorkflowPhaseMessage(
+        self, content: WorkflowPhaseMessage, _: TemplateMessage
+    ) -> str:
+        return f"Phase: {escape_html(content.title)}" if content.title else "Phase"
+
+    def title_WorkflowAgentMessage(
+        self, content: WorkflowAgentMessage, _: TemplateMessage
+    ) -> str:
+        return f"Agent {escape_html(content.label)}" if content.label else "Agent"
+
+    def title_SystemMessage(self, content: SystemMessage, _: TemplateMessage) -> str:
+        # ``level`` is FREE-TEXT from the transcript (``system_factory``:
+        # ``transcript.level or "info"``), not an enum — so it can carry a
+        # payload that lands in the header. Title-case the RAW level FIRST,
+        # then escape: escaping first would let ``.title()`` capitalize the
+        # entity prefixes (``&lt;`` → ``&Lt;``) and break the escaping. #245 XSS.
+        level = content.level or "unknown"
+        return f"System {escape_html(level.title())}"
+
+    def title_TaskInput(self, input: TaskInput, message: TemplateMessage) -> str:
+        """Title → '🔧 Task <desc> (subagent_type) [async #<id>]'.
+
+        ``[async]`` muted hint appears when ``run_in_background=True``
+        so the reader can tell at a glance which spawns will be
+        followed up later by a ``<task-notification>`` user entry
+        (issue #90), as opposed to synchronous Task calls whose
+        result returns inline. Once the launch confirmation has been
+        parsed, the minted ``#<agent_id>`` is appended; when there's
+        a later ``TaskOutput`` poll for the same agent, ``#<agent_id>``
+        wraps in a forward-link anchor (PR #158 follow-up, mirroring
+        the consumer-side backlink from #154).
+        """
+        content = cast(ToolUseMessage, message.content)
+        escaped_name = escape_html(content.tool_name)
+        escaped_subagent = (
+            escape_html(input.subagent_type) if input.subagent_type else ""
+        )
+        async_hint = (
+            " "
+            + self._async_id_suffix(
+                input.minted_agent_id,
+                input.linked_consumer_message_index,
+            )
+            if input.run_in_background
+            else ""
+        )
+        suffix = (
+            async_hint
+            + self._agent_depth_badge(message)
+            + self._agent_model_badge(message)
+        )
+        if input.description and input.subagent_type:
+            escaped_desc = escape_html(input.description)
+            return (
+                f"🔧 {escaped_name} <span class='tool-summary'>{escaped_desc}</span>"
+                f" <span class='tool-subagent'>({escaped_subagent})</span>"
+                f"{suffix}"
+            )
+        elif input.description:
+            return self._tool_title(message, "🔧", input.description) + suffix
+        elif input.subagent_type:
+            return (
+                f"🔧 {escaped_name} <span class='tool-subagent'>({escaped_subagent})</span>"
+                f"{suffix}"
+            )
+        return f"🔧 {escaped_name}{suffix}"
+
+    def _agent_depth_badge(self, message: TemplateMessage) -> str:
+        """Depth badge for a nested spawn card (#213 visual layer).
+
+        Shows the depth of the sub-agent this Task/Agent call opens — the
+        card's own ``agent_depth`` + 1, since the spawned agent sits exactly
+        one level deeper. Empty for top-level spawns (which open a depth-1
+        transcript) so the common shallow case stays uncluttered. The badge's
+        ring class colour-matches the group line that frames the transcript
+        directly below it.
+        """
+        spawned_depth = message.agent_depth + 1
+        if spawned_depth < 2:
+            return ""
+        ring = ((spawned_depth - 1) % 5) + 1
+        return (
+            f" <span class='agent-depth-badge agent-ring-{ring}'"
+            f" title='Opens a depth-{spawned_depth} sub-agent transcript'>"
+            f"Depth {spawned_depth}</span>"
+        )
+
+    def _agent_model_badge(self, message: TemplateMessage) -> str:
+        """Model badge for a spawn card (#246): the model the spawned
+        sub-agent ran on, stamped on the always-visible Task/Agent launch
+        card by ``_surface_agent_models`` (``display_model``). Shown for
+        every spawn depth — unlike the depth badge, it isn't suppressed at
+        depth 1, since the top-level Explore/Task spawn is the common case a
+        reader wants to see. Empty when no model was resolved (e.g. an
+        interrupted spawn whose sub-agent produced no assistant turn)."""
+        if not message.display_model:
+            return ""
+        return (
+            f" <span class='message-model' title='Model this sub-agent ran on'>"
+            f"{escape_html(message.display_model)}</span>"
+        )
+
+    def _async_id_suffix(
+        self,
+        minted_id: Optional[str],
+        consumer_idx: Optional[int],
+    ) -> str:
+        """Compose the trailing ``[async ...]`` marker for spawn cards
+        of background ``Bash`` / async ``Task`` calls (PR #158).
+
+        Shape:
+        - ``run_in_background`` but id not (yet) hoisted onto the
+          spawn input → ``[async]``
+        - id known → ``[async #<id>]``
+        - id known and a later consumer's index known → wraps the
+          ``#<id>`` in a forward-link anchor pointing at the first
+          ``TaskOutput`` poll (mirrors the backlink direction).
+
+        The leading bracket-tagged hint reuses the existing
+        ``.task-async-hint`` styling (muted blue, smaller font); the
+        anchor is tagged ``.task-id-forward-link`` (initially same
+        dotted-underline as ``.task-id-backlink`` but a distinct class
+        so tests can disambiguate the two directions unambiguously
+        and styling can diverge later).
+        """
+        if not minted_id:
+            return "<span class='task-async-hint'>[async]</span>"
+        id_html = f"<code>#{escape_html(minted_id)}</code>"
+        if consumer_idx is not None:
+            anchor = f"msg-d-{consumer_idx}"
+            id_html = f"<a class='task-id-forward-link' href='#{anchor}'>{id_html}</a>"
+        return f"<span class='task-async-hint'>[async {id_html}]</span>"
+
+    def title_EditInput(self, input: EditInput, message: TemplateMessage) -> str:
+        """Title → '📝 Edit <file_path>', or '🧠 Edit memory <short-path>'
+        when the path is inside an auto-memory directory (#192)."""
+        if is_memory_path(input.file_path):
+            return self._tool_title(
+                message, "🧠", f"memory {memory_short_path(input.file_path)}"
+            )
+        return self._tool_title(message, "📝", input.file_path)
+
+    def title_WriteInput(self, input: WriteInput, message: TemplateMessage) -> str:
+        """Title → '📝 Write <file_path>', or '🧠 Write memory <short-path>'
+        when the path is inside an auto-memory directory (#192)."""
+        if is_memory_path(input.file_path):
+            return self._tool_title(
+                message, "🧠", f"memory {memory_short_path(input.file_path)}"
+            )
+        return self._tool_title(message, "📝", input.file_path)
+
+    def title_DeleteInput(self, input: DeleteInput, message: TemplateMessage) -> str:
+        """Title → '🗑️ Delete <file_path>'."""
+        return self._tool_title(message, "🗑️", input.file_path)
+
+    def title_ReadInput(self, input: ReadInput, message: TemplateMessage) -> str:
+        """Title → '📄 Read <file_path>[, lines N-M]', or
+        '🧠 Read memory <short-path>[, lines N-M]' when the path is inside an
+        auto-memory directory (recalled memory, #192)."""
+        is_memory = is_memory_path(input.file_path)
+        icon = "🧠" if is_memory else "📄"
+        summary = (
+            f"memory {memory_short_path(input.file_path)}"
+            if is_memory
+            else input.file_path
+        )
+        # Add line range info if available. ``offset`` in the Read tool's
+        # input is the 1-based starting line number (matches what the
+        # ``toolUseResult.file.startLine`` and the cat-n line numbers in
+        # the rendered content show). ``None`` or ``0`` both mean "start
+        # from line 1". The displayed range is inclusive on both ends, so
+        # the end is ``start + limit - 1`` — not ``start + limit``.
+        if input.limit is not None:
+            start = input.offset if input.offset else 1
+            end = start + input.limit - 1
+            if input.limit == 1:
+                summary = f"{summary}, line {start}"
+            else:
+                summary = f"{summary}, lines {start}-{end}"
+        return self._tool_title(message, icon, summary)
+
+    def title_GlobInput(self, input: GlobInput, message: TemplateMessage) -> str:
+        """Title → '🔍 Glob <pattern>[ in path]'."""
+        summary = input.pattern
+        if input.path:
+            summary = f"{summary} in {input.path}"
+        return self._tool_title(message, "🔍", summary)
+
+    def title_GrepInput(self, input: GrepInput, message: TemplateMessage) -> str:
+        """Title → '🔎 Grep <pattern>'."""
+        return self._tool_title(message, "🔎", input.pattern)
+
+    def title_BashInput(self, input: BashInput, message: TemplateMessage) -> str:
+        """Title → '💻 Bash <description> [async #<id>]'.
+
+        Plain shape for foreground Bash. For background spawns, append
+        the ``[async]`` muted hint and — once the matching tool_result
+        has been parsed — the minted ``#<id>``. When a later
+        ``TaskOutput`` poll for the same id is present, the ``#<id>``
+        wraps in a forward-link anchor (PR #158 follow-up).
+
+        The async signal is the OR of (a) ``input.run_in_background``
+        (caller-set hint) and (b) ``input.minted_background_task_id``
+        (propagated from the tool_result by
+        ``_link_task_id_consumers``). The harness may background a
+        Bash command on its own (e.g. timeout-driven) WITHOUT setting
+        the input flag, so gating on the input alone misses real-world
+        shapes — the authoritative signal lives on the result side.
+        """
+        base = self._tool_title(message, "💻", input.description)
+        if not (input.run_in_background or input.minted_background_task_id):
+            return base
+        suffix = self._async_id_suffix(
+            input.minted_background_task_id,
+            input.linked_consumer_message_index,
+        )
+        return f"{base} {suffix}"
+
+    def title_WebSearchInput(
+        self, input: WebSearchInput, message: TemplateMessage
+    ) -> str:
+        """Title → '🔎 WebSearch <query>'."""
+        queries = split_websearch_queries(input.query)
+        summary = f"{queries[0]} (...)" if len(queries) > 1 else input.query
+        return self._tool_title(message, "🔎", summary)
+
+    def title_WebFetchInput(
+        self, input: WebFetchInput, message: TemplateMessage
+    ) -> str:
+        """Title → '🌐 WebFetch <url>'."""
+        if re.fullmatch(r"turn\d+(?:search|view)\d+", input.url):
+            content = cast(ToolUseMessage, message.content)
+            tool_name = escape_html(content.tool_name)
+            ref = escape_html(input.url)
+            return (
+                f"🌐 {tool_name} "
+                f"<a class='web-ref-link' href='#web-ref-{ref}'>"
+                f"<span class='tool-summary'>{ref}</span></a>"
+            )
+        return self._tool_title(message, "🌐", input.url)
+
+    def title_ArtifactInput(
+        self, input: ArtifactInput, message: TemplateMessage
+    ) -> str:
+        """Title → '🖼️ Artifact <file_path>' (same full-path recipe as
+        Read/Write — the deployed page is identified by its source file)."""
+        return self._tool_title(message, "🖼️", input.file_path)
+
+    def title_MonitorInput(self, input: MonitorInput, message: TemplateMessage) -> str:
+        """Title → '🔭 Monitor <description>'."""
+        return self._tool_title(message, "🔭", input.description)
+
+    def title_ScheduleWakeupInput(
+        self, input: ScheduleWakeupInput, message: TemplateMessage
+    ) -> str:
+        """Title → '⏰ ScheduleWakeup +<delay>s — <reason>'."""
+        summary = f"+{input.delaySeconds}s — {input.reason}"
+        return self._tool_title(message, "⏰", summary)
+
+    def title_CronCreateInput(
+        self, input: CronCreateInput, message: TemplateMessage
+    ) -> str:
+        """Title → '⏰ CronCreate <cron>'."""
+        return self._tool_title(message, "⏰", input.cron)
+
+    def title_CronListInput(
+        self, _input: CronListInput, message: TemplateMessage
+    ) -> str:
+        """Title → '⏰ CronList'.
+
+        Drop the summary entirely — ``_tool_title`` already emits the
+        message's tool name (``CronList``) ahead of any summary span,
+        so passing the tool name as the summary too would render it
+        twice (caught by monk on #148 review). The other three tools
+        in the family pass distinct summaries (delay, cron expression,
+        id), so they don't trigger the duplication.
+        """
+        return self._tool_title(message, "⏰")
+
+    def title_CronDeleteInput(
+        self, input: CronDeleteInput, message: TemplateMessage
+    ) -> str:
+        """Title → '⏰ CronDelete <id>'."""
+        return self._tool_title(message, "⏰", input.id)
+
+    def title_SkillInput(self, input: SkillInput, message: TemplateMessage) -> str:
+        """Title → '💡 Skill <skill_name>'."""
+        return self._tool_title(message, "💡", input.skill)
+
+    def _task_title(
+        self,
+        message: TemplateMessage,
+        action: str,
+        subject: str,
+        task_id: str,
+        linked_creating_call_index: Optional[int] = None,
+    ) -> str:
+        """Compose the compact ``Task #N <subject> [action]`` tool title.
+
+        Used by both TaskCreate (action="created") and TaskUpdate
+        (action="updated"). ``task_id`` is empty when unknown
+        (TaskCreate before its tool_result has been observed); the ``#N``
+        segment is then dropped. ``subject`` is escaped here, so callers
+        pass the raw value. The leading emoji comes from the template.
+
+        ``linked_creating_call_index`` is the message_index of the
+        originating ``TaskCreate`` call, set by
+        ``_link_task_id_consumers`` for ``TaskUpdate`` titles. When
+        present, the ``#N`` segment wraps in an anchor pointing back
+        to the create card (#154).
+        """
+        del message  # Reserved for future per-message hints.
+        parts: list[str] = ["Task"]
+        if task_id:
+            id_html = f"<code>#{escape_html(task_id)}</code>"
+            if linked_creating_call_index is not None:
+                anchor = f"msg-d-{linked_creating_call_index}"
+                id_html = f"<a class='task-id-backlink' href='#{anchor}'>{id_html}</a>"
+            parts.append(id_html)
+        if subject:
+            parts.append(f"<span class='tool-summary'>{escape_html(subject)}</span>")
+        parts.append(f"<span class='task-action'>[{action}]</span>")
+        return " ".join(parts)
+
+    def title_TaskCreateInput(
+        self, input: TaskCreateInput, message: TemplateMessage
+    ) -> str:
+        """Title → 'Task #N <subject> [created]'.
+
+        ``#N`` resolves via the per-session ``tool_use_id → task_id`` map
+        populated from the matching TaskCreate tool_result; absent when
+        the result hasn't been loaded.
+        """
+        content = cast(ToolUseMessage, message.content)
+        sid = message.meta.session_id if message.meta else ""
+        task_id = self._task_id_by_tool_use.get(sid, {}).get(content.tool_use_id, "")
+        return self._task_title(message, "created", input.subject or "", task_id)
+
+    def title_TaskUpdateInput(
+        self, input: TaskUpdateInput, message: TemplateMessage
+    ) -> str:
+        """Title → 'Task #N <subject> [updated]'.
+
+        Subject resolves via the per-session ``task_id → subject`` map
+        populated from earlier TaskCreate tool_results (or TaskList
+        snapshots). Empty when not found — the title degrades to the
+        bare ``#N``.
+
+        ``#N`` wraps in a backlink anchor pointing at the originating
+        ``TaskCreate`` card when ``_link_task_id_consumers`` matched
+        the ``taskId`` to a create call earlier in the transcript
+        (#154).
+        """
+        sid = message.meta.session_id if message.meta else ""
+        subject = self._task_subjects_by_session.get(sid, {}).get(input.taskId, "")
+        return self._task_title(
+            message,
+            "updated",
+            subject,
+            input.taskId,
+            linked_creating_call_index=input.creating_call_message_index,
+        )
+
+    def title_SendMessageInput(
+        self, input: SendMessageInput, message: TemplateMessage
+    ) -> str:
+        """Title → '✉️ SendMessage to <recipient_badge>'.
+
+        The leading ✉️ replaces the default 🛠️ tool emoji (the template
+        suppresses the default when the title already starts with one).
+        Inlining the recipient frees the body to render the message
+        content directly as markdown.
+        """
+        # Re-use the formatter module's badge helper. The underscore is
+        # legacy intra-module convention; surfacing the title here is
+        # the only cross-module call.
+        from .teammate_formatter import _teammate_badge  # pyright: ignore[reportPrivateUsage]
+
+        if input.recipient:
+            color = self._colors_for(message).get(input.recipient)
+            badge = _teammate_badge(input.recipient, color)
+            return f"✉️ SendMessage <span class='tool-summary'>to {badge}</span>"
+        return "✉️ SendMessage"
+
+    def title_TaskOutputInput(self, input: TaskOutputInput, _: TemplateMessage) -> str:
+        """Title → '🔍 TaskOutput #<task_id>' for the async-agent polling tool.
+
+        ``🔍`` reads as "look up / inspect" — distinct from the
+        spawning ``🔧 Task`` so the visual scan separates spawn from
+        poll. The leading emoji also short-circuits the template's
+        default ``🛠️`` prepend.
+
+        ``#<task_id>`` wraps in a backlink anchor pointing at the
+        originating spawn (a ``Bash`` with ``run_in_background`` for
+        ``local_bash`` taskType, or a ``Task`` async-agent launch for
+        ``local_agent`` taskType) when ``_link_task_id_consumers``
+        matched the id (#154).
+        """
+        if not input.task_id:
+            return "🔍 TaskOutput"
+        id_html = f"<code>#{escape_html(input.task_id)}</code>"
+        if input.creating_call_message_index is not None:
+            anchor = f"msg-d-{input.creating_call_message_index}"
+            id_html = f"<a class='task-id-backlink' href='#{anchor}'>{id_html}</a>"
+        return f"🔍 TaskOutput {id_html}"
+
+    def title_TaskStopInput(self, input: TaskStopInput, _: TemplateMessage) -> str:
+        """Title → '🛑 TaskStop #<task_id>' for the background-task
+        termination tool (PR #158 follow-up — was rendered as a generic
+        tool block before).
+
+        ``🛑`` reads as "halt", visually distinct from the ``🔍``
+        TaskOutput poll. The same backlink machinery as
+        ``TaskOutputInput`` applies: ``#<task_id>`` wraps in an anchor
+        pointing back at the originating spawn when
+        ``_link_task_id_consumers`` matched the id.
+        """
+        if not input.task_id:
+            return "🛑 TaskStop"
+        id_html = f"<code>#{escape_html(input.task_id)}</code>"
+        if input.creating_call_message_index is not None:
+            anchor = f"msg-d-{input.creating_call_message_index}"
+            id_html = f"<a class='task-id-backlink' href='#{anchor}'>{id_html}</a>"
+        return f"🛑 TaskStop {id_html}"
+
+    def title_TaskNotificationMessage(
+        self, content: TaskNotificationMessage, _: TemplateMessage
+    ) -> str:
+        """Title → '🔄 Async result • <summary>' for an async-agent
+        completion notification (issue #90). The summary is the most
+        useful at-a-glance hint; the rest of the metadata renders in
+        the body card.
+
+        Empty at ``RenderingDepth.AGENT`` for duplicate-flagged
+        notifications — pairs with ``format_TaskNotificationMessage``
+        to "ghost" the card while keeping the message in
+        ``ctx.messages``.
+        """
+        if self.depth == RenderingDepth.AGENT and content.result_is_duplicate:
+            return ""
+        if content.summary:
+            return (
+                "🔄 Async result "
+                f"<span class='tool-summary'>{escape_html(content.summary)}</span>"
+            )
+        if content.task_id:
+            return f"🔄 Async result <code>#{escape_html(content.task_id)}</code>"
+        return "🔄 Async result"
+
+    def _annotate_tree_for_render(
+        self, roots: list[TemplateMessage]
+    ) -> list[TemplateMessage]:
+        """Format every message in the tree, annotating it in place.
+
+        Walks the tree depth-first (pre-order), computing each message's
+        title + HTML + timestamp and storing them on the message
+        (``rendered_title`` / ``rendered_html`` / ``rendered_timestamp``)
+        so the recursive template macro can render the tree directly as
+        nested DOM. Returns the root messages unchanged (the tree is
+        rendered by recursing over ``message.children``).
+
+        Previously this flattened the tree into a list of tuples for a
+        flat template loop with ``d-N`` ancestry CSS classes; the nested
+        DOM removes that flattening (see work/rendering-next.md §1).
+
+        Also tracks and reports timing statistics for Markdown and Pygments
+        operations when DEBUG_TIMING is enabled.
+
+        Args:
+            roots: Root messages (typically session headers) with children populated
+
+        Returns:
+            The same root messages, each subtree annotated for rendering.
+        """
+        # Initialize timing tracking for expensive operations
+        markdown_timings: list[Tuple[float, str]] = []
+        pygments_timings: list[Tuple[float, str]] = []
+        set_timing_var("_markdown_timings", markdown_timings)
+        set_timing_var("_pygments_timings", pygments_timings)
+
+        # Build index_map so we can clear stranded `pair_first` flags
+        # when their partner tool_result gets skipped (see suppression
+        # logic in visit()).
+        index_map: dict[int, TemplateMessage] = {}
+
+        def index_tree(msg: TemplateMessage) -> None:
+            if msg.message_index is not None:
+                index_map[msg.message_index] = msg
+            for child in msg.children:
+                index_tree(child)
+
+        for root in roots:
+            index_tree(root)
+
+        def visit(msg: TemplateMessage) -> None:
+            # Update current message ID for timing tracking
+            set_timing_var("_current_msg_id", msg.message_id)
+            title = self.title_content(msg)
+            html = self.format_content(msg)
+            formatted_ts = format_timestamp(msg.meta.timestamp if msg.meta else None)
+            msg.rendered_title = title
+            msg.rendered_html = html
+            msg.rendered_timestamp = formatted_ts
+            # Skip messages with nothing to show — e.g. TaskCreate /
+            # TaskUpdate tool_results whose output formatter returns "".
+            # Without this they render as a bare timestamp-only card.
+            # A skipped node is always a leaf (the condition includes
+            # ``msg.children``), so the macro simply emits no card for it
+            # and there are no orphaned descendants to reparent.
+            msg.should_render = bool(title or html or msg.children)
+            if not msg.should_render:
+                # Skipped message: if it's the second half of a pair
+                # (msg.pair_first → first message's index), clear the
+                # first half's `pair_last` so it loses its `pair_first`
+                # CSS class. Otherwise the surviving tool_use renders
+                # with a flat bottom border and no margin, expecting a
+                # companion that never arrives.
+                if msg.pair_first is not None:
+                    partner = index_map.get(msg.pair_first)
+                    if partner is not None:
+                        partner.pair_last = None
+                        partner.pair_duration = None
+            for child in msg.children:
+                visit(child)
+
+        for root in roots:
+            visit(root)
+
+        # Report timing statistics for Markdown/Pygments operations
+        if DEBUG_TIMING:
+            report_timing_statistics(
+                [
+                    ("Markdown", markdown_timings),
+                    ("Pygments", pygments_timings),
+                ]
+            )
+
+        return roots
+
+    def generate(
+        self,
+        messages: list[TranscriptEntry],
+        title: Optional[str] = None,
+        combined_transcript_link: Optional[str] = None,
+        output_dir: Optional[Path] = None,
+        session_tree: Optional["SessionTree"] = None,
+        page_info: Optional[dict[str, Any]] = None,
+        page_stats: Optional[dict[str, Any]] = None,
+    ) -> str:
+        """Generate HTML from transcript messages.
+
+        Args:
+            messages: List of transcript entries to render.
+            title: Optional title for the output.
+            combined_transcript_link: Optional link to combined transcript.
+            output_dir: Optional output directory for referenced images.
+            page_info: Optional pagination info (page_number, prev_link, next_link).
+            page_stats: Optional page statistics (message_count, date_range, token_summary).
+            session_tree: Optional pre-built SessionTree (avoids rebuilding DAG).
+        """
+
+        from ..git_remote import canonical_cwd_from_messages, render_with_repo_context
+
+        # Bind the per-render canonical repo cwd for the SHA-link
+        # plugin (issue #156). The mistune renderers themselves are
+        # cached singletons; the resolver reads the cwd from a
+        # ContextVar so different transcripts can scope to different
+        # repos without cache invalidation.
+        repo_cwd = canonical_cwd_from_messages(messages)
+        with render_with_repo_context(repo_cwd):
+            return self._generate_inner(
+                messages,
+                title=title,
+                combined_transcript_link=combined_transcript_link,
+                output_dir=output_dir,
+                session_tree=session_tree,
+                page_info=page_info,
+                page_stats=page_stats,
+            )
+
+    def _generate_inner(
+        self,
+        messages: list[TranscriptEntry],
+        title: Optional[str] = None,
+        combined_transcript_link: Optional[str] = None,
+        output_dir: Optional[Path] = None,
+        session_tree: Optional["SessionTree"] = None,
+        page_info: Optional[dict[str, Any]] = None,
+        page_stats: Optional[dict[str, Any]] = None,
+    ) -> str:
+        """Body of ``generate`` running inside the SHA-resolver context."""
+        import time
+
+        t_start = time.time()
+
+        # Set output directory for image export (used in "referenced" mode)
+        self._output_dir = output_dir
+        self._image_counter = 0
+
+        if not title:
+            title = "Claude Transcript"
+
+        # Get root messages (tree) and session navigation from format-neutral renderer
+        root_messages, session_nav, ctx = generate_template_messages(
+            messages,
+            session_tree=session_tree,
+            depth=self.depth,
+            no_recaps=self.no_recaps,
+        )
+        # Snapshot the teammate-color map onto the renderer so per-message
+        # format methods can consult it without threading ctx through every
+        # dispatch. Reset for subsequent renders on the same instance.
+        self._teammate_colors_by_session = {
+            sid: dict(colors) for sid, colors in ctx.teammate_colors.items()
+        }
+        self._task_subjects_by_session = {
+            sid: dict(subjects) for sid, subjects in ctx.task_subjects.items()
+        }
+        self._task_id_by_tool_use = {
+            sid: dict(ids) for sid, ids in ctx.task_id_for_tool_use.items()
+        }
+        # Snapshot the context so format methods can resolve pair partners.
+        self._ctx = ctx
+        # Collapse answered AskUserQuestion pairs into a single result card (#180).
+        self._collapse_askuserquestion_pairs(ctx)
+
+        # Format every message (pre-order), annotating the tree in place
+        # so the template can recurse over it as nested DOM.
+        with log_timing("Content formatting (pre-order)", t_start):
+            render_roots = self._annotate_tree_for_render(root_messages)
+
+        # Render template
+        with log_timing("Template environment setup", t_start):
+            env = get_template_environment()
+            template = env.get_template("transcript.html")
+
+        with log_timing(
+            lambda: f"Template rendering ({len(html_output)} chars)", t_start
+        ):
+            html_output = str(
+                template.render(
+                    title=title,
+                    roots=render_roots,
+                    sessions=session_nav,
+                    combined_transcript_link=combined_transcript_link,
+                    library_version=get_library_version(),
+                    css_class_from_message=css_class_from_message,
+                    get_message_emoji=get_message_emoji,
+                    is_session_header=is_session_header,
+                    page_info=page_info,
+                    page_stats=page_stats,
+                )
+            )
+
+        return html_output
+
+    def generate_session(
+        self,
+        messages: list[TranscriptEntry],
+        session_id: str,
+        title: Optional[str] = None,
+        cache_manager: Optional["CacheManager"] = None,
+        output_dir: Optional[Path] = None,
+        session_tree: Optional["SessionTree"] = None,
+        suppress_combined_link: bool = False,
+    ) -> str:
+        """Generate HTML for a single session."""
+        # Filter messages for this session (SummaryTranscriptEntry.sessionId is always None).
+        # Also accept entries whose sessionId was rewritten to
+        # ``{session_id}#agent-{agent_id}`` by ``_integrate_agent_entries``;
+        # otherwise per-session exports drop the inlined subagent
+        # conversation (CodeRabbit on PR #125).
+        agent_prefix = f"{session_id}#agent-"
+        session_messages = [
+            msg
+            for msg in messages
+            if msg.sessionId == session_id
+            or (msg.sessionId or "").startswith(agent_prefix)
+        ]
+
+        # Get combined transcript link if cache manager is available.
+        # The back-link must point at the combined file of the *same*
+        # variant this session is being rendered at — mixing variants
+        # would land the user on a different depth/compact rendering.
+        # Suppressed under `--combined no` where the combined file is
+        # never written.
+        combined_link = None
+        if cache_manager is not None and not suppress_combined_link:
+            try:
+                project_cache = cache_manager.get_cached_project_data()
+                if project_cache and project_cache.sessions:
+                    from ..utils import variant_suffix as _variant_suffix
+
+                    suffix = _variant_suffix(
+                        self.depth, self.compact, "html", no_recaps=self.no_recaps
+                    )
+                    combined_link = f"combined_transcripts{suffix}.html"
+            except Exception:
+                pass
+
+        return self.generate(
+            session_messages,
+            title or f"Session {session_id[:8]}",
+            combined_transcript_link=combined_link,
+            output_dir=output_dir,
+            session_tree=session_tree,
+        )
+
+    def generate_projects_index(
+        self,
+        project_summaries: list[dict[str, Any]],
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        expand_paths_tree: bool = False,
+        provider_label: Optional[str] = None,
+    ) -> str:
+        """Generate an HTML projects index page.
+
+        Args:
+            project_summaries: Per-project summary dicts.
+            from_date / to_date: Date-filter labels for the title.
+            expand_paths_tree: When True (Obsidian mode — `--expand-paths`),
+                render the project list as a nested folder hierarchy that
+                mirrors the projected directory tree, instead of a flat
+                grid of cards.
+            provider_label: Provider name for the title (None → Claude).
+        """
+        title = title_for_projects_index(
+            project_summaries, from_date, to_date, provider_label
+        )
+        template_projects, template_summary = prepare_projects_index(project_summaries)
+
+        project_tree: Optional[dict[str, Any]] = None
+        if expand_paths_tree:
+            project_tree = _build_html_project_tree(template_projects)
+
+        env = get_template_environment()
+        template = env.get_template("index.html")
+        return str(
+            template.render(
+                title=title,
+                projects=template_projects,
+                project_tree=project_tree,
+                summary=template_summary,
+                library_version=get_library_version(),
+            )
+        )
+
+    def is_outdated(self, file_path: Path) -> bool:
+        """Check if an HTML file is outdated based on version.
+
+        Returns:
+            True if the file should be regenerated (missing version,
+            different version, or file doesn't exist).
+            False if the file is current.
+        """
+        html_version = check_html_version(file_path)
+        current_version = get_library_version()
+        # If no version found or different version, it's outdated
+        return html_version != current_version
+
+
+# -- Convenience Functions ----------------------------------------------------
+
+
+def generate_html(
+    messages: list[TranscriptEntry],
+    title: Optional[str] = None,
+    combined_transcript_link: Optional[str] = None,
+    page_info: Optional[dict[str, Any]] = None,
+    page_stats: Optional[dict[str, Any]] = None,
+    session_tree: Optional["SessionTree"] = None,
+) -> str:
+    """Generate HTML from transcript messages using Jinja2 templates.
+
+    This is a convenience function that delegates to HtmlRenderer.generate.
+
+    Args:
+        messages: List of transcript entries to render.
+        title: Optional title for the output.
+        combined_transcript_link: Optional link to combined transcript.
+        page_info: Optional pagination info (page_number, prev_link, next_link).
+        page_stats: Optional page statistics (message_count, date_range, token_summary).
+        session_tree: Optional pre-built SessionTree (avoids rebuilding DAG).
+    """
+    return HtmlRenderer().generate(
+        messages,
+        title,
+        combined_transcript_link,
+        page_info=page_info,
+        page_stats=page_stats,
+        session_tree=session_tree,
+    )
+
+
+def generate_session_html(
+    messages: list[TranscriptEntry],
+    session_id: str,
+    title: Optional[str] = None,
+    cache_manager: Optional["CacheManager"] = None,
+) -> str:
+    """Generate HTML for a single session using Jinja2 templates."""
+    return HtmlRenderer().generate_session(messages, session_id, title, cache_manager)
+
+
+def generate_projects_index_html(
+    project_summaries: list[dict[str, Any]],
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+) -> str:
+    """Generate an index HTML page listing all projects using Jinja2 templates.
+
+    This is a convenience function that delegates to HtmlRenderer.generate_projects_index.
+    """
+    return HtmlRenderer().generate_projects_index(project_summaries, from_date, to_date)

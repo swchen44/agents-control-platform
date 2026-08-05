@@ -1,0 +1,1834 @@
+/* Message and content styles */
+
+/* Structural wrapper around a message card and its nested .children
+   (dissociated nested DOM, issue #174). Carries NO box styling: the card's
+   border/background/shadow/margins live on .message and must frame only the
+   card, not the subtree. The wrapper is a plain full-width block so the
+   per-type horizontal margins on .message resolve against the full content
+   width (absolute type-based positioning), not a parent card's inset. */
+.message-node {
+    /* structural only — intentionally no visual properties */
+}
+
+.message {
+    margin-bottom: 1em;
+    padding: var(--message-padding);
+    border-radius: 8px;
+    border-left: var(--white-dimmed) 2px solid;
+    background-color: var(--highlight-light);
+    box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
+    border-top: var(--white-dimmed) 1px solid;
+    border-bottom: #00000017 1px solid;
+    border-right: #00000017 1px solid;
+    position: relative;
+}
+
+/* Message with fold bar: remove bottom padding */
+.message:has(.fold-bar) {
+    padding-bottom: 0;
+}
+
+/* Horizontal Fold Bar - integrated into message box */
+.fold-bar {
+    display: flex;
+    margin: 1em calc(-1 * var(--message-padding)) 0;
+    height: 28px;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.fold-bar-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4em;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.9em;
+    font-weight: 500;
+    padding: 0.4em 0.8em 0.4em 0.4em;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid transparent;
+    background: linear-gradient(to bottom, #f8f8f844, #f0f0f0);
+}
+
+/* Show border only when folded (content is hidden) */
+.fold-bar-section.folded {
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+}
+
+.fold-bar-section:hover {
+    background: linear-gradient(to bottom, #fff, #f5f5f5);
+    transform: translateY(1px);
+}
+
+.fold-bar-section:active {
+    transform: translateY(0);
+}
+
+/* Left section: fold one level */
+.fold-one-level {
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Full-width single button when counts are equal */
+.fold-bar-section.full-width {
+    border-right: none;
+}
+
+/* Icon styling */
+.fold-icon {
+    font-size: 1.1em;
+    line-height: 1;
+    color: var(--fold-color);
+    /* The doubled glyphs ``⏷⏷`` / ``⏵⏵`` (U+23F7 / U+23F5) sit at a
+       natural, even spacing in both Chrome and Firefox, so no kerning
+       trick is needed (the earlier ``▼▼`` / ``▶▶`` needed a -0.2em
+       letter-spacing pull-in to tame Chrome's wide default — issue
+       #73 / #153 / #247). */
+}
+
+.fold-count {
+    font-weight: 600;
+    min-width: 1.5em;
+    text-align: center;
+}
+
+.fold-label {
+    color: var(--fold-color);
+    font-size: 0.9em;
+}
+
+/* Border colors matching message types - only shown when folded */
+.fold-bar[data-border-color="user"] .fold-bar-section.folded,
+.fold-bar[data-border-color="user compacted"] .fold-bar-section.folded,
+.fold-bar[data-border-color="user sidechain"] .fold-bar-section.folded,
+.fold-bar[data-border-color="user compacted sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--user-color);
+}
+
+.fold-bar[data-border-color="user slash-command"] .fold-bar-section.folded,
+.fold-bar[data-border-color="user slash-command sidechain"] .fold-bar-section.folded,
+.fold-bar[data-border-color="user command-output"] .fold-bar-section.folded {
+    border-bottom-color: var(--user-dimmed);
+}
+
+.fold-bar[data-border-color="assistant"] .fold-bar-section.folded,
+.fold-bar[data-border-color="assistant sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--assistant-dimmed);
+}
+
+.fold-bar[data-border-color="system"] .fold-bar-section.folded {
+    border-bottom-color: var(--system-color);
+}
+
+.fold-bar[data-border-color="system-warning"] .fold-bar-section.folded {
+    border-bottom-color: var(--system-warning-color);
+}
+
+.fold-bar[data-border-color="system-error"] .fold-bar-section.folded {
+    border-bottom-color: var(--system-error-color);
+}
+
+.fold-bar[data-border-color="system-info"] .fold-bar-section.folded {
+    border-bottom-color: var(--info-dimmed);
+}
+
+.fold-bar[data-border-color="tool_use"] .fold-bar-section.folded,
+.fold-bar[data-border-color="tool_use sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--tool-use-color);
+}
+
+.fold-bar[data-border-color="tool_result"] .fold-bar-section.folded,
+.fold-bar[data-border-color="tool_result sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--success-dimmed);
+}
+
+.fold-bar[data-border-color="tool_result error"] .fold-bar-section.folded,
+.fold-bar[data-border-color="tool_result error sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--error-dimmed);
+}
+
+.fold-bar[data-border-color="thinking"] .fold-bar-section.folded,
+.fold-bar[data-border-color="thinking sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--assistant-color);
+}
+
+.fold-bar[data-border-color="image"] .fold-bar-section.folded,
+.fold-bar[data-border-color="image sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--info-dimmed);
+}
+
+.fold-bar[data-border-color="unknown"] .fold-bar-section.folded,
+.fold-bar[data-border-color="unknown sidechain"] .fold-bar-section.folded {
+    border-bottom-color: var(--neutral-dimmed);
+}
+
+.fold-bar[data-border-color="bash-input"] .fold-bar-section.folded {
+    border-bottom-color: var(--user-color);
+}
+
+.fold-bar[data-border-color="bash-output"] .fold-bar-section.folded {
+    border-bottom-color: var(--user-dimmed);
+}
+
+.fold-bar[data-border-color="session-header"] .fold-bar-section.folded {
+    border-bottom-color: var(--system-warning-color);
+}
+
+/* Sidechain (sub-assistant) fold-bar styling - dashed border when folded */
+.sidechain .fold-bar-section.folded {
+    border-bottom-style: dashed;
+}
+
+/* ========================================
+   CONVERSATION STRUCTURE - Margin Hierarchy
+   ======================================== */
+
+/* Right-aligned messages (user-initiated, right margin 0, left margin 33%) */
+.user:not(.compacted),
+.bash-input,
+.bash-output,
+.system:not(.system-info):not(.system-warning):not(.system-error):not(.system-away-summary) {
+    margin-left: 33%;
+    margin-right: 0;
+}
+
+/* System error messages (assistant-generated) */
+.system-error {
+    margin-left: 0;
+    margin-right: 8em;
+}
+
+/* Left-aligned messages (assistant-generated) with progressive indentation */
+/* Base assistant messages */
+.assistant,
+.thinking {
+    margin-left: 0;
+    margin-right: 8em;
+}
+
+/* Tool messages (nested under assistant) */
+.tool_use,
+.tool_result {
+    margin-left: 2em;
+    margin-right: 6em;
+}
+
+/* System warnings/info at tool level (e.g., hook notifications) */
+/* Away-summary recaps share the left-aligned tool-level position because
+   they're assistant-generated narrative (Claude summarising its own work),
+   not user-side input. */
+.system-warning,
+.system-info,
+.system-away-summary {
+    margin-left: 2em;
+    margin-right: 6em;
+}
+
+/* Sidechain messages (sub-assistant hierarchy) */
+/* Note: .sidechain.user (Sub-assistant prompt) is no longer produced
+   since it duplicates the Task tool input prompt */
+
+/* Sub-assistant response and thinking (nested under Task tool result) */
+.sidechain.assistant,
+.sidechain.thinking {
+    margin-left: 4em;
+    margin-right: 4em;
+}
+
+/* Sub-assistant tools (nested below sub-assistant) */
+.sidechain.tool_use,
+.sidechain.tool_result {
+    margin-left: 6em;
+    margin-right: 2em;
+}
+
+/* ======================================== */
+
+/* Message header info styling */
+.header-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.timestamp-row {
+    display: flex;
+    flex-direction: row;
+    align-items: normal;
+    gap: 8px;
+}
+
+.pair-duration {
+    font-size: 80%;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.token-usage {
+    font-size: 0.75em;
+    color: #888;
+}
+
+/* Model id surfaced on sub-agent message headers (issue #246) */
+.message-model {
+    font-size: 0.75em;
+    font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+    color: var(--text-secondary, #888);
+}
+
+/* Paired message styling */
+.message.pair_first {
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+}
+
+.message.pair_last {
+    margin-top: 0;
+    margin-bottom: 1em;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top: 1px solid #00000011;
+}
+
+.message.pair_middle {
+    margin-top: 0;
+    margin-bottom: 0;
+    border-radius: 0;
+    border-top: 1px solid #00000011;
+    border-bottom: none;
+}
+
+.session-divider {
+    margin: 70px 0;
+    border-top: 2px solid #fff;
+}
+
+/* Message type styling */
+.user {
+    border-left-color: var(--user-color);
+}
+
+/* Steering user messages (out-of-band input while agent is working) */
+.user.steering {
+    border-left-color: var(--user-dimmed);
+    opacity: 0.7;
+}
+
+/* Slash command prompts (isMeta=true, LLM-generated content) */
+.user.slash-command {
+    border-left-color: var(--user-color);
+}
+
+.assistant {
+    border-left-color: var(--assistant-color);
+}
+
+/* Dimmed assistant when paired with thinking */
+.assistant.pair_last {
+    border-left-color: var(--assistant-dimmed);
+}
+
+.system {
+    border-left-color: var(--system-color);
+}
+
+.system-warning {
+    border-left-color: var(--system-warning-color);
+    background-color: var(--highlight-semi);
+}
+
+.system-error {
+    border-left-color: var(--system-error-color);
+    background-color: var(--error-semi);
+}
+
+.system-info {
+    border-left-color: var(--info-dimmed);
+    background-color: var(--highlight-dimmed);
+}
+
+.system-info .header,
+.system-info .content {
+    font-size: 80%;
+}
+
+/* Hook summary styling */
+.system-hook {
+    border-left-color: var(--warning-dimmed);
+    background-color: var(--highlight-dimmed);
+}
+
+/* Hook attachment styling — full-detail-only payloads from
+   ``type: "attachment"`` hook callbacks (issue #128). Same compact
+   visual register as ``.system-hook`` summaries but with the assistant
+   accent so it reads as "tooling around the assistant turn" rather
+   than user/system noise. */
+.system-hook-attachment {
+    border-left-color: var(--assistant-dimmed);
+    background-color: var(--highlight-dimmed);
+}
+
+/* Hook entries (both flavours) appear in dense bursts when ClMail or
+   similar plugins fire on every turn — minimise their visual weight
+   so they don't drown out actual conversation. Slight transparency
+   reads as "secondary signal" without losing the affordance. */
+div.system-hook-attachment,
+div.system-hook {
+    font-size: 75%;
+    opacity: 65%;
+}
+
+div.system-hook-attachment .header,
+div.system-hook .header {
+    font-weight: 500;
+}
+
+.hook-attachment {
+    cursor: pointer;
+}
+
+.hook-attachment summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    flex-wrap: wrap;
+}
+
+.hook-attachment-meta {
+    color: var(--secondary-text);
+    font-size: 0.85em;
+}
+
+.hook-attachment-stream {
+    margin-top: 0.5em;
+}
+
+.hook-attachment-stream-label {
+    font-size: 0.75em;
+    color: var(--secondary-text);
+    margin-bottom: 0.2em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.hook-attachment-output,
+.hook-attachment-content {
+    margin: 0;
+    padding: 0.5em;
+    background-color: var(--code-bg);
+    border-radius: 4px;
+    font-size: 0.85em;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.hook-attachment-stderr {
+    border-left: 3px solid var(--warning-dimmed);
+    /* Existing 0.5em padding-left butts text up against the warning
+       bar; bump it by 3px so the border breathes. */
+    padding-left: calc(0.5em + 3px);
+}
+
+/* Away-summary (recap) styling — assistant-authored narrative recap of
+   recent activity. Uses the assistant accent (dimmed) on the border so
+   it reads as Claude-generated content, but with the same compact
+   info-tier sizing as other secondary system entries. */
+.system-away-summary {
+    border-left-color: var(--assistant-dimmed);
+    background-color: var(--highlight-light);
+    font-size: 90%;
+}
+
+.hook-summary {
+    cursor: pointer;
+}
+
+.hook-summary summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.hook-details {
+    margin-top: 0.5em;
+    padding: 0.5em;
+    background-color: var(--code-bg);
+    border-radius: 4px;
+}
+
+.hook-commands {
+    margin-bottom: 0.5em;
+}
+
+.hook-commands code {
+    display: block;
+    padding: 0.25em 0.5em;
+    font-size: 0.85em;
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+.hook-errors {
+    margin-top: 0.5em;
+}
+
+.hook-error {
+    margin: 0.25em 0;
+    padding: 0.5em;
+    background-color: var(--error-semi);
+    border-left: 3px solid var(--system-error-color);
+    font-size: 0.85em;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Command output styling */
+.command-output {
+    background-color: var(--highlight-light);
+    border-left-color: var(--user-color);
+}
+
+.command-output-content {
+    background-color: #1e1e1e08;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #00000011;
+    margin-top: 8px;
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    color: var(--text-primary);
+    overflow-x: auto;
+}
+
+/* Multi-line system content — ASCII visualisations from /context, /cost
+ * etc. preserve their grid alignment via white-space: pre (no wrapping)
+ * and horizontal-scroll on narrow viewports. The pre-wrap + break-word
+ * combo used for command-output is wrong here: even a single overlong
+ * line in a grid breaks the visualisation when it wraps mid-row.
+ *
+ * Selector tightened to ``.content pre.system-content`` to win over
+ * the existing ``.content pre`` rule above (specificity 0,1,1 — would
+ * otherwise force ``white-space: pre-wrap`` and undo the fix). Same
+ * pattern as the sibling ``.content pre.command-output-content``. */
+.content pre.system-content {
+    background-color: #1e1e1e08;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #00000011;
+    margin-top: 8px;
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    line-height: 1.4;
+    white-space: pre;
+    color: var(--text-primary);
+    overflow-x: auto;
+}
+
+/* CronList structured-jobs table — same panel-y feel as
+ * .system-content / .command-output-content, but as a table. The
+ * default unstyled table reads as raw rows pasted into the page;
+ * a light border + padded cells gives it the same visual weight
+ * as the other tool-output cards (#148). */
+.cronlist-output-table {
+    margin-top: 8px;
+    border: 1px solid #00000011;
+    border-radius: 4px;
+    background-color: #1e1e1e08;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    overflow: hidden;
+}
+.cronlist-output-table th,
+.cronlist-output-table td {
+    padding: 6px 12px;
+    text-align: left;
+    border-bottom: 1px solid #00000011;
+}
+.cronlist-output-table tr:last-child td {
+    border-bottom: none;
+}
+.cronlist-output-table th {
+    font-weight: 600;
+    color: var(--text-secondary, #666);
+    background-color: #00000005;
+}
+
+/* Cross-link from a CronList row's id (or a CronDelete result's id)
+ * back to the originating CronCreate card. Subtle affordance —
+ * inherits colour from the surrounding text, picks up underline +
+ * accent on hover so it stays scannable but doesn't draw attention
+ * away from the structured row content. */
+.cron-id-backlink {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted currentcolor;
+}
+.cron-id-backlink:hover {
+    color: var(--user-color);
+    border-bottom-style: solid;
+}
+
+/* Cross-link from a TaskOutput / TaskUpdate header's task_id back to
+ * the originating spawn (Bash run_in_background, async Task launch,
+ * or TaskCreate). Same visual affordance as .cron-id-backlink (#154). */
+.task-id-backlink {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted currentcolor;
+}
+.task-id-backlink:hover {
+    color: var(--user-color);
+    border-bottom-style: solid;
+}
+
+/* Forward counterpart to .task-id-backlink: a Bash run_in_background /
+ * async Task spawn title links its minted `#<id>` to the first
+ * TaskOutput poll for that id (PR #158 follow-up). Initially shares
+ * the dotted-underline affordance; kept as a distinct class so the
+ * two directions stay disambiguatable in tests and so styling can
+ * diverge later if reading distance demands it. */
+.task-id-forward-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted currentcolor;
+}
+.task-id-forward-link:hover {
+    color: var(--user-color);
+    border-bottom-style: solid;
+}
+
+/* TaskStop result card (PR #158 follow-up) — small status badge
+ * followed by the harness message in a <pre>. Success / error get
+ * different badge colors so the reader can scan at a glance. */
+.taskstop-result {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+}
+.taskstop-badge {
+    display: inline-block;
+    padding: 0.05em 0.5em;
+    font-size: 0.85em;
+    font-weight: 600;
+    border-radius: 4px;
+    align-self: flex-start;
+}
+.taskstop-badge.taskstop-ok {
+    background-color: rgba(0, 128, 0, 0.12);
+    color: #0a6f0a;
+}
+.taskstop-badge.taskstop-err {
+    background-color: rgba(204, 51, 0, 0.12);
+    color: #a13300;
+}
+.taskstop-message {
+    margin: 0;
+    padding: 0.5em;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+.command-output-content td {
+    border-left: 1px dotted #bbb;
+    padding: 0 1em;
+}
+.command-output-content th {
+    text-align: left;
+    padding: 0 1em;
+}
+
+.content pre.command-output-content {
+    padding: .5em;
+}
+
+/* Bash command styling (user-initiated, right-aligned) */
+.bash-input {
+    background-color: var(--highlight-light);
+    border-left-color: var(--user-color);
+}
+
+.bash-prompt {
+    color: var(--user-color);
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-right: 8px;
+}
+
+.bash-command {
+    font-family: var(--font-monospace);
+    font-size: 0.95em;
+    color: #2c3e50;
+    background-color: var(--bg-neutral);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Bash output styling (user-initiated, right-aligned) */
+.bash-output {
+    background-color: var(--highlight-light);
+    border-left-color: var(--user-dimmed);
+}
+
+.bash-output pre.bash-stdout,
+.bash-output pre.bash-stderr {
+    padding: 8px;
+    border-radius: 4px;
+    margin: 4px 0;
+    font-family: var(--font-monospace);
+    font-size: 80%;
+    line-height: 1.3;
+    white-space: pre;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 300px;
+}
+
+.bash-output pre.bash-stdout {
+    background-color: #1e1e1e05;
+    border: 1px solid #00000011;
+    color: var(--text-primary);
+}
+
+.bash-output pre.bash-stderr {
+    background-color: #ffebee;
+    border: 1px solid #ffcdd2;
+    color: #c62828;
+}
+
+.bash-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Bash tool content styling (Tool Use message) */
+.bash-tool-content {
+    margin: 8px 0;
+}
+
+.bash-tool-description {
+    color: var(--text-muted);
+    font-size: 0.95em;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.content pre.bash-tool-command {
+    background-color: var(--code-bg-color);
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--tool-param-sep-color);
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    color: #2c3e50;
+    margin: 0;
+    overflow-x: auto;
+}
+
+.tool_use {
+    border-left-color: var(--tool-use-color);
+}
+
+.tool_result {
+    border-left-color: var(--success-dimmed);
+}
+
+.tool_result.error {
+    border-left-color: var(--error-dimmed);
+    background-color: var(--error-semi);
+}
+
+.message.tool_use pre, .message.tool_result pre {
+    font-size: 80%;
+}
+
+/* Sidechain message styling */
+.sidechain {
+    opacity: 0.85;
+    background-color: var(--neutral-semi);
+    border-left-width: 2px;
+    border-left-style: dashed;
+}
+
+.sidechain .sidechain-indicator {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    margin-bottom: 5px;
+    padding: 2px 6px;
+    background-color: #e9ecef88;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.thinking {
+    border-left-color: var(--assistant-color);
+}
+
+.image {
+    border-left-color: #d48a5e;
+    margin-left: 0; /* Align with user messages */
+}
+
+/* Session header styling */
+.session-header {
+    background-color: var(--session-bg-dimmed);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 30px 0 20px 0;
+    box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
+    border-left: var(--white-dimmed) 1px solid;
+    border-top: var(--white-dimmed) 1px solid;
+    border-bottom: #00000017 1px solid;
+    border-right: #00000017 1px solid;
+}
+
+.session-header .header {
+    margin-bottom: 8px;
+    font-size: 1.2em;
+}
+
+/* Branch headers (within-session forks) — indent set via inline
+   style based on tree depth (margin-left: depth*2em). */
+.branch-header {
+    background-color: transparent;
+    box-shadow: none;
+    border: none;
+    border-left: 3px solid var(--branch-point-color);
+    /* Dashed top border as a connector (mirrors .fork-point), and no bottom
+       margin so the header sticks to its own branch content below. The bottom
+       corners are squared (mirroring .fork-point's squared top) so the left
+       rail flows cleanly into the branch content rather than rounding off. */
+    border-top: 1px dashed var(--branch-point-color);
+    border-radius: 8px 8px 0 0;
+    padding: 8px 14px;
+    margin: 2em 0 0 0;
+}
+
+.branch-header .header {
+    font-size: 1em;
+    margin-bottom: 0;
+}
+
+/* The header's own fold-bar sits at the bottom of the card; square its
+   bottom corners too so the squared branch-header bottom isn't undone by the
+   fold-bar's own rounded corners. Direct child only — never a fold-bar of a
+   message nested inside the branch content. */
+.branch-header > .fold-bar {
+    border-radius: 0;
+}
+
+.branch-header .fold-bar[data-border-color="session-header"] .fold-bar-section.folded {
+    border-bottom-color: var(--branch-point-color);
+}
+
+.session-subtitle {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* IDE notification styling */
+.ide-notification {
+    background-color: var(--ide-notification-dimmed);
+    border-left: var(--assistant-color) 2px solid;
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 4px;
+    font-size: 80%;
+    font-style: italic;
+}
+
+/* IDE selection styling */
+.ide-selection-collapsible {
+    margin-top: 4px;
+}
+
+.ide-selection-collapsible summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.ide-selection-collapsible summary:hover {
+    color: var(--text-primary);
+}
+
+.ide-selection-content {
+    margin-top: 8px;
+    padding: 8px;
+    background-color: var(--bg-neutral);
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+
+/* Content styling */
+.content {
+    overflow-wrap: break-word;
+}
+
+.content>pre {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+}
+
+.header:has(+ .content > details.collapsible-details) {
+    margin-left: 1em;
+}
+
+/* Assistant and Thinking content styling */
+.assistant .content,
+.thinking-text,
+.user.compacted .content,
+.markdown {
+    font-family: var(--font-ui);
+}
+
+.markdown table {
+    border-collapse: collapse;
+}
+
+.markdown td {
+    padding: .5em;
+    border-top: 1px solid #bbb;
+}
+
+.markdown th {
+    padding: .5em;
+    border-bottom: 1px solid #888;
+}
+
+/* Code block styling */
+pre > code {
+    display: block;
+}
+
+/* Tool content styling */
+.tool-content {
+    background-color: var(--neutral-dimmed);
+    border-radius: 4px;
+    padding: 8px;
+    margin: 8px 0;
+    overflow-x: auto;
+    box-shadow: -4px -4px 10px #eeeeee33, 4px 4px 10px #00000007;
+    border-left: var(--white-dimmed) 1px solid;
+    border-top: var(--white-dimmed) 1px solid;
+    border-bottom: #00000017 1px solid;
+    border-right: #00000017 1px solid;
+}
+
+/* Tool parameter table styling. The percentage font-size compounds at
+   each nesting level of the recursive params renderer — a deliberate
+   depth cue — so keep the factor gentle (90%, not 80%) or deep tables
+   become unreadable. */
+.tool-params-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 90%;
+}
+
+/* Skill-tool body folded into the Skill tool_use block (issue #93).
+   The expanded skill markdown renders below the title; the green left
+   border on the outer .tool_use already frames the block, so the body
+   needs no separate accent — just gentle padding to keep it from
+   touching the title row. */
+.skill-body {
+    margin-top: 8px;
+    padding: 4px 0;
+    font-size: 90%;
+}
+
+.tool-params-table tr {
+    border-bottom: 1px solid var(--tool-param-sep-color);
+}
+
+.tool-param-key {
+    padding: 4px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    vertical-align: top;
+    width: 8em;
+}
+
+.tool-param-value {
+    padding: 4px;
+    color: #212529;
+    vertical-align: top;
+}
+
+/* Opaque Codex executions can emit several independent values. Keep their
+   ordinal labels in a stable column and neutralise the generic collapsible's
+   card-level pull-up inside result cells. */
+.tool-execution-results {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5em;
+}
+
+.tool-execution-results tr {
+    border-bottom: 1px solid var(--tool-param-sep-color);
+}
+
+.tool-execution-result-label {
+    width: 8em;
+    padding: 4px;
+    color: var(--text-secondary);
+    text-align: left;
+    vertical-align: top;
+}
+
+.tool-execution-result-value {
+    padding: 4px;
+    vertical-align: top;
+}
+
+.tool-execution-result-value .collapsible-details {
+    margin-top: 0;
+}
+
+.tool-param-structured {
+    margin: 0;
+    background-color: var(--bg-neutral);
+    padding: 4px;
+    border-radius: 3px;
+}
+
+/* Nested tables produced by the recursive params renderer retain the
+   same readable key-column width at every depth. */
+.tool-params-nested .tool-param-key {
+    width: 8em;
+    min-width: 4em;
+}
+
+/* Markdown-rendered string values: suppress the outer paragraph
+   margins so a prose value aligns with plain-text cells. */
+.tool-param-value .tool-param-markdown > p:first-child {
+    margin-top: 0;
+}
+
+.tool-param-value .tool-param-markdown > p:last-child {
+    margin-bottom: 0;
+}
+
+.tool-param-collapsible {
+    margin: 0;
+}
+
+.tool-param-collapsible summary {
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.tool-param-collapsible summary:hover {
+    color: var(--text-primary);
+}
+
+/* When open, hide the truncated preview text but keep the arrow visible
+   with a "collapse" hint so the user can close the expanded value again. */
+.tool-param-collapsible[open] > summary > .tool-param-preview {
+    display: none;
+}
+
+.tool-param-collapsible[open] > summary::after {
+    content: "collapse";
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.tool-param-full {
+    margin-top: 4px;
+    word-break: break-all;
+}
+
+/* The rows-toggle lives in a controls strip AFTER the summary — never
+   inside it (an interactive element within <summary> is an accessibility
+   violation: not consistently reachable by keyboard/AT). The strip is
+   details content, so it's natively hidden while the fold is closed. */
+.tool-param-fold-controls {
+    margin: 2px 0;
+}
+
+.tool-param-rows-toggle {
+    padding: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    color: var(--text-muted);
+    font-style: italic;
+    cursor: pointer;
+}
+
+.tool-param-rows-toggle:hover {
+    color: var(--text-primary);
+}
+
+/* Fold-valued rows hoist their toggle into the KEY column: the key cell's
+   ⏵/⏷ button (wired in transcript.html, state derived from toggle events)
+   replaces the per-fold in-summary collapse chrome, which only remained
+   useful en masse — every row showing "⏷ collapse" drowned the content.
+   Scoped to keyed rows: the top-level root fold has no key column and
+   keeps its summary affordances (the pure-CSS ::after "collapse" hint —
+   no interactive child). */
+.tool-param-key-toggle {
+    /* The whole key (glyph + text) is the click target — inherit the key
+       cell's look so fold keys read exactly like scalar keys. */
+    padding: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.tool-param-key-toggle:hover {
+    color: var(--text-primary);
+}
+
+/* The shared fold glyph: the BROWSER'S native disclosure marker (the same
+   UA-drawn icon a <summary> shows) via display:list-item — geometrically
+   symmetric open/closed, and immune to the italic style of the button
+   labels (font glyphs like ⏵/⏷ skew in italics; the marker icon doesn't).
+   The empty span doubles as the key-column alignment slot: every key cell
+   renders one (markerless on scalar rows), so all key texts start at the
+   same x. */
+.tool-param-fold-glyph {
+    display: inline-block;
+    width: 1.3em;
+    color: var(--text-muted);
+    font-style: normal;
+}
+
+/* Marker only inside the toggle buttons — the scalar-row spacer stays
+   empty. list-style-type string values are the fallback where the
+   disclosure-* keywords are unsupported. */
+button > .tool-param-fold-glyph {
+    display: list-item;
+    list-style-position: inside;
+    list-style-type: "\23F5";
+    list-style-type: disclosure-closed;
+}
+
+.tool-param-key-toggle[aria-expanded='true'] > .tool-param-fold-glyph,
+[data-state='expanded'] > .tool-param-fold-glyph {
+    list-style-type: "\23F7";
+    list-style-type: disclosure-open;
+}
+
+/* display:list-item is block-level — lay the buttons out as inline-flex so
+   the marker slot and the label sit on one line. */
+.tool-param-key-toggle,
+.tool-params-expand-all,
+.tool-param-rows-toggle {
+    display: inline-flex;
+    align-items: baseline;
+}
+
+/* The key glyph is THE marker for these rows — drop the duplicate native
+   one from the value summary (preview text stays clickable). */
+.tool-param-row-fold > .tool-param-value > details > summary {
+    list-style: none;
+}
+
+.tool-param-row-fold > .tool-param-value > details > summary::-webkit-details-marker {
+    display: none;
+}
+
+/* A keyed fold's open summary carries nothing (the key glyph shows ⏷ and
+   the rows-toggle sits in the controls strip below) — drop the line it
+   would occupy. This also suppresses the generic ::after "collapse". */
+.tool-param-row-fold > .tool-param-value > details[open] > summary {
+    display: none;
+}
+
+/* Top-level expand/collapse-all control above a params/result table —
+   same quiet look as the in-summary rows-toggle. */
+.tool-params-controls {
+    margin-bottom: 2px;
+}
+
+.tool-params-expand-all {
+    padding: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 80%;
+    color: var(--text-muted);
+    font-style: italic;
+    cursor: pointer;
+}
+
+.tool-params-expand-all:hover {
+    color: var(--text-primary);
+}
+
+.tool-params-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.tool-result {
+    background-color: var(--tool-result-dimmed);
+    border-left: #4caf5088 1px solid;
+}
+
+.tool-use {
+    background-color: var(--highlight-dimmed);
+    border-left: #2196f388 1px solid;
+}
+
+.thinking-content {
+    font-style: italic;
+    font-size: 80%;
+}
+
+.thinking-content em {
+    font-style: normal;
+}
+
+.thinking-text {
+    font-family: var(--font-ui);
+    font-size: 90%;
+    overflow-wrap: break-word;
+    color: #555;
+}
+
+.tool-input {
+    background-color: var(--tool-input-dimmed);
+    border-radius: 4px;
+    padding: 6px;
+    margin: 4px 0;
+    font-size: 0.9em;
+    box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
+    border-left: var(--white-dimmed) 1px solid;
+    border-top: var(--white-dimmed) 1px solid;
+    border-bottom: #00000017 1px solid;
+    border-right: #00000017 1px solid;
+}
+
+/* Session summary styling */
+.session-summary {
+    background-color: var(--white-dimmed);
+    border-left: #4caf5088 4px solid;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 0 4px 4px 0;
+    font-style: italic;
+    box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
+    border-top: var(--white-dimmed) 1px solid;
+    border-bottom: #00000017 1px solid;
+    border-right: #00000017 1px solid;
+}
+
+/* Collapsible details styling */
+details summary {
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.collapsible-details {
+    margin-top: -2em;
+}
+
+.collapsible-details summary {
+    position: relative;
+    cursor: pointer;
+}
+
+/* Collapsible code blocks (Read/Edit/Write tools) */
+.tool_result .collapsible-code {
+    margin-top: -2.5em;
+}
+
+/* The negative margin above deliberately tucks the *first* collapsible up
+   under the tool's header bar. But when a collapsible instead FOLLOWS
+   sibling content in the card body — a WebFetch meta badge, an async-answer
+   label, or a plugin-emitted header line — that pull-up makes the
+   collapsible's first row overlap the preceding content (issue #153).
+   Whenever the collapsible's wrapper is not the first child of the card
+   body, cancel the merge and leave a little breathing room instead.
+   This generalises the earlier per-case overrides for WebFetch and the
+   async-answer label. */
+.tool_result .content > * + * .collapsible-code {
+    margin-top: 0.5em;
+}
+
+.tool_result .collapsible-code summary {
+    cursor: pointer;
+    padding-top: 0.5em;
+    background: var(--color-bg-secondary);
+    border-radius: 4px;
+}
+
+.tool_result .collapsible-code summary:hover {
+    background: var(--color-bg-tertiary);
+}
+
+/* Preview content styling - shown when closed */
+.collapsible-details:not([open]) .preview-content {
+    margin-top: 4px;
+}
+
+/* Tool use/result/bash-output preview content with gradient fade */
+.tool_use .preview-content,
+.tool_result .preview-content,
+.bash-output .preview-content {
+    opacity: 0.7;
+    mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+/* Fix list rendering in preview-content inside summary */
+/* Mistune wraps list content in <p> tags which causes line breaks */
+.preview-content li > p:first-child {
+    display: inline;
+}
+
+/* Hide preview content when details/collapsible is open */
+.collapsible-details[open] .preview-content,
+.collapsible-code[open] .preview-content {
+    display: none;
+}
+
+/* Style the full details content */
+.details-content {
+    margin-top: 4px;
+}
+
+/* Hide details content when closed */
+.collapsible-details:not([open]) .details-content {
+    display: none;
+}
+
+/* Style pre and other elements within details content */
+.content pre {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+    color: #555;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+/* Message filtering */
+.message.filtered-hidden {
+    display: none;
+}
+
+/* ANSI color classes */
+/* Standard colors */
+.ansi-black { color: #000000; }
+.ansi-red { color: #cd3131; }
+.ansi-green { color: #0dbc79; }
+.ansi-yellow { color: #e5e510; }
+.ansi-blue { color: #2472c8; }
+.ansi-magenta { color: #bc3fbc; }
+.ansi-cyan { color: #11a8cd; }
+.ansi-white { color: #e5e5e5; }
+
+/* Bright colors */
+.ansi-bright-black { color: #666666; }
+.ansi-bright-red { color: #f14c4c; }
+.ansi-bright-green { color: #23d18b; }
+.ansi-bright-yellow { color: #f5f543; }
+.ansi-bright-blue { color: #3b8eea; }
+.ansi-bright-magenta { color: #d670d6; }
+.ansi-bright-cyan { color: #29b8db; }
+.ansi-bright-white { color: #ffffff; }
+
+/* Background colors */
+.ansi-bg-black { background-color: #000000; }
+.ansi-bg-red { background-color: #cd3131; }
+.ansi-bg-green { background-color: #0dbc79; }
+.ansi-bg-yellow { background-color: #e5e510; }
+.ansi-bg-blue { background-color: #2472c8; }
+.ansi-bg-magenta { background-color: #bc3fbc; }
+.ansi-bg-cyan { background-color: #11a8cd; }
+.ansi-bg-white { background-color: #e5e5e5; }
+
+/* Debug UUID info */
+.debug-info {
+    display: none;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.7em;
+    color: #999;
+    padding: 2px 0;
+    letter-spacing: 0.02em;
+}
+
+.show-debug-info .debug-info {
+    display: block;
+}
+
+/* Bright background colors */
+.ansi-bg-bright-black { background-color: #666666; }
+.ansi-bg-bright-red { background-color: #f14c4c; }
+.ansi-bg-bright-green { background-color: #23d18b; }
+.ansi-bg-bright-yellow { background-color: #f5f543; }
+.ansi-bg-bright-blue { background-color: #3b8eea; }
+.ansi-bg-bright-magenta { background-color: #d670d6; }
+.ansi-bg-bright-cyan { background-color: #29b8db; }
+.ansi-bg-bright-white { background-color: #ffffff; }
+
+/* Text styles */
+.ansi-bold { font-weight: bold; }
+.ansi-dim { opacity: 0.7; }
+.ansi-italic { font-style: italic; }
+.ansi-underline { text-decoration: underline; }
+
+/* Image styling */
+.tool-result-image,
+.uploaded-image {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+/* WebFetch tool styling */
+.webfetch-prompt {
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-bottom: 8px;
+}
+
+.webfetch-meta {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85em;
+}
+
+.webfetch-status {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.webfetch-status-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.webfetch-status-error {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.webfetch-size,
+.webfetch-duration {
+    color: var(--text-muted);
+}
+
+/* Note: WebFetch puts a `.webfetch-meta` badge above the collapsible, so the
+   negative-margin pull-up would overlap it. That's handled generically by the
+   `.tool_result .content > * + * .collapsible-code` rule above (issue #153) —
+   no WebFetch-specific override needed. (The previous `.webfetch-result.collapsible-code`
+   rule never matched: those two classes sit on different elements — the wrapper
+   div vs. the nested `<details>`.) */
+
+/* Override centered h1 from global styles for WebFetch content */
+.webfetch-result h1 {
+    text-align: left;
+}
+
+@media (max-width: 1280px) {
+    .fold-bar {
+        height: auto;
+    }
+    .user:not(.compacted),
+    .bash-input,
+    .bash-output,
+    .system:not(.system-info):not(.system-warning):not(.system-error):not(.system-away-summary) {
+        margin-left: 10%;
+    }
+    .system-error {
+        margin-right: 8%;
+    }
+    .assistant,
+    .thinking {
+        margin-right: 8%;
+    }
+    .tool_use,
+    .tool_result {
+        margin-left: 2%;
+        margin-right: 6%;
+    }
+    .system-warning,
+    .system-info,
+    .system-away-summary {
+        margin-left: 2%;
+        margin-right: 6%;
+    }
+    .sidechain.assistant,
+    .sidechain.thinking {
+        margin-left: 4%;
+        margin-right: 4%;
+    }
+    .sidechain.tool_use,
+    .sidechain.tool_result {
+        margin-left: 6%;
+        margin-right: 2%;
+    }
+}
+
+/* Workflow tool-input (issue #174) — meta header above the highlighted JS
+   orchestrator. The script body reuses the standard Pygments code styling
+   via render_file_content_collapsible. */
+.workflow-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.workflow-name {
+    font-weight: 600;
+    color: var(--tool-use-color);
+}
+
+.workflow-description {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.workflow-phases {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.workflow-phase-pill {
+    font-size: 0.78em;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background-color: var(--highlight-dimmed);
+    border: 1px solid #00000011;
+    color: var(--text-secondary);
+}
+
+/* Non-completed terminal status chip (failed / killed / ...) — for a run
+   that launched no agents this is the only failure signal on the page. */
+.workflow-status {
+    font-size: 0.78em;
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--error-dimmed);
+    color: var(--system-error-color);
+    background-color: var(--error-semi);
+}
+
+/* The run's snapshot `error` — typically a JS stack trace, collapsed. */
+.workflow-error {
+    margin-bottom: 8px;
+}
+
+.workflow-error > summary {
+    cursor: pointer;
+    font-size: 0.85em;
+    color: var(--system-error-color);
+}
+
+.workflow-error > pre {
+    margin: 4px 0 0;
+    padding: 6px 8px;
+    background-color: var(--error-semi);
+    border-left: 3px solid var(--system-error-color);
+    overflow-x: auto;
+    font-size: 0.85em;
+}
+
+/* Invocation line — how the workflow was launched, for the non-inline
+   shapes (saved-workflow name / scriptPath reference / resumed run). */
+.workflow-invocation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-bottom: 8px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.workflow-script {
+    margin-top: 4px;
+}
+
+/* Spliced dynamic-workflow run tree (#174 PR3): phase + agent cards. */
+
+/* Depth-driven indentation with aligned, color-coded group borders.
+
+   Each workflow node's .children container gets the SAME margin-left as the
+   cards (2em), so the container's border-left lands at the exact x of its
+   parent card's border-left — the group border reads as the card's border
+   continuing down its subtree (one line per level, no parallel doubles).
+   The cards inside step right by their own 2em margin. Depth accumulates
+   through DOM nesting, so arbitrarily deep nests (e.g. a future sub-agent
+   spawning its own sub-agents) indent correctly with no new rules.
+
+   Color pairing: a phase card + its agents group line are dark green; an
+   agent card + its side-channel group line are grey. The Workflow-level
+   phases group keeps its indent but draws NO line — two levels of lines
+   (phase + agent) already distinguish a workflow from a standard
+   sub-agent's single line, and a third outer line read as noise. */
+.workflow_phase,
+.workflow_agent {
+    margin-right: 4em;
+}
+
+.workflow_phase {
+    border-left-color: var(--workflow-phase-color);
+}
+
+.workflow_agent {
+    border-left-color: var(--workflow-agent-color);
+}
+
+/* The phases group (children of the Workflow tool_result) — indent only.
+   Selected by its CONTENT (the parent card is a plain tool_result, so :has
+   on the parent would over-match). The border is deliberately suppressed
+   (0px, was tool-green): with the phase and agent lines below it, a third
+   parallel line at full depth read as noise. Restore the width if a
+   Workflow-level line ever proves useful. */
+.children:has(> .message-node > .message.workflow_phase) {
+    margin-left: 2em;
+    border-left: 0px solid var(--tool-use-color);
+}
+
+/* A sub-agent's sidechain group (Task/Agent-spawned — sync, async,
+   teammates): the agent's transcript hangs under its spawning tool card,
+   indented and framed by ONE line in tool-green — per the color-pairing
+   principle, the group line CONTINUES its parent card's border, and the
+   spawning tool card's border is tool-green. (Workflow agents use the
+   same principle with their own grey: grey workflow_agent card → grey
+   side-channel line.) The rule matches at EVERY nesting depth (#213):
+   a nested agent's group hangs under a spawn card that is itself
+   .sidechain, and each spawn boundary adds its own 2em step + line, so
+   depth accumulates through the DOM with no per-depth rules. Both
+   tool_use and tool_result parents are covered — a transcript attaches
+   to the tool_use when the spawn has no result yet (running /
+   interrupted). The :not(.workflow_agent) keeps this higher-specificity
+   rule off workflow agents' side-channel groups (their card is ALSO
+   tool_use-classed; their group line is grey, see below). This is the
+   BASE: indent 2em + tool-green; the per-depth ramp below recolours
+   rings 2-5 and the deep-indent rule below compresses the step. */
+.message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.sidechain),
+.message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.sidechain) {
+    margin-left: 2em;
+    border-left: 2px solid var(--tool-use-color);
+}
+
+/* Per-depth colour ramp (#213 visual layer): the group line takes the colour
+   of the depth it frames, cycling every 5 levels. Ring 1 = tool-green is the
+   base above (no override needed). Rings 2-5 override border-left-color only;
+   same selector shape as the base → equal specificity, so source order (these
+   come after) wins the tie while margin-left is inherited from the base. */
+.message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.agent-ring-2),
+.message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.agent-ring-2) {
+    border-left-color: var(--agent-ring-2);
+}
+
+.message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.agent-ring-3),
+.message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.agent-ring-3) {
+    border-left-color: var(--agent-ring-3);
+}
+
+.message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.agent-ring-4),
+.message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.agent-ring-4) {
+    border-left-color: var(--agent-ring-4);
+}
+
+.message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.agent-ring-5),
+.message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.agent-ring-5) {
+    border-left-color: var(--agent-ring-5);
+}
+
+/* Deep-chain indent compression (#213 visual layer): the cumulative 2em step
+   marches very deep chains off-screen (observed 79 levels in the wild). Once
+   the depth badge carries the absolute depth, levels 6+ (cards tagged
+   .agent-deep) need only a token step — depth stays legible via the badge and
+   the cycling line colour, not the indent. Steps 1-5 keep the comfortable 2em. */
+.message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.agent-deep),
+.message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.agent-deep) {
+    margin-left: 0.5em;
+}
+
+/* Depth badge on a nested spawn card's title (#213 visual layer): a small
+   pill reading e.g. "d3" for "opens a depth-3 sub-agent". Its ring class
+   colour-matches the group line framing the transcript directly below. */
+.agent-depth-badge {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 700;
+    line-height: 1.4;
+    padding: 0 0.45em;
+    border-radius: 0.8em;
+    vertical-align: middle;
+    color: #fff;
+    background-color: var(--agent-ring-1);
+}
+
+.agent-depth-badge.agent-ring-1 {
+    background-color: var(--agent-ring-1);
+}
+
+.agent-depth-badge.agent-ring-2 {
+    background-color: var(--agent-ring-2);
+}
+
+.agent-depth-badge.agent-ring-3 {
+    background-color: var(--agent-ring-3);
+}
+
+.agent-depth-badge.agent-ring-4 {
+    background-color: var(--agent-ring-4);
+}
+
+.agent-depth-badge.agent-ring-5 {
+    background-color: var(--agent-ring-5);
+}
+
+/* "≡ full transcript" marker on a fully-collapsed nested spawn's result
+   (#213 visual layer): the sub-agent answered directly, so its whole
+   transcript was just the prompt + this result — nothing was hidden. Muted
+   so it reads as reassurance, not a warning. */
+.spawn-collapsed-marker {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: var(--text-muted, #888);
+    font-style: italic;
+    white-space: nowrap;
+}
+
+/* A phase's agents group — continues the phase card's dark green. */
+.message-node:has(> .message.workflow_phase) > .children {
+    margin-left: 2em;
+    border-left: 2px solid var(--workflow-phase-color);
+}
+
+/* An agent's side-channel group — continues the agent card's grey. */
+.message-node:has(> .message.workflow_agent) > .children {
+    margin-left: 2em;
+    border-left: 2px solid var(--workflow-agent-color);
+}
+
+/* Below 1280px the tool-level card margins switch to percentages (see the
+   responsive block above) — mirror that on the workflow group containers so
+   the group borders stay pixel-aligned with their parent cards' borders. */
+@media (max-width: 1280px) {
+    .workflow_phase,
+    .workflow_agent {
+        margin-right: 4%;
+    }
+
+    .children:has(> .message-node > .message.workflow_phase),
+    .message-node:has(> .message.workflow_phase) > .children,
+    .message-node:has(> .message.workflow_agent) > .children,
+    .message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.sidechain),
+    .message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.sidechain) {
+        margin-left: 2%;
+    }
+
+    /* Deep-chain compression mirrored for the percentage scale. */
+    .message-node:has(> .message.tool_result) > .children:has(> .message-node > .message.agent-deep),
+    .message-node:has(> .message.tool_use:not(.workflow_agent)) > .children:has(> .message-node > .message.agent-deep) {
+        margin-left: 0.6%;
+    }
+}
+
+/* Phase pills double as anchor links to their phase card when the splice
+   recorded the targets — keep the pill look, add link affordance on hover. */
+a.workflow-phase-pill {
+    text-decoration: none;
+}
+
+a.workflow-phase-pill:hover {
+    border-color: var(--tool-use-color);
+    color: var(--tool-use-color);
+}
+
+.workflow-phase-meta,
+.workflow-agent-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.workflow-phase-detail {
+    color: var(--text-secondary);
+}
+
+.workflow-phase-count,
+.workflow-agent-tokens,
+.workflow-agent-tools {
+    font-size: 0.95em;
+    color: var(--text-muted);
+}
+
+.workflow-agent-model {
+    font-family: var(--font-mono, monospace);
+    color: var(--text-secondary);
+}
+
+.workflow-agent-state {
+    font-style: italic;
+}
+
+.workflow-agent-result,
+.workflow-agent-result-preview {
+    display: block;
+    margin-top: 6px;
+}
+
+.workflow-agent-result-preview {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+/* Embedded JSON blocks extracted from workflow side-channel user prompts
+   (#174 follow-up): the block renders as a params table in place of the raw
+   JSON text; the hint marks a block whose table lives below the fold. */
+.embedded-json {
+    margin: 0.5em 0;
+}
+
+.embedded-json-hint {
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+}
+
+/* Artifact tool result (issue #262): "Published artifact (favicon) (label)".
+   The favicon is usually an emoji span; when it is a real image URL it
+   renders as an inline <img> sized to the text line. */
+img.artifact-favicon {
+    height: 1em;
+    width: 1em;
+    vertical-align: -0.125em;
+}

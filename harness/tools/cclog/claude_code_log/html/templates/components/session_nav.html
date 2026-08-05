@@ -1,0 +1,83 @@
+{# Session navigation component - can be used for ToC or expandable navigation #}
+{% macro render_session_nav(sessions, mode="toc", link_prefix="") %}
+{% if sessions and sessions|length > 0 %}
+<div class='navigation'>
+    {% if mode == "toc" %}
+    <h2>Sessions</h2>
+    <span class='nav-hint'>↓ Click a box below to scroll down to the corresponding session</span>
+    {% elif mode == "expandable" %}
+    <h2>Session Navigation</h2>
+    <span class='nav-hint'>↓ Click any to open individual session page</span>
+    {% endif %}
+
+    <div class='session-nav'>
+        {% for session in sessions %}
+        {% if session.is_fork_point is defined and session.is_fork_point %}
+        <div class='session-nav-item session-fork-point'
+            style='margin-left: {{ session.depth * 24 }}px'>
+            {% if session.message_index is not none %}
+            <a href='#msg-d-{{ session.message_index }}' class='fork-link'>
+                &#x2442; {{ session.first_user_message }}
+            </a>
+            {% else %}
+            {# Fork point was ghosted (e.g. a folded Skill slot) — show the
+               label without a dangling anchor. #}
+            <span class='fork-link'>
+                &#x2442; {{ session.first_user_message }}
+            </span>
+            {% endif %}
+        </div>
+        {% elif session.is_compaction_point is defined and session.is_compaction_point %}
+        <div class='session-nav-item session-compaction-point'
+            style='margin-left: {{ session.depth * 24 }}px'>
+            <a href='#msg-d-{{ session.message_index }}' class='compaction-link'>
+                &#x1F4E6; {{ session.first_user_message }}
+            </a>
+        </div>
+        {% elif session.is_branch is defined and session.is_branch %}
+        <div class='session-nav-item session-branch'
+            style='margin-left: {{ session.depth * 24 }}px'>
+            <a href='#msg-d-{{ session.message_index }}' class='branch-link'>
+                &#x21b3; {{ session.first_user_message }}
+            </a>
+        </div>
+        {% else %}
+        <div class='session-nav-item{% if session.depth|default(0) > 0 %} session-child{% endif %}'
+            {% if session.depth|default(0) > 0 %}style='margin-left: {{ session.depth * 24 }}px'{% endif %}>
+            {% if session.parent_session_id and mode == "toc" and session.parent_message_index is defined and session.parent_message_index is not none %}
+            <a href='#msg-d-{{ session.parent_message_index }}' class='session-backlink'>&#x21b3; continues from {{ session.parent_session_id[:8] }}</a>
+            {% elif session.parent_session_id %}
+            <span class='session-backlink'>&#x21b3; continues from {{ session.parent_session_id[:8] }}</span>
+            {% endif %}
+            {#- Prefer the pre-built `session.file` URL when set (carries
+                the path-projected rel-dest and the `--detail` variant
+                infix from the converter), and fall back to the legacy
+                `{link_prefix}session-{id}.html` shape for call sites
+                that don't populate it. -#}
+            <a href='{% if mode == "expandable" %}{% if session.file %}{{ session.file }}{% else %}{{ link_prefix }}session-{{ session.id }}.html{% endif %}{% else %}{{ link_prefix }}#msg-d-{{ session.message_index }}{% endif %}'
+                class='session-link'>
+                <div class='session-link-title'>
+                    {% if session.summary %}
+                    {{ session.summary }} •
+                    {% endif %}
+                    {{ session.id[:8] }}
+                </div>
+                <div class='session-link-meta'>
+                    <span class="timestamp"{% if session.first_timestamp %} data-timestamp="{{ session.first_timestamp }}"{% endif %}{% if session.last_timestamp and session.last_timestamp != session.first_timestamp %} data-timestamp-end="{{ session.last_timestamp }}"{% endif %}>{{ session.timestamp_range }}</span> • {{ session.message_count }} messages
+                    {% if session.token_summary %}
+                    <br>{{ session.token_summary }}
+                    {% endif %}
+                </div>
+                {% if session.first_user_message %}
+                <pre class='session-preview'>
+                    {{- session.first_user_message|e -}}
+                </pre>
+                {% endif %}
+            </a>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endmacro %}

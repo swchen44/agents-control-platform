@@ -1,0 +1,219 @@
+/* Session navigation styles */
+.navigation {
+    background-color: var(--bg-neutral);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+    box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
+    border-left: var(--white-dimmed) 1px solid;
+    border-top: var(--white-dimmed) 1px solid;
+    border-bottom: #00000017 1px solid;
+    border-right: #00000017 1px solid;
+}
+
+.navigation h2 {
+    margin: 0 0 12px 0;
+    font-size: 1.2em;
+    color: var(--text-secondary);
+}
+
+.session-nav {
+    margin-top: 1em;
+    display: grid;
+    gap: 8px;
+}
+
+.session-link {
+    display: block;
+    padding: 8px 12px;
+    background-color: var(--white-dimmed);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    transition: background-color 0.2s;
+}
+
+.session-link:hover {
+    background-color: #ffffff99;
+}
+
+.session-link-title {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.session-link-meta {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+/* Child session hierarchy */
+.session-nav-item.session-child {
+    border-left: 3px solid var(--accent-color, #6c757d);
+    padding-left: 8px;
+}
+
+.session-backlink {
+    font-size: 0.75em;
+    color: #6c757d;
+    display: block;
+    margin-bottom: 2px;
+    text-decoration: none;
+}
+
+a.session-backlink:hover {
+    color: var(--text-secondary);
+    text-decoration: underline;
+}
+
+/* Project-specific session navigation */
+.project-sessions {
+    margin-top: 15px;
+    border-top: 1px solid #dee2e6;
+    padding-top: 15px;
+}
+
+.project-sessions h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.project-sessions .session-link {
+    padding: 6px 8px;
+    font-size: 0.8em;
+    margin-bottom: 4px;
+}
+
+.project-sessions .session-link-title {
+    font-size: 0.85em;
+}
+
+.project-sessions .session-link-meta {
+    font-size: 0.75em;
+}
+
+/* Combined transcript link */
+.combined-transcript-link {
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: var(--white-dimmed);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.combined-transcript-link:hover {
+    background-color: #ffffff99;
+    text-decoration: none;
+}
+
+/* Navigation hints */
+.nav-hint {
+    font-size: 0.75em;
+}
+
+/* Session preview styling */
+.session-preview {
+    font-size: 0.75em;
+    line-height: 1.3;
+}
+
+/* Fork point element — rendered inside the fork node's .children, so it
+   reads as hanging off the message above it. Pull it up against that
+   message (negative top margin cancels the card's 1em bottom margin) and
+   add a dashed top border as a connector, while the .children indent still
+   shows it's subordinate. */
+.fork-point {
+    margin: -1.2em 0 2em 0;
+    padding: 8px 14px;
+    font-size: 0.85em;
+    color: var(--text-muted, #6c757d);
+    border-left: 3px solid var(--fork-point-color);
+    border-top: 1px dashed var(--fork-point-color);
+    border-radius: 0 0 8px 8px;
+}
+
+.fork-point-header {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-secondary, #495057);
+}
+
+.fork-point-branches {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 12px;
+}
+
+.fork-point-branch {
+    display: block;
+    text-decoration: none;
+    color: var(--text-muted, #6c757d);
+    padding: 2px 0;
+    transition: color 0.2s;
+}
+
+.fork-point-branch:hover {
+    color: var(--text-secondary, #495057);
+}
+
+/* Branch header back-reference to fork point */
+.branch-from {
+    font-size: 0.85em;
+    color: var(--text-muted, #6c757d);
+    margin-top: 2px;
+}
+
+.branch-backlink {
+    text-decoration: none;
+    color: var(--text-muted, #6c757d);
+    transition: color 0.2s;
+}
+
+.branch-backlink:hover {
+    color: var(--text-secondary, #495057);
+}
+
+/* Fork point, branch, and compaction-point nav items
+ * — lightweight text links, not cards */
+.session-fork-point,
+.session-branch,
+.session-compaction-point {
+    padding-left: 8px;
+}
+
+.session-fork-point {
+    border-left: 2px dashed #888;
+}
+
+.session-branch {
+    border-left: 2px dashed #666;
+}
+
+.session-compaction-point {
+    border-left: 2px solid #888;
+}
+
+.fork-link,
+.branch-link,
+.compaction-link {
+    display: block;
+    text-decoration: none;
+    color: #6c757d;
+    padding: 2px 0;
+    font-size: 0.85em;
+}
+
+.fork-link:hover,
+.branch-link:hover,
+.compaction-link:hover {
+    color: var(--text-secondary);
+}

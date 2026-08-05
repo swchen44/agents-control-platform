@@ -10,3 +10,4 @@ examples/openhands-acp-poc/runtime*/
 
 # B 期 harness
 harness/runtime*/
+harness/tools/cclog/.venv/

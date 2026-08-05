@@ -1,0 +1,373 @@
+/* Named tokens for the Claude Code teammate palette.
+   Values chosen to read well against both the light and dark message
+   backgrounds already used in message_styles.css. */
+:root {
+    --cc-blue: #2f80ed;
+    --cc-cyan: #00b8d9;
+    --cc-green: #27ae60;
+    --cc-yellow: #e1b80b;
+    --cc-orange: #e67e22;
+    --cc-red: #eb5757;
+    --cc-pink: #eb2f96;
+    --cc-purple: #8e44ad;
+    --cc-gray: #6b7280;
+    --cc-system: #4a5568;
+
+    /* Slightly desaturated tints for use as message backgrounds. */
+    --cc-blue-bg: #e8f2fd;
+    --cc-cyan-bg: #e0f7fa;
+    --cc-green-bg: #e7f5ee;
+    --cc-yellow-bg: #fdf6dd;
+    --cc-orange-bg: #fdecd9;
+    --cc-red-bg: #fde4e4;
+    --cc-pink-bg: #fde0ef;
+    --cc-purple-bg: #f2e6f7;
+    --cc-gray-bg: #eef0f3;
+    --cc-system-bg: #eef0f3;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --cc-blue-bg: #15324f;
+        --cc-cyan-bg: #12394d;
+        --cc-green-bg: #16382a;
+        --cc-yellow-bg: #3a3419;
+        --cc-orange-bg: #3a2a17;
+        --cc-red-bg: #3a1e1e;
+        --cc-pink-bg: #3a1d2b;
+        --cc-purple-bg: #2e1b3a;
+        --cc-gray-bg: #26292e;
+        --cc-system-bg: #1f2328;
+    }
+}
+
+/* ----------------------------------------------------------------------
+   TeammateMessage — one card per <teammate-message> block.
+   The block wrapper carries --cc-color, set inline by the formatter so
+   the left border and badge pick up the teammate's color automatically.
+   ---------------------------------------------------------------------- */
+.teammate-message {
+    --cc-color: var(--cc-gray);
+    --cc-color-bg: var(--cc-gray-bg);
+
+    border-left: 4px solid var(--cc-color);
+    background: var(--cc-color-bg);
+    padding: 0.6em 0.8em;
+    margin: 0.4em 0;
+    border-radius: 0 4px 4px 0;
+    /* Deliberately left-aligned: teammate messages are *not* human user
+       input (human user messages align right in the surrounding theme). */
+    text-align: left;
+}
+
+.teammate-message + .teammate-message {
+    margin-top: 0.25em;
+}
+
+.teammate-message-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.85em;
+    margin-bottom: 0.25em;
+}
+
+.teammate-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 0.1em 0.5em;
+    border-radius: 999px;
+    background: var(--cc-color);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.8em;
+    white-space: nowrap;
+}
+
+.teammate-badge .teammate-icon {
+    font-size: 0.9em;
+}
+
+.teammate-summary {
+    font-style: italic;
+    color: var(--cc-color);
+    opacity: 0.9;
+}
+
+.teammate-body {
+    font-size: 0.95em;
+}
+
+.teammate-body > :first-child {
+    margin-top: 0;
+}
+
+.teammate-body > :last-child {
+    margin-bottom: 0;
+}
+
+/* JSON-shaped teammate notifications (e.g. idle_notification payloads)
+   render as a compact key:value list rather than a code blob. */
+.teammate-body .teammate-json {
+    display: grid;
+    grid-template-columns: max-content auto;
+    gap: 0.15em 0.6em;
+    margin: 0;
+}
+
+.teammate-body .teammate-json dt {
+    color: var(--cc-gray);
+    font-weight: 600;
+}
+
+.teammate-body .teammate-json dd {
+    margin: 0;
+}
+
+/* System teammate messages (teammate_id="system") render with a neutral
+   palette and an italicized body to signal out-of-band notifications
+   (teammate_terminated, etc.). */
+.teammate-message.teammate-system {
+    --cc-color: var(--cc-system);
+    --cc-color-bg: var(--cc-system-bg);
+}
+
+.teammate-message.teammate-system .teammate-body {
+    font-style: italic;
+}
+
+/* Non-block text surrounding <teammate-message> blocks — preserved by the
+   parser as leading_text / trailing_text. */
+.teammate-surrounding-text {
+    margin: 0.3em 0;
+    white-space: pre-wrap;
+    color: inherit;
+    opacity: 0.8;
+}
+
+/* ----------------------------------------------------------------------
+   Task-board table rendered by format_tasklist_output.
+   ---------------------------------------------------------------------- */
+.task-list {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+.task-list th,
+.task-list td {
+    padding: 0.3em 0.6em;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    text-align: left;
+    vertical-align: top;
+}
+
+.task-list th {
+    font-weight: 600;
+    opacity: 0.75;
+}
+
+.task-list .task-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--cc-gray);
+    width: 3em;
+}
+
+.task-list .task-status {
+    width: 7em;
+}
+
+.task-list .task-owner .teammate-badge {
+    font-size: 0.75em;
+}
+
+/* Status badges reuse the CC palette when we can map a standard status
+   to a color; default is gray. Applies to TaskList rows and to the
+   TaskCreate / TaskUpdate cards' inline status pills. */
+.task-status {
+    white-space: nowrap;
+    font-variant: small-caps;
+    letter-spacing: 0.02em;
+}
+
+.task-status.status-completed {
+    color: var(--cc-green);
+}
+
+.task-status.status-in_progress {
+    color: var(--cc-blue);
+}
+
+.task-status.status-pending {
+    color: var(--cc-gray);
+}
+
+.task-status.status-blocked {
+    color: var(--cc-red);
+}
+
+.task-status.status-deleted {
+    color: var(--cc-gray);
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* `[created]` / `[updated]` action tag in the TaskCreate / TaskUpdate
+   tool-use titles. Muted so the subject reads as the primary content. */
+.task-action {
+    color: var(--cc-gray);
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+/* `[async]` hint on Task tool_use titles when run_in_background=True
+   (issue #90). Same muted treatment as the action tag — the reader
+   needs to scan past it most of the time. */
+.task-async-hint {
+    color: var(--cc-blue);
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+/* "Result (from async notification)" label that introduces the
+   folded agent-answer section in an async Task tool_result body
+   (issue #90 Phase 3). */
+.task-async-answer-label {
+    margin-top: 0.6em;
+    color: var(--cc-blue);
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.task-async-answer-label small {
+    color: var(--cc-gray);
+    font-weight: 400;
+    margin-left: 0.3em;
+}
+
+/* The async-answer collapsible follows a label, so the tool_result
+   negative-margin pull-up (meant to tuck the *first* collapsible under the
+   tool title) would make it overlap that label. This is now handled
+   generically — see `.tool_result .content > * + * .collapsible-code` in
+   message_styles.css (issue #153) — so no async-answer-specific override is
+   needed here. */
+
+/* ----------------------------------------------------------------------
+   Async-agent cards (issue #90).
+
+   - .task-output-card: TaskOutput (polling tool) input + result.
+   - .task-notification-card: <task-notification> User entry metadata.
+
+   Both reuse the .teammate-tool-card grid; adding a coloured left
+   border lets the visual scan separate spawn (Task) → poll
+   (TaskOutput) → result (Notification).
+   ---------------------------------------------------------------------- */
+.teammate-tool-card.task-output-card {
+    --cc-color: var(--cc-cyan);
+
+    border-left: 4px solid var(--cc-color);
+}
+
+.teammate-tool-card.task-notification-card {
+    --cc-color: var(--cc-blue);
+
+    border-left: 4px solid var(--cc-color);
+}
+
+.task-notification-backlink {
+    color: var(--cc-blue);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.task-notification-backlink:hover {
+    text-decoration: underline;
+}
+
+/* ----------------------------------------------------------------------
+   Teammate-aware tool cards.
+   Used by TeamCreate / TeamDelete / TaskCreate / TaskUpdate / SendMessage
+   formatters and the extended Task card when teammate fields are set.
+   ---------------------------------------------------------------------- */
+.teammate-tool-card {
+    display: grid;
+    grid-template-columns: max-content auto;
+    gap: 0.15em 0.6em;
+    padding: 0.4em 0.6em;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.teammate-tool-card dt {
+    font-weight: 600;
+    opacity: 0.75;
+}
+
+.teammate-tool-card dd {
+    margin: 0;
+    /* `word-break: break-word` is deprecated; the modern equivalent is
+       `overflow-wrap: anywhere` (breaks within words when they'd
+       otherwise overflow, but keeps normal word boundaries elsewhere). */
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
+.teammate-tool-card.team-card {
+    --cc-color: var(--cc-purple);
+
+    border-left: 4px solid var(--cc-color);
+}
+
+.teammate-tool-card.task-update-card {
+    --cc-color: var(--cc-blue);
+
+    border-left: 4px solid var(--cc-color);
+}
+
+.teammate-tool-card.task-update-card .status-arrow {
+    margin: 0 0.3em;
+    opacity: 0.6;
+}
+
+.teammate-tool-card.task-update-card .task-update-failed {
+    color: var(--cc-red);
+    font-weight: 600;
+}
+
+.teammate-tool-card.send-message-card {
+    --cc-color: var(--cc-orange);
+
+    border-left: 4px solid var(--cc-color);
+}
+
+.teammate-tool-card.send-message-card .recipient .teammate-badge {
+    font-size: 0.8em;
+}
+
+/* ----------------------------------------------------------------------
+   Session header team badge (teammates feature).
+   .session-team-badge surfaces a session's `teamName` next to the title.
+   ---------------------------------------------------------------------- */
+.session-team-badge {
+    --cc-color: var(--cc-purple);
+    --cc-color-bg: var(--cc-purple-bg);
+
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    margin-left: 0.6em;
+    padding: 0.1em 0.55em;
+    border-radius: 999px;
+    background: var(--cc-color-bg);
+    color: var(--cc-color);
+    font-size: 0.78em;
+    font-weight: 600;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.session-team-icon {
+    font-size: 0.95em;
+}
