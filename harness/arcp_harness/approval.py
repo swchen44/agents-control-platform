@@ -43,13 +43,16 @@ class ApprovalGate:
         return "agent_name:            # ← 請填(snake_case)\nparam:"
 
     def _write_plan(self, ticket, profile, session) -> None:
-        pre, secs = parse(ticket.description or "")
+        before, secs, after = parse(ticket.description or "")
+        if not secs and not after:
+            # 首次:原本無 ARCP 區塊,原始描述整段沉到區塊下方(區塊置頂)
+            before, after = "", before
         by = {s.owner: s for s in secs}
         by["control"] = Section("control", self._control_body(profile, session))
         by.setdefault("human", Section("human", self._human_body()))
-        ordered = [by["control"], by["human"]] + [
-            s for o, s in by.items() if o not in ("control", "human")]
-        self.source.set_description(ticket.id, render(pre, ordered))
+        # render 依 canonical 序(human→control→agent)自動排,不需手排
+        self.source.set_description(
+            ticket.id, render(before, list(by.values()), after))
 
     def _validate_human(self, human: Section | None) -> list[str]:
         if human is None:
@@ -63,7 +66,7 @@ class ApprovalGate:
     def gate(self, ticket, profile, session) -> str:
         """回 proceed | awaiting | reprompt | escalate;副作用:寫 description/
         comment/assignee + 改 session(pending_reason/approval_revisions)。"""
-        _pre, secs = parse(ticket.description or "")
+        _before, secs, _after = parse(ticket.description or "")
         by = {s.owner: s for s in secs}
 
         if "control" not in by:                       # 首次:貼 plan、指派審批者

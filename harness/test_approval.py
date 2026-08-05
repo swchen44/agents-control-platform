@@ -62,11 +62,12 @@ def _ticket(desc="原始需求", assignee_id=None):
 
 def _filled(agent_name):
     body = f"agent_name: {agent_name}" if agent_name else "agent_name:"
-    return render("原始需求", [
+    # 定案版面:ARCP 區塊置頂,原始需求沉到區塊下方(after)
+    return render("", [
         Section("control",
                 "template: empty\nprofile: p\nstatus: awaiting-approval\n"
                 "revisions: 0"),
-        Section("human", body)])
+        Section("human", body)], "原始需求")
 
 
 def _gate():

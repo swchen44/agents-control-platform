@@ -117,16 +117,19 @@ hash: a1b2c3d4e5f6
 - [ ] 單元測 `test_logutil.py`(pytest-compatible):level 生效、file handler 寫檔
 - [ ] commit+push
 
-**Phase W2.2 — description 分區段 + hash(W10/W11)** ✅ 初版 6f9421d
-⚠️ 待按定案版面重構:human 段前置 + 結束標記 `<!-- /ARCP:sections -->` + 區塊置頂 +
-全掃描所有機器段驗 hash 並 log(段名+時間)+ 區塊外內容一律不碰
-- [ ] `arcp_harness/sections.py`:parse(description)→{原始需求, sections[]};
-      render(sections)→description 文字;`section_hash(body)`(規範化+sha256[:12]);
-      `verify_and_restore(parsed, authoritative)`→(restored_desc, violations)
-- [ ] owner 模型:control/human/agent:<名>;命名校驗(snake_case key);`attach:` 引用解析
-- [ ] 幂等:機器段 hash 未變 → render 回原文(不觸發寫)
-- [ ] 單元測 `test_sections.py`:parse/render 往返、hash 規範化穩定、機器段誤改→還原、
-      human 段尊重、attach 引用解析、命名校驗
+**Phase W2.2 — description 分區段 + hash(W10/W11)** ✅ 定案完成
+定案版面已落地:human 段前置 + 結束標記 `<!-- /ARCP:sections -->` + 區塊置頂 +
+全掃描所有機器段驗 hash 並 log(段名+時間)+ 區塊外(before/after)內容一律不碰
+- [x] `arcp_harness/sections.py`:`parse(description)`→`(before, sections[], after)`;
+      `render(before, sections, after)`→區塊置頂、canonical 序(human→control→agent);
+      `section_hash(body)`(規範化+sha256[:12]);`verify_and_restore(sections, authoritative)`
+      →`(restored, violations)`(全掃描、log 段名+時間、human 永遠尊重)
+- [x] owner 模型:control/human/agent:<名>;命名校驗(snake_case key);`attach:` 引用解析
+- [x] 幂等:機器段 hash 未變 → render 出同一 hash(不觸發寫);approval 首次把原始
+      描述沉到區塊下方(after)
+- [x] 單元測 `test_sections.py`(14 tests):3-tuple parse、區塊置頂+結束標記、human
+      前置排序、before/after 不碰、hash 規範化、全掃描還原/尊重 human/無權威版仍 flag、
+      attach 引用、命名校驗 —— 全綠;ruff clean
 - [ ] commit+push
 
 **Phase W2.3 — 審批門主體(§4,建在 W2.2 上)**
