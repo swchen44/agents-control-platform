@@ -170,23 +170,29 @@ class ExternalChangePolicy:
         # assignee 當放行信號(W2.3 指派審批者/交回機器人),不可誤標 inactive。
         if sess.pending_reason == "approval":
             return []
+        # 已 pending 的票(human-decision/budget/…):inactive 只記 journal 不留言
+        # ——pending comment 已說明怎麼繼續;再留言會重複甚至矛盾(SCRUM-22 實測:
+        # G1 handoff 交人後,資源開關把 harness 自己改的 assignee 當外部變更補留言)。
+        quiet = sess.pending_reason is not None
         if (t.assignee_id or "") == self.bot_account_id:
             if not sess.inactive:
                 return []                   # 本來就 active,無事
             sess.inactive = False
             self.store.upsert_session(sess)
-            self.source.add_comment(
-                t.id, "[agent] assignee 回到機器人 → 恢復 active,"
-                      "下輪 resume 續跑。")
+            if not quiet:
+                self.source.add_comment(
+                    t.id, "[agent] assignee 回到機器人 → 恢復 active,"
+                          "下輪 resume 續跑。")
             log.info("%s assignee 回機器人 → active(resume)", t.key)
             return [self.store.journal("inactive_cleared", t.id, t.key)]
         if sess.inactive:
             return []                       # 已 inactive(人→人)不重複
         sess.inactive = True
         self.store.upsert_session(sess)
-        self.source.add_comment(
-            t.id, "[agent] assignee 交給人類 → inactive:不再派工、讓出並發"
-                  "額度(不占 CPU/memory)。把 assignee 改回機器人即恢復續跑。")
+        if not quiet:
+            self.source.add_comment(
+                t.id, "[agent] assignee 交給人類 → inactive:不再派工、讓出並發"
+                      "額度(不占 CPU/memory)。把 assignee 改回機器人即恢復續跑。")
         log.info("%s assignee 交人類 → inactive(讓出額度)", t.key)
         return [self.store.journal("inactive_set", t.id, t.key,
                                    assignee=t.assignee or "")]

@@ -101,6 +101,21 @@ def test_approval_pending_not_marked_inactive():
     assert store.get_session(1).inactive is False
 
 
+def test_pending_session_inactive_but_quiet():
+    # 已 pending(如 G1 handoff 後 human-decision):inactive 照標(讓出額度)
+    # 但不留言——pending comment 已說明怎麼繼續,再留言重複矛盾(SCRUM-22 實測)
+    store = _store()
+    store.upsert_session(_sess(pending_reason="human-decision"))
+    pol = _policy(store)
+    ev = pol.on_assignee_changed(_ticket("HUMAN-1"))
+    assert [e["type"] for e in ev] == ["inactive_set"]
+    assert store.get_session(1).inactive is True
+    assert pol.source.comments == []                    # 靜默
+    ev2 = pol.on_assignee_changed(_ticket(BOT))         # 回機器人也靜默
+    assert [e["type"] for e in ev2] == ["inactive_cleared"]
+    assert pol.source.comments == []
+
+
 def test_legacy_without_bot_id():
     # 未配置機器人身份 → 舊語義:任何變更 = 撤銷授權(pending:external)
     store = _store()

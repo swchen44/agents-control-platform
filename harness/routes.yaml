@@ -89,6 +89,12 @@ outer_loop:
       profile: approval-demo
       on_match: create_or_resume
 
+    - name: handoff-demo            # W2.5 真 Jira 實測:G1 handoff kind=human
+      when:
+        labels: ['handoff-demo']
+      profile: handoff-demo
+      on_match: create_or_resume
+
 # Inner loop(v5 §4.2):profile 決定 workspace/skills/agent/verify/loop。
 # agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
 inner_loop:
@@ -194,6 +200,32 @@ inner_loop:
         required: true
         approver: swchen44@gmail.com
         max_revisions: 3
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # W2.5 真 Jira 實測:G1 handoff kind=human。agent 自報 handoff(G1 契約
+    # output_schema)→ dispatcher 轉人類:human_email→approver fallback 指派。
+    handoff-demo:
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        output_schema: true        # G1 契約:回報 {reason,status,next}
+        venv: ../examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+      verify:
+        - name: never-reached      # handoff 在 grade 前返回,不會用到
+          files:
+            done.txt: null
+      approval:
+        required: false
+        approver: swchen44@gmail.com   # handoff kind=human 的 assignee fallback
       loop:
         max_attempts: 2
         on_unknown: pending
