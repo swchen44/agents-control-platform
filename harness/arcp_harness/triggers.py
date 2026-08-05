@@ -138,9 +138,11 @@ def run_trigger(trigger: Trigger, profiles: dict[str, Profile], store,
         if verdict.passed and res.raw_outcome == "completed":
             sess.outcome = "SUCCESS"
             store.upsert_session(sess)
+            kpi = ({"human_minutes_saved": profile.human_minutes_est}
+                   if profile.human_minutes_est else {})    # W3.5 C3
             events.append(store.journal(
                 "trigger_finished", ts, trigger.run_name, outcome="SUCCESS",
-                attempts=sess.attempts, cost_usd=sess.cost_usd))
+                attempts=sess.attempts, cost_usd=sess.cost_usd, **kpi))
             log.info("trigger %s SUCCESS(%d attempt, $%.4f)",
                      trigger.name, sess.attempts, sess.cost_usd)
             return events

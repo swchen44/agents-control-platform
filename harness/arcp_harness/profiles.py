@@ -40,6 +40,7 @@ class Profile:
     approver: str | None = None       # 審批者 email/accountId
     max_revisions: int = 3            # 退回重填上限
     retention_days: int = 270         # W3.3:終態後保留天數(0=不回收;DESIGN §3)
+    human_minutes_est: float | None = None  # W3.5 C3:人做同任務估時(分),KPI 用
 
 
 def load_profiles(path: str) -> dict[str, Profile]:
@@ -95,5 +96,8 @@ def load_profiles(path: str) -> dict[str, Profile]:
             require_approval=bool(appr.get("required", False)),
             approver=appr.get("approver"),
             max_revisions=int(appr.get("max_revisions", 3)),
-            retention_days=int(p.get("retention_days", 270)))
+            retention_days=int(p.get("retention_days", 270)),
+            human_minutes_est=(float(p["human_minutes_est"])
+                               if p.get("human_minutes_est") is not None
+                               else None))
     return profiles

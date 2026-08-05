@@ -81,13 +81,16 @@
       水位冪等、失敗證據迴圈、UNKNOWN 停、額滿跳過 —— 全綠;14 測檔全綠
 - [x] commit+push
 
-**Phase W3.5 — C3 KPI 人力估算(W21)**
-- [ ] profile `human_minutes_est`(選填);SUCCESS 時 journal `human_minutes_saved`
-      (公式 v1:est × 1;attempts>1 不折減——人也會重試)
-- [ ] dashboard 總覽卡加:累計節省人時、agent 成本 vs 人時成本對比(時薪 config,
-      default 不顯示金額只顯示時數)
-- [ ] `test_kpi.py`:journal 記錄/彙總正確;無 est 的 profile 不計
-- [ ] commit+push
+**Phase W3.5 — C3 KPI 人力估算(W21)** ✅
+- [x] profile `human_minutes_est`(選填);SUCCESS 時 journal `human_minutes_saved`
+      (公式 v1:est 平計;dispatcher `resolved` + trigger `trigger_finished`
+      都記;無 est 不加 key);routes.yaml filechain-rawcli 示範 est=15
+- [x] dashboard:`saved_minutes(journal)` 彙總(只算 SUCCESS 事件)+ 總覽卡
+      「節省人時」(顯示小時);時薪 env `ARCP_HOURLY_RATE` 選配 → 加
+      「人力成本對比」卡(人力$ vs agent$);未設不顯金額
+- [x] `test_kpi.py`(5 tests):dispatcher/trigger 記錄、無 est 不記、彙總只算
+      SUCCESS、卡片與時薪對比 —— 全綠;e2e_dashboard 回歸 PASS
+- [x] commit+push
 
 **Phase W3.6 — D1 隔離設定檔介面(W22,不實驗)**
 - [ ] profile `agent.isolation: {provider: auto|seatbelt|landlock|appcontainer|docker}`;

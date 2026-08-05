@@ -184,8 +184,18 @@ def session_status(s: dict, qpos: dict[int, int]) -> tuple[str, str]:
     return "active", "running"
 
 
-def overview_cards(sessions: dict[int, dict]) -> str:
-    """C4 總覽卡:cost / outcome 計數 / 失敗率 / in-flight / queued / inactive。"""
+def saved_minutes(journal: list[dict]) -> float:
+    """W3.5 C3:累計節省人時(分)。SUCCESS 事件(resolved / trigger_finished)
+    帶 human_minutes_saved(profile 估時,公式 v1 平計)。"""
+    return sum(e.get("human_minutes_saved") or 0 for e in journal
+               if e.get("type") in ("resolved", "trigger_finished"))
+
+
+def overview_cards(sessions: dict[int, dict],
+                   journal: list[dict] | None = None) -> str:
+    """C4 總覽卡:cost / outcome 計數 / 失敗率 / in-flight / queued / inactive
+    + W3.5 節省人時(有 est 的 profile 才累計;時薪 env ARCP_HOURLY_RATE
+    選配 → 顯示人力成本對比)。"""
     vals = list(sessions.values())
     oc = Counter(s.get("outcome") for s in vals if s.get("outcome"))
     succ, fail = oc.get("SUCCESS", 0), oc.get("FAILURE", 0)
@@ -195,14 +205,26 @@ def overview_cards(sessions: dict[int, dict]) -> str:
                     if not s.get("outcome") and not s.get("pending_reason")
                     and not s.get("queued") and not s.get("inactive"))
     live = [s for s in vals if not s.get("outcome")]
+    total_cost = sum(s.get("cost_usd") or 0 for s in vals)
     stats = [
-        (f"${sum(s.get('cost_usd') or 0 for s in vals):.4f}", "總 cost"),
+        (f"${total_cost:.4f}", "總 cost"),
         (in_flight, "in-flight"),
         (sum(1 for s in live if s.get("queued")), "queued"),
         (sum(1 for s in live if s.get("inactive")), "inactive"),
         (sum(1 for s in live if s.get("pending_reason")), "pending"),
         (succ, "SUCCESS"), (fail, "FAILURE"), (fail_rate, "失敗率"),
     ]
+    mins = saved_minutes(journal or [])
+    if mins:
+        stats.append((f"{mins / 60:.1f}h", "節省人時"))
+        rate = os.environ.get("ARCP_HOURLY_RATE")
+        if rate:
+            try:
+                human_cost = mins / 60 * float(rate)
+                stats.append((f"${human_cost:.0f} vs ${total_cost:.2f}",
+                              "人力成本對比"))
+            except ValueError:
+                pass
     return "<div class='stats'>" + "".join(
         f"<div class='stat'><div class='n'>{esc(n)}</div>"
         f"<div class='l'>{esc(label)}</div></div>" for n, label in stats
@@ -247,7 +269,7 @@ def render_index(journal, sessions) -> str:
                  f"<td>${s.get('cost_usd',0) or 0:.4f}</td></tr>")
     return (f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
             f"</h1></header><main>"
-            f"{overview_cards(sessions)}{control_bar()}"
+            f"{overview_cards(sessions, journal)}{control_bar()}"
             f"<h2>Tickets</h2><div class='card'><table>"
             f"<tr><td><b>ticket</b></td><td><b>profile</b></td>"
             f"<td><b>status</b></td><td><b>attempts</b></td>"

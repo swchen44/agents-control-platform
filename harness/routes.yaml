@@ -167,6 +167,7 @@ inner_loop:
             step1.txt: '1'
             step2.txt: '12'
             step3.txt: '123'
+      human_minutes_est: 15         # W3.5 C3:人做同任務估時(分)→ KPI 節省人時
       loop:
         max_attempts: 2
         on_unknown: pending         # 不可改 retry(v5 D3)
