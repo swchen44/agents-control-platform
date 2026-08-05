@@ -33,10 +33,20 @@
   W3.5 C3 KPI(human_minutes_est→節省人時卡+時薪對比)、W3.6 D1 隔離介面
   (provider 可插拔、`DESIGN_isolation.md`、介面先行不實驗)。
   16 個 test_*.py + selftest + e2e_gate/dashboard/codex/contract 全綠。
-- **恢復起點(W4 候選)**:(a) 冪等盤點 #5——attempt 中途 harness crash
-  (sid 預派 + attempt_started 標記 → 缺 envelope 判 UNKNOWN);(b) E3 evict/
-  rehydrate 對照 + 實時 killpg(異步架構);(c) openhands-acp/server 的 codex
-  對照(quota);(d) landlock/docker 隔離實作;(e) 量產 python 標準結構另開 repo。
+- **W4 全部完成 ✅(M15+M16,2026-08-06)** `harness/PLAN_wave4.md`:transcript
+  可視化閉環 —— vendor claude-code-log(MIT,`tools/cclog/`+NOTICE;cchv 因
+  export 丟 sidechain 棄用)、`render_transcript.py` wrapper(claude+**72
+  sub-agent HTML** 實測+codex)、close 打包 transcript.tgz(gzip -9)+dashboard
+  下載(`/tfile`)、快照器(active 每 60s 可設定+四個離手點 final 定格)、
+  dashboard 分頁/filter/新欄位(assignee/created/finished/換手起點)+
+  auto-collapse bug 修(meta refresh→fetch 局部更新)、script trigger 萬用化
+  (uvx/npx/.sh/.py,log 保存+run.tgz,session 註冊全設施重用)。19 個
+  test_*.py + selftest + e2e 全綠。
+- **恢復起點(W5 候選)**:(a) 真 Jira 實測 W4(快照器/打包/換手定格全鏈路,
+  建議跑一張 handoff-demo 票肉眼看 dashboard);(b) 冪等盤點 #5——sid 預派
+  (兼修「首 attempt 快照落空」限制);(c) E3 evict/實時 killpg(異步);
+  (d) openhands 系 codex 對照(quota);(e) landlock/docker 隔離實作;
+  (f) 量產 python 標準結構另開 repo。
 - **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
   venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
   `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
