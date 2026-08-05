@@ -67,6 +67,14 @@ def load_profiles(path: str) -> dict[str, Profile]:
         agent = p.get("agent") or {}
         if not agent.get("backend"):
             raise ConfigError(f"profile {name}: agent.backend 必填")
+        # W3.6(D1):isolation.provider 白名單 fail-fast(介面先行,不實驗)
+        iso_provider = (agent.get("isolation") or {}).get("provider")
+        if iso_provider is not None:
+            from .isolation import PROVIDERS
+            if iso_provider not in PROVIDERS:
+                raise ConfigError(
+                    f"profile {name}: isolation.provider 必須是 "
+                    f"{list(PROVIDERS)}(拿到 {iso_provider!r})")
         venv = agent.get("venv")
         if venv and not os.path.isdir(venv):
             raise ConfigError(f"profile {name}: agent.venv 不存在: {venv}")

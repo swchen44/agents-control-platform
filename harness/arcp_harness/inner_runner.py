@@ -20,6 +20,7 @@ import subprocess
 from dataclasses import dataclass
 
 from .contract import CONTRACT_SCHEMA
+from .isolation import resolve as resolve_isolation
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # backend → venv runner script (same job/envelope contract for all)
@@ -58,7 +59,9 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "acp_server": agent_cfg.get("acp_server", "claude-code"),
         "acp_server_engine": agent_cfg.get("engine", "claude"),  # rawcli
         "acp_model": agent_cfg.get("acp_model") or agent_cfg.get("model"),
-        "os_sandbox": agent_cfg.get("os_sandbox", False),       # rawcli 隔離
+        # W3.6(D1):isolation.provider 解析(auto→依 OS;未實作→none+警告);
+        # 舊寫法 os_sandbox: true == provider auto。runner 端欄位名不變。
+        "os_sandbox": resolve_isolation(agent_cfg) == "seatbelt",
         "sandbox": agent_cfg.get("sandbox", "workspace-write"),  # codex 內建
         "stall_seconds": agent_cfg.get("stall_seconds", 0),      # rawcli N13
         "output_schema": (CONTRACT_SCHEMA                        # G1 契約(rawcli)

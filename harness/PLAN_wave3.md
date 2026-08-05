@@ -92,15 +92,20 @@
       SUCCESS、卡片與時薪對比 —— 全綠;e2e_dashboard 回歸 PASS
 - [x] commit+push
 
-**Phase W3.6 — D1 隔離設定檔介面(W22,不實驗)**
-- [ ] profile `agent.isolation: {provider: auto|seatbelt|landlock|appcontainer|docker}`;
-      loader 校驗 provider 白名單;`os_sandbox: true` 映射 `provider: auto`(向後相容,
-      deprecation 註記)
-- [ ] rawcli agent:provider 解析(auto→darwin=seatbelt/linux=landlock 預留/其它=無)
-      ——現行為 seatbelt 實跑,其餘 provider 只接受設定不啟用(warning log)
-- [ ] DESIGN_lifecycle 或新 DESIGN_isolation 短文件:介面、各 OS 提供方路線、docker 邊界
-- [ ] `test_isolation_config.py`:載入/白名單/映射/未支援 provider 警告
-- [ ] commit+push
+**Phase W3.6 — D1 隔離設定檔介面(W22,不實驗)** ✅
+- [x] `arcp_harness/isolation.py`:`requested_provider`(isolation 區塊優先,
+      `os_sandbox: true` 映射 auto 向後相容)+ `resolve`(auto→darwin=seatbelt/
+      linux=landlock 預留/win=appcontainer 預留;未實作→none+WARNING,接受設定
+      不啟用);profiles loader 白名單 fail-fast
+- [x] inner_runner 接線:`job.os_sandbox = (resolve(agent_cfg)=="seatbelt")`
+      ——runner 端欄位不變,行為對現有 profile 完全等價(darwin 上 os_sandbox
+      true → seatbelt 照舊)
+- [x] `DESIGN_isolation.md`:介面、各 OS 提供方路線表、docker 邊界(resume 綁
+      cwd→volume 穩定路徑、CLI 憑證 mount、冷啟成本)、codex 例外(自帶 --sandbox)
+- [x] `test_isolation_config.py`(8 tests):白名單拒絕、全 provider 可載、auto
+      依平台、legacy 映射、未實作降級、seatbelt 限 darwin、顯式優先於 legacy、
+      inner_runner 接線 —— 全綠;16 測檔 + selftest + e2e 全綠
+- [x] commit+push
 
 ## W3 明確不做(留後續)
 
