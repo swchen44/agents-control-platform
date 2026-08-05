@@ -147,22 +147,27 @@ class OuterLoop:
                 passthrough.append(idx)                 # handle 秒 skip / 自解除
             else:
                 need.append(idx)
-        cand = [(engine_of(profiles[to_dispatch[i][1]])
-                 if to_dispatch[i][1] in profiles else "claude",
-                 to_dispatch[i][1]) for i in need]
+        cand = []
+        for i in need:                                  # F3:session pin 優先
+            prof = to_dispatch[i][1]                    # (與 dispatcher 一致)
+            s = self.store.get_session(to_dispatch[i][0].id)
+            if s is not None and s.profile in profiles:
+                prof = s.profile
+            cand.append((engine_of(profiles[prof]) if prof in profiles
+                         else "claude", prof))
         run_l, q_l = select_dispatchable(
             cand, self.concurrency, in_flight_engine=inf_eng,
             in_flight_profile=inf_prof, in_flight_total=len(active))
         for j in q_l:                                   # 標 QUEUED,下輪重評
             i = need[j]
-            t, prof = to_dispatch[i]
+            t = to_dispatch[i][0]
             sess = self.store.get_session(t.id)
             if sess is not None:                        # 只標已有 session
                 sess.queued = True
                 sess.queued_at = sess.queued_at or time.time()
                 self.store.upsert_session(sess)
             events.append(self.store.journal(
-                "queued", t.id, t.key, profile=prof, engine=cand[j][0]))
+                "queued", t.id, t.key, profile=cand[j][1], engine=cand[j][0]))
         selected = []
         for i in passthrough + [need[j] for j in run_l]:
             t, prof = to_dispatch[i]

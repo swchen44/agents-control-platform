@@ -159,12 +159,23 @@ hash: a1b2c3d4e5f6
       審批中不誤標、legacy 語義、無 session/終態不管、inactive 期間 dispatcher 不派工 —— 全綠
 - [ ] commit+push
 
-**Phase W2.5 — F3 換手(G1 next 驅動)**
-- [ ] command `@agent next <profile>`:重置 session→換 profile→inactive 清→queued 重評(進新隊列)
-- [ ] G1 的 `next`(status=handoff):next.kind=agent→自動觸發換手(換 next.to profile)、
-      kind=human→assignee 改人(pending:human,不排 agent 隊列)
-- [ ] 換手 = 新 session/新 fork → 若目標 profile require_approval,重走 W2.3 審批門
-- [ ] 單元測 `test_handoff.py`:@agent next 換 profile 進隊列、next=agent 自動換、next=human→pending
+**Phase W2.5 — F3 換手(G1 next 驅動)** ✅
+- [x] command `@agent next <profile>`:重置 session(session_id/attempts/outcome/pending/
+      inactive/queued/approval_revisions 歸零)→ pin 新 profile → workspace 哨值
+      `(handoff)`(下輪 health 失敗重 provision 新 instance)→ 下輪經 gate 重新排隊;
+      目標校驗(profiles 白名單,無效→comment 拒絕)
+- [x] **session pin 優先於 route**(關鍵接線):dispatch 的 profile 每輪由 route 標籤
+      重推,換手要生效必須 session.profile 優先 —— dispatcher.handle 與 poller._gate
+      額度計算一致採 pin;workspace 重建路徑回存(修 latent bug:原本重 provision 不回存)
+- [x] G1 的 `next`(status=handoff):next.kind=agent→自動換手(pin next.to,不 grade,
+      下輪重新排隊)、kind=human→assignee 改 next.to + pending:human-decision(不排隊,
+      session_id 留存可 resume);目標無效→journal handoff_invalid 當一般失敗;
+      A↔B 換手迴圈由 A4 budget 上限擋(cost_usd 跨換手累計不歸零)
+- [x] 換手 = 新 session/新 fork → 目標 require_approval 重走 W2.3 審批門(reset 後
+      session_id=None+pending=None 自然落入審批門條件)
+- [x] 單元測 `test_handoff.py`(7 tests):next 換 profile/無效目標/裸 next 拒絕、
+      dispatcher 用 pin 並重 provision 回存、G1 agent 自動換、G1 human 交人、
+      換手到審批 profile 重走門 —— 全綠;全套回歸無破
 - [ ] commit+push
 
 **Phase W2.6 — REST 控制面(hot reload / graceful,W13)**

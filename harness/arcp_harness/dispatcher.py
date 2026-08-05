@@ -83,6 +83,11 @@ class Dispatcher:
         events: list[dict] = []
         profile = self.profiles[profile_name]
         sess = self.store.get_session(ticket.id)
+        # F3(W2.5):session pin 的 profile 優先於 route 推導——換手後 route
+        # 標籤仍指舊 profile,session 存在即以其 profile 為準
+        if (sess is not None and sess.profile != profile.name
+                and sess.profile in self.profiles):
+            profile = self.profiles[sess.profile]
         # auto-recover pending:external once infra is back (N1/N3): server
         # healthy again → clear the block and resume this poll (不漏)
         if (sess and sess.pending_reason == "external"
@@ -134,11 +139,13 @@ class Dispatcher:
         else:
             healthy, reason = health_check(sess.workspace, ticket)
             if not healthy:
-                # empty-template workspaces are safe to rebuild; journal it
+                # 重建(empty-template 安全)/ 換手哨值「(handoff)」→ 依現行
+                # profile 重 provision 新 instance;路徑要回存(換手後路徑不同)
                 events.append(self.store.journal(
                     "workspace_unhealthy", ticket.id, ticket.key,
                     reason=reason))
-                provision(self.root, ticket, profile)
+                sess.workspace = provision(self.root, ticket, profile)
+                self.store.upsert_session(sess)
 
         grader = _grader(profile)
         artifacts = os.path.join(os.path.dirname(sess.workspace), "attempts")
@@ -190,6 +197,47 @@ class Dispatcher:
                 events.append(self.store.journal(
                     "pending", ticket.id, ticket.key, reason="unknown"))
                 return events
+
+            # F3/G1(W2.5):agent 自報 handoff(status=handoff + next)→ 不
+            # grade。kind=human:交人(pending:human-decision,不排 agent 隊列);
+            # kind=agent:重置 session pin 新 profile,下輪經 gate 重新排隊
+            #(目標 require_approval 則重走審批門)。A↔B 換手迴圈由 A4 budget
+            # 上限擋(cost_usd 跨換手累計、不歸零)。
+            nxt = (res.structured or {}).get("next") or {}
+            if ((res.structured or {}).get("status") == "handoff"
+                    and nxt.get("to")):
+                if nxt.get("kind") == "human":
+                    sess.pending_reason = "human-decision"
+                    self.store.upsert_session(sess)
+                    self.source.add_comment(ticket.id, (
+                        f"[agent] handoff→human:{summarize(res.structured)}\n"
+                        f"請人工接手;要 agent 繼續請留言 @agent run。"
+                        f"\n{_resume_hint(sess)}"))
+                    self.source.assign(ticket.id, str(nxt["to"]))
+                    events.append(self.store.journal(
+                        "handoff", ticket.id, ticket.key, kind="human",
+                        to=nxt["to"]))
+                    log.info("%s handoff → human(%s)", ticket.key, nxt["to"])
+                    return events
+                target = str(nxt["to"])
+                if target in self.profiles and target != profile.name:
+                    old = profile.name
+                    sess.profile = target
+                    sess.session_id = None
+                    sess.attempts = 0
+                    sess.outcome, sess.pending_reason = None, None
+                    sess.workspace = "(handoff)"   # 新 instance,下輪重 provision
+                    self.store.upsert_session(sess)
+                    self.source.add_comment(ticket.id, (
+                        f"[agent] handoff→{target}:{summarize(res.structured)}\n"
+                        f"已重置 session,下輪由 {target} 重新排隊接手。"))
+                    events.append(self.store.journal(
+                        "handoff", ticket.id, ticket.key, kind="agent",
+                        from_profile=old, to=target))
+                    log.info("%s handoff %s → %s", ticket.key, old, target)
+                    return events
+                events.append(self.store.journal(     # 目標無效:當一般失敗
+                    "handoff_invalid", ticket.id, ticket.key, to=target))
 
             verdict = grader.grade(sess.workspace)
             if verdict.passed and res.raw_outcome == "completed":

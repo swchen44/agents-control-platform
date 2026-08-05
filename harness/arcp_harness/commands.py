@@ -10,6 +10,9 @@ comment 只以 comment_added 事件出現一次);自家 [agent] 前綴留言不�
   retry  歸零 attempts + 解除 pending,從頭再試
   stop   交還人工:pending:human-decision
   cancel 撤銷:outcome=ABORTED,此後不再派工
+  next <profile>  F3 換手(W2.5):重置 session、pin 新 profile(dispatcher 以
+         session.profile 優先於 route)→ 下輪重新排隊;目標 require_approval
+         則重走審批門;workspace 置哨值 → 下輪重 provision(新 instance)
 
 External-change policy(v5 §6-10/11 + W12 假設更新):
   status → 終止類狀態(人在看板上直接關票)= out-of-band 撤銷 → ABORTED
@@ -36,10 +39,13 @@ _COMMANDS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)^@agent\s+(stop|hold|pause)\b"), "stop"),
     (re.compile(r"(?i)^@agent\s+retry\b"), "retry"),
     (re.compile(r"(?i)^@agent\s+cancel\b"), "cancel"),
+    (re.compile(r"(?i)^@agent\s+next\b"), "next"),
 ]
+_NEXT_RE = re.compile(r"(?i)^@agent\s+next\s+([A-Za-z0-9_-]+)")
 _GENERIC = re.compile(r"(?i)^@agent\b")
 
-HELP = ("[agent] 不認得這個指令。可用:@agent run|retry|stop|cancel")
+HELP = ("[agent] 不認得這個指令。可用:@agent run|retry|stop|cancel"
+        "|next <profile>")
 DENIED = "[agent] 未授權:你的帳號不在指令白名單(commands.allowed_commenters)"
 
 
@@ -56,10 +62,12 @@ def parse(body: str) -> str | None:
 
 class CommandHandler:
     def __init__(self, source: JiraCloudSource, store: Store,
-                 allowed_commenters: list[str]):
+                 allowed_commenters: list[str],
+                 profiles: dict | None = None):
         self.source = source
         self.store = store
         self.allowed = allowed_commenters
+        self.profiles = profiles       # W2.5:next 目標校驗(None=不校驗)
 
     def _authorized(self, c: Comment) -> bool:
         return (c.author in self.allowed) or (c.author_id in self.allowed)
@@ -84,6 +92,33 @@ class CommandHandler:
                       f"run/retry 會在路由命中時生效)")
             return [self.store.journal("command_accepted", t.id, t.key,
                                        command=cmd, note="no-session")]
+        if cmd == "next":                       # F3 換手(W2.5)
+            m = _NEXT_RE.match(c.body.strip())
+            target = m.group(1) if m else ""
+            if not target or (self.profiles is not None
+                              and target not in self.profiles):
+                avail = (f"可用:{', '.join(sorted(self.profiles))}"
+                         if self.profiles else "用法:@agent next <profile>")
+                self.source.add_comment(
+                    t.id, f"[agent] next 目標 profile 無效:'{target}'。{avail}")
+                return [self.store.journal("command_rejected", t.id, t.key,
+                                           command="next", target=target)]
+            # 重置 session、pin 新 profile;下輪 poll 經 gate 重新排隊,目標
+            # require_approval 則重走審批門;workspace 哨值→下輪重 provision
+            sess.profile = target
+            sess.session_id = None
+            sess.attempts = 0
+            sess.outcome, sess.pending_reason = None, None
+            sess.inactive, sess.queued, sess.queued_at = False, False, 0.0
+            sess.approval_revisions = 0
+            sess.workspace = "(handoff)"
+            self.store.upsert_session(sess)
+            self.source.add_comment(
+                t.id, f"[agent] ack: next → {target}(已重置 session,"
+                      f"下輪重新排隊接手)")
+            log.info("%s 換手指令 → %s", t.key, target)
+            return [self.store.journal("handoff", t.id, t.key, kind="command",
+                                       to=target, author=c.author)]
         if cmd in ("run", "retry"):
             if cmd == "retry":
                 sess.attempts = 0
