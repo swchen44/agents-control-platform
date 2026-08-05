@@ -1,0 +1,92 @@
+# PLAN_wave3 — codex 驗證 + 冪等分層 + 生命週期收尾 + KPI + 隔離設定檔
+
+> 承 W2(M11/M12)+ 真 Jira 實測(TEST_real_jira.md,SCRUM-20/21/22 全 PASS)。
+> 範圍 = 使用者 2026-08-05 圈選:D2 codex、A2 冪等分層、retention/scheduled、
+> C3 人力估算、D1 隔離設定檔(全選)。
+> **單線、小步、每步 commit+push。斷線 resume:讀本檔 checklist + git log。**
+>
+> 開發約定(W2 延續):測試 `test_*.py` pytest-compatible+自跑、免 token;
+> e2e 花 token 的另立 `e2e_*.py`;核心 `arcp_harness/` ruff 嚴格 clean。
+
+## W3 設計決策(新標 W)
+
+| # | 決策 | 理由 |
+|---|---|---|
+| W17 | codex 驗證只走 rawcli(`engine: codex`),G1 用 `--output-schema <FILE>`(W1.4 已鋪);openhands-acp/server 的 codex 對照**不在本波**(quota/優先級) | D2:token 已可用;rawcli 是一級公民,先把第二引擎立起來驗「同 envelope 契約」 |
+| W18 | A2 冪等 = **分層**:agent 層靠 native resume transcript 重放(現成);harness 層自有機制——先**盤點 crash 窗口**(每個「寫外部 + 寫 store」的間隙),再對高風險路徑補防重(comment 冪等 key、attempt 標記),用 fault-injection 驗 | 使用者:「有些利用 agent transcript,有些要自己的機制」;先盤點再補,不盲加 |
+| W19 | retention:profile `retention_days`(default 270,config 可調);poller 每輪輕量掃(終態 + 過期 → 刪 workspace 目錄;store/journal 留著稽核);刪除記 journal | DESIGN §3(Q2 定案);工作區可拋、證據不可拋 |
+| W20 | scheduled/oneshot = **內部觸發源**,不經 Jira 票:`triggers:` config(cron-like `every:` + oneshot CLI);**要求 run name**;folder=`{agent}__{run_name}__{timestamp}`;走同一條 provision→(審批略過)→fork 管線;結果進 journal/dashboard(無 Jira 面) | DESIGN §5(Q6 定案);審批門綁 Jira description,內部觸發無票面→不審(config 即授權) |
+| W21 | C3 KPI:per-profile `human_minutes_est`(人做同任務的估時,config 給)+ 公式推算(可用 attempts/工具事件數修正);SUCCESS 時 journal 記 `human_minutes_saved`;dashboard 總覽卡加「節省人時 / 成本對比」 | 使用者:「計算若人作要花多久,可以用公式推算」;先簡單 config 估值,公式可迭代 |
+| W22 | D1 隔離 = **設定檔介面先行,不實驗**:`agent.isolation: {provider: auto\|seatbelt\|landlock\|appcontainer\|docker, ...}`;`auto`=依 OS 選提供方;現行 `os_sandbox: true` 映射為 `provider: auto` 向後相容;docker 只留介面與文件 | 使用者:「先不驗,未來 linux/windows/macos,os 提供方優先,docker 給選項」 |
+
+## Checklist
+
+**Phase W3.1 — D2 codex 真跑驗證(rawcli 第二引擎)**
+- [ ] routes.yaml 加 `filechain-codex` profile(rawcli engine: codex、sandbox:
+      workspace-write、model 省成本檔)+ label route
+- [ ] `e2e_codex.py`(花 token):filechain 任務真跑 → envelope 契約欄位齊
+      (completed/session_id/cost_usd)+ resume 續跑驗證
+- [ ] `e2e_contract.py` 擴:codex `--output-schema <FILE>` G1 結構化真跑
+      (status/next 解析;對齊 claude 的 4/4)
+- [ ] 真 Jira 冒煙(選做):SCRUM 票 label 跑一張 SUCCESS
+- [ ] commit+push
+
+**Phase W3.2 — A2 冪等分層(關一半副作用)**
+- [ ] **盤點文件**:列全部「外部寫入(Jira comment/assignee/description)× store 寫入」
+      crash 窗口(dispatcher/approval/commands/poller),每個標:重放後果 + 現有防護
+      (watermark/hash/journal)+ 缺口
+- [ ] 高風險缺口補防重:至少 (a) dispatcher 終態 comment(SUCCESS/FAILURE/pending)
+      冪等 key——crash 後重跑不重複留言;(b) approval 首貼說明/plan 寫入的窗口收斂
+- [ ] `test_idempotency.py`:模擬 crash 窗口(寫外部成功、store 未寫)→ 重跑一輪
+      → 不重複副作用
+- [ ] commit+push
+
+**Phase W3.3 — retention 回收(W19)**
+- [ ] profile/config `retention_days`(default 270;`0` = 不回收)
+- [ ] `arcp_harness/retention.py`:掃終態 session(outcome SUCCESS/ABORTED/FAILURE)
+      + 完成時間過期 → 刪 workspace 目錄(store/journal 留);journal `workspace_reclaimed`
+- [ ] store 加 `finished_at`(終態時間戳;migration ALTER)——回收判定基準
+- [ ] poller 每輪輕量掃(或每 N 輪);run_poller 接線
+- [ ] `test_retention.py`:過期刪/未過期留/0=不回收/刪後 journal 有記
+- [ ] commit+push
+
+**Phase W3.4 — scheduled/oneshot 內部觸發源(W20)**
+- [ ] routes.yaml `triggers:`:`- name/profile/run_name/every:`(cron-like 簡化:
+      `every: 24h` 級距即可)+ oneshot:`python3 run_trigger.py <trigger名>`(CLI)
+- [ ] `arcp_harness/triggers.py`:due 判定(store 記 last_run)→ 走 provision
+      (folder=`{agent}__{run_name}__{timestamp}`,run_name 校驗 `[a-z0-9-]`)→ fork
+      → grade → journal(無 Jira 面;prompt 來自 trigger config)
+- [ ] poller 每輪順檢 triggers due;dispatcher/gate 額度共用(佔 per-engine 額度)
+- [ ] `test_triggers.py`:due 判定/run_name 校驗/folder 命名/last_run 冪等(不重跑)
+- [ ] commit+push
+
+**Phase W3.5 — C3 KPI 人力估算(W21)**
+- [ ] profile `human_minutes_est`(選填);SUCCESS 時 journal `human_minutes_saved`
+      (公式 v1:est × 1;attempts>1 不折減——人也會重試)
+- [ ] dashboard 總覽卡加:累計節省人時、agent 成本 vs 人時成本對比(時薪 config,
+      default 不顯示金額只顯示時數)
+- [ ] `test_kpi.py`:journal 記錄/彙總正確;無 est 的 profile 不計
+- [ ] commit+push
+
+**Phase W3.6 — D1 隔離設定檔介面(W22,不實驗)**
+- [ ] profile `agent.isolation: {provider: auto|seatbelt|landlock|appcontainer|docker}`;
+      loader 校驗 provider 白名單;`os_sandbox: true` 映射 `provider: auto`(向後相容,
+      deprecation 註記)
+- [ ] rawcli agent:provider 解析(auto→darwin=seatbelt/linux=landlock 預留/其它=無)
+      ——現行為 seatbelt 實跑,其餘 provider 只接受設定不啟用(warning log)
+- [ ] DESIGN_lifecycle 或新 DESIGN_isolation 短文件:介面、各 OS 提供方路線、docker 邊界
+- [ ] `test_isolation_config.py`:載入/白名單/映射/未支援 provider 警告
+- [ ] commit+push
+
+## W3 明確不做(留後續)
+
+- openhands-acp / openhands-server 的 **codex 對照**(quota;rawcli 驗證優先)
+- **真 docker 隔離實作**(W22 介面先行,使用者明示先不驗)
+- **cron 表達式完整支援**(`every:` 級距夠用;複雜排程未來換)
+- **C3 進階公式**(工具事件數/行數加權;v1 先 config 估值)
+- 實時 killpg 長駐 agent(維持 W2 註記,異步架構未來)
+
+## W3 里程碑
+
+**M13 = 雙引擎 + 韌性**(W3.1/W3.2):codex 同 envelope 真跑、crash 窗口盤點+防重。
+**M14 = 自主營運**(W3.3-W3.6):回收、定時/一次性任務、KPI 對比、隔離介面就緒。
