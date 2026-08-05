@@ -8,17 +8,20 @@
 > - **統一快照器**:active 每 N 秒重產 HTML(config,**預設 60s**)+ 離手事件
 >   (換手/交人/pending/close)當下產 final + close 額外打包——B1/B2/B3 一套機制。
 > - **打包** = 最高壓縮率 tgz(gzip -9);agent transcript 與 script log 共用設施。
-> - **工具** = claude-code-history-viewer 的 `cchv-server` prebuilt,裝
->   `harness/tools/`(不 global);`--export <session|/abs/path.jsonl> --format html`
->   headless 產 HTML;claude(~/.claude/projects)+ codex(~/.codex/sessions)都支援
->   (WebFetch 查證)。
+> - **工具(2026-08-06 改案)** = **vendor `claude-code-log`**(MIT,Daniel Demmel,
+>   https://github.com/daaain/claude-code-log,本機 clone `~/git/claude-code-log`
+>   v1.5.0):把必要模組 copy 進 `harness/tools/cclog/` 作適當 refactor,**註明出處**。
+>   取代原 cchv-server prebuilt 方案 —— V0 實測發現 cchv `--export` **刻意丟棄
+>   sidechain**(source `export.rs:330` 證實),且 Rust binary 無法 refactor;
+>   claude-code-log 是 Python(同棧)、**原生渲染 sidechain/agentId(sub-agent)**、
+>   `--provider codex --session-id` 支援 codex(beta)。
 > - 順序:V0 除險 → C 快贏 → B2 基礎設施 → B1+B3 快照器 → A script trigger。
 
 ## W4 設計決策(新標 W)
 
 | # | 決策 | 理由 |
 |---|---|---|
-| W23 | cchv-server prebuilt 放 `harness/tools/`,**binary 不進 git**(.gitignore);`tools/README.md` 記版本+下載指令(或 install 腳本),斷線可重建 | 使用者:prebuilt、裝自己資料夾不 global;repo 不塞 binary |
+| W23 | **(改案)vendor claude-code-log 必要模組**進 `harness/tools/cclog/`(MIT、出處/版本註明於 NOTICE);剝離 TUI/browser/git 等不需要的部分,只留 parse→render HTML 鏈路;依賴裝進 `tools/cclog/.venv` 專用 venv(不污染其它);我們的薄 wrapper `render_transcript.py` 直呼函數(claude session / subagents/agent-*.jsonl / codex provider) | 使用者 2026-08-06 改案:「copy 到我們的專門資料夾,作適當 refactor,註明出處」;Python 可控、離線可用、版本釘住 |
 | W24 | 快照產物放 instance 內:`<base>/transcript/`(latest.html、final.html、close 打包 `transcript.tgz`);dashboard 以靜態檔服務 + 下載連結;retention 回收時一併清 | 產物跟 instance 同生命週期,W3.3 現成回收 |
 | W25 | 快照器 = harness 內背景 daemon thread(持 store 引用,掃 active session→cchv --export);離手/close 的 final 由 dispatcher 事件點同步觸發 | 同步 poll 架構中 attempt 執行時主線程被佔,每分鐘快照必須背景做 |
 | W26 | dashboard 分頁+filter 走**前端 JS**(server 照 render 全表,JS 做分頁/status 下拉/keyword);detail 頁去 `<meta refresh>` 改 **fetch 局部更新**(修 auto-collapse bug) | 票量數百級 JS 夠用,免 API 改動;整頁重載是收起 bug 根因 |
@@ -27,14 +30,20 @@
 
 ## Checklist
 
-**Phase W4.0 — V0:cchv-server prebuilt 落地驗證(除最大風險)**
-- [ ] 下載 prebuilt 到 `harness/tools/cchv/`;.gitignore binary;`tools/README.md`
-      記版本/下載指令/用法
-- [ ] 真 session 實測:claude(近期 SCRUM run 的 session id 或 aN.raw.jsonl)
-      `--export --format html` 產出可開 HTML;codex(thread id)同
-- [ ] 探索 sub-agent session 枚舉方式(claude Task 子 session 怎麼從主 session 找)
-      → 記錄到 `DESIGN_transcript.md`(可行性、指令、限制)
-- [ ] commit+push(文件與腳本;binary 不進)
+**Phase W4.0 — V0:transcript 工具落地驗證(除最大風險)**
+- [x] 研究(2026-08-06):cchv-server prebuilt 實測可產 HTML(claude session-id +
+      codex 絕對路徑),**但 source 證實 --export 丟 sidechain** → 棄用;
+      改案 vendor claude-code-log(MIT/Python/原生 sidechain/codex beta)
+- [x] sub-agent 枚舉方式確定:新版 Claude Code 子代理在
+      `<proj>/<session-id>/subagents/agent-<id>.jsonl` 獨立檔(glob 即得
+      sub-agent id);列入 DESIGN_transcript.md
+- [ ] vendor:copy claude-code-log 必要模組 → `harness/tools/cclog/`
+      (NOTICE 註明出處/版本/MIT;剝 TUI/瀏覽器/git 部分);專用 .venv 裝依賴
+- [ ] 薄 wrapper `render_transcript.py`:claude session → HTML、
+      subagents/agent-*.jsonl → 各自 HTML、codex thread → HTML
+- [ ] 真 session 實測三種都產出可開 HTML;`DESIGN_transcript.md` 記錄用法/限制
+- [ ] 清掉 cchv(tools/cchv 目錄與 .gitignore 項)
+- [ ] commit+push
 
 **Phase W4.1 — C:dashboard 分頁+filter+欄位+bug 修**
 - [ ] index 表格加欄:assignee / created / finished / 最新換手起點(W28 資料源)
