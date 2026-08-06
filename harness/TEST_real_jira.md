@@ -1,4 +1,21 @@
-# TEST_real_jira — W2a 審批門 + human_email 真 Jira 實測
+# TEST_real_jira — 審批門 / handoff / W4 可視化 真 Jira 實測
+
+> ## ★ W4 全鏈路實測(2026-08-06 08:38-08:42,SCRUM-23/24)— PASS
+>
+> poller+dashboard 起 → 一輪 poll 內全中,Chrome 肉眼驗證:
+>
+> | 驗證點 | 結果 |
+> |---|---|
+> | cron script trigger(`* * * * *` `/bin/sh date`) | ✓ 每分鐘 SUCCESS run,dashboard 列表 profile=`script:clock-demo`,詳情頁 stdout.log 文字檢視 + run.tgz 下載連結 |
+> | SCRUM-24 SUCCESS close 打包 | ✓ `transcript_packed [final.html, transcript.tgz]`(63.4KB);ticket 頁 Transcript 卡;**final.html 在 dashboard 內完整渲染**(cclog:session/model/工具/思考計數) |
+> | SCRUM-24 KPI | ✓ journal `human_minutes_saved: 15` → 總覽卡「節省人時 0.2h」 |
+> | SCRUM-23 handoff 離手定格 | ✓ kind=human 交人(approver accountId)+ `transcript/final.html` 產出 |
+> | dashboard 新 UI | ✓ 分頁/status 下拉(filter 後 8 筆)/keyword;新欄位 created/finished 有值;**fetch 局部更新**(SUCCESS 計數 7→8 活跳、無整頁重載、不再 auto-collapse) |
+> | graceful shutdown | ✓ `POST /shutdown` → `{"stopping":true}` → 當前輪跑完 →「graceful shutdown(當前輪已完成)」→ rc=0 乾淨退出 |
+>
+> **符合預期的限制實證**:快照器 `latest.html` 未出現——兩張票都單 attempt
+> 數十秒完成,首 attempt sid 未持久化(snapshotter 已註記的限制;根治 =
+> sid 預派,W5)。demo trigger 已移除,SCRUM-23/24 轉 Done。
 
 > ## ★ 實測結果(2026-08-05 22:40-22:48,SCRUM-20)— PASS
 >
