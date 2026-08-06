@@ -122,7 +122,7 @@ def test_dispatcher_close_packs():
     _fake_renderers(tmp)
 
     def _fork(agent_cfg, ws, prompt, artifacts, attempt,
-              resume_session_id=None):
+              resume_session_id=None, **kw):
         return AttemptResult(raw_outcome="completed", session_id="sid-1",
                              truly_resumed=False, cost_usd=0.0, error=None,
                              events_path="", envelope_path="",

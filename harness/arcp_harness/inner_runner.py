@@ -45,8 +45,8 @@ class AttemptResult:
 
 
 def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
-                attempt: int, resume_session_id: str | None = None
-                ) -> AttemptResult:
+                attempt: int, resume_session_id: str | None = None,
+                preassigned_session_id: str | None = None) -> AttemptResult:
     os.makedirs(artifacts_dir, exist_ok=True)
     backend = agent_cfg.get("backend", "openhands-acp")
     runner = RUNNERS.get(backend)
@@ -68,6 +68,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
                           if agent_cfg.get("output_schema") else None),
         "server_managed": agent_cfg.get("server_managed", False),  # conc.3
         "resume_session_id": resume_session_id,
+        # W5.1 sid 預派(W29):claude --session-id 可指定;crash 後憑它 resume
+        "preassigned_session_id": preassigned_session_id,
         "timeout_sec": agent_cfg.get("timeout_sec", 300),
         "events_path": os.path.join(artifacts_dir, f"a{attempt}.events.jsonl"),
         "envelope_path": os.path.join(artifacts_dir, f"a{attempt}.envelope.json"),

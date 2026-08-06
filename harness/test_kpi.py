@@ -36,7 +36,7 @@ def _profile(est=None, name="p"):
 
 
 def _fork_ok(agent_cfg, ws, prompt, artifacts, attempt,
-             resume_session_id=None):
+             resume_session_id=None, **kw):
     return AttemptResult(raw_outcome="completed", session_id="s1",
                          truly_resumed=False, cost_usd=0.02, error=None,
                          events_path="", envelope_path="", error_kind=None)

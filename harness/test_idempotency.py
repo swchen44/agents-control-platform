@@ -74,7 +74,7 @@ def _filled_empty_agent_name():
 def _fork_recorder():
     calls = []
 
-    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None):
+    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None, **kw):
         calls.append(ws)
         return AttemptResult(raw_outcome="completed", session_id="s1",
                              truly_resumed=False, cost_usd=0.0, error=None,
@@ -165,6 +165,84 @@ def test_command_replay_idempotent():
     h.handle(_ticket(), c)                         # watermark 丟失 → 重放
     assert store.get_session(1).outcome == "ABORTED"   # 狀態冪等
     assert len(src.comments) == 2                  # ack 重複一則(記錄於盤點 #2,可接受)
+
+
+# -- W5.1:sid 預派 + crash 偵測(盤點 #5)---------------------------------- #
+def test_sid_preassigned_and_persisted_before_spawn():
+    root = tempfile.mkdtemp()
+    store = Store(os.path.join(root, "s"))
+    seen = {}
+
+    def _fork(agent_cfg, ws, prompt, artifacts, attempt,
+              resume_session_id=None, preassigned_session_id=None, **kw):
+        s = store.get_session(1)                  # spawn 當下讀 store
+        seen.update(persisted_sid=s.session_id, persisted_attempts=s.attempts,
+                    resume=resume_session_id, pre=preassigned_session_id)
+        return AttemptResult(raw_outcome="completed",
+                             session_id=preassigned_session_id,
+                             truly_resumed=False, cost_usd=0.0, error=None,
+                             events_path="", envelope_path="",
+                             error_kind=None)
+    dmod.run_attempt = _fork
+    d = Dispatcher(MockSource(), store,
+                   {"p": _profile(agent={"backend": "rawcli",
+                                         "engine": "claude"})}, root=root)
+    ev = d.handle(_ticket(), "p")
+    assert seen["persisted_sid"] is not None          # spawn 前 sid 已落 store
+    assert seen["persisted_attempts"] == 1            # attempts 也先持久化
+    assert seen["pre"] == seen["persisted_sid"]       # 預派的就是持久化的
+    assert seen["resume"] is None                     # 首跑非 resume
+    assert any(e["type"] == "attempt_started" for e in ev)
+
+
+def test_crash_with_sid_refunds_and_resumes():
+    from arcp_harness.store import TicketSession
+    root = tempfile.mkdtemp()
+    store = Store(os.path.join(root, "s"))
+    base = os.path.join(root, "tickets", "1")
+    os.makedirs(os.path.join(base, "ws"), exist_ok=True)
+    # 上輪:attempts=1 已持久化、sid 有,但 a1.envelope.json 不存在 = 中途死
+    store.upsert_session(TicketSession(
+        issue_id=1, key="P-1", profile="p",
+        workspace=os.path.join(base, "ws"), session_id="sid-crash",
+        attempts=1, outcome=None, pending_reason=None, cost_usd=0.0))
+    calls = []
+
+    def _fork(agent_cfg, ws, prompt, artifacts, attempt,
+              resume_session_id=None, preassigned_session_id=None, **kw):
+        calls.append(resume_session_id)
+        return AttemptResult(raw_outcome="completed", session_id="sid-crash",
+                             truly_resumed=True, cost_usd=0.0, error=None,
+                             events_path="", envelope_path="",
+                             error_kind=None)
+    dmod.run_attempt = _fork
+    d = Dispatcher(MockSource(), store, {"p": _profile()}, root=root)
+    ev = d.handle(_ticket(), "p")
+    assert any(e["type"] == "attempt_crash_recovered" for e in ev)
+    assert calls == ["sid-crash"]                 # 退還後以原 sid resume
+    assert store.get_session(1).attempts == 1     # 退還再 +1,不重複消耗
+    assert store.get_session(1).outcome == "SUCCESS"
+
+
+def test_crash_without_sid_goes_unknown():
+    from arcp_harness.store import TicketSession
+    root = tempfile.mkdtemp()
+    store = Store(os.path.join(root, "s"))
+    base = os.path.join(root, "tickets", "1")
+    os.makedirs(os.path.join(base, "ws"), exist_ok=True)
+    store.upsert_session(TicketSession(
+        issue_id=1, key="P-1", profile="p",
+        workspace=os.path.join(base, "ws"), session_id=None,
+        attempts=1, outcome=None, pending_reason=None, cost_usd=0.0))
+    calls = []
+    dmod.run_attempt = lambda *a, **k: calls.append(1)
+    src = MockSource()
+    d = Dispatcher(src, store, {"p": _profile()}, root=root)
+    d.handle(_ticket(), "p")
+    assert calls == []                            # 不能證明 → 不重跑
+    s = store.get_session(1)
+    assert s.outcome == "UNKNOWN" and s.pending_reason == "unknown"
+    assert any("無法證明" in c for _, c in src.comments)
 
 
 if __name__ == "__main__":

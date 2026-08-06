@@ -86,7 +86,7 @@ def test_due_and_oneshot():
 def _fake_fork(results):
     it = iter(results)
 
-    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None):
+    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None, **kw):
         raw = next(it)
         return AttemptResult(raw_outcome=raw, session_id="s1",
                              truly_resumed=resume_session_id is not None,
@@ -120,7 +120,7 @@ def test_run_trigger_success_naming_and_watermark():
 def test_run_trigger_failure_evidence_loop():
     calls = []
 
-    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None):
+    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None, **kw):
         calls.append(prompt)
         return AttemptResult(raw_outcome="completed", session_id="s1",
                              truly_resumed=False, cost_usd=0.0, error=None,

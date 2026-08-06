@@ -78,7 +78,7 @@ PROFILES = {"p": _profile("p"), "other": _profile("other")}
 def _fork_recorder(structured=None):
     calls = []
 
-    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None):
+    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None, **kw):
         calls.append((agent_cfg, ws))
         return AttemptResult(raw_outcome="completed", session_id="s-new",
                              truly_resumed=False, cost_usd=0.0, error=None,

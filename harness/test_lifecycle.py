@@ -140,7 +140,7 @@ def test_dispatcher_skips_inactive():
     calls = []
 
     def _fork(agent_cfg, ws, prompt, artifacts, attempt,
-              resume_session_id=None):
+              resume_session_id=None, **kw):
         calls.append(ws)
         return AttemptResult(raw_outcome="completed", session_id="s1",
                              truly_resumed=False, cost_usd=0.0, error=None,

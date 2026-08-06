@@ -6,9 +6,9 @@ latest*.html——人類可在 dashboard 肉眼監控進行中的 agent;「換�
 由此保證(永遠有 ≤N 秒新的 HTML)+ 離手事件的 final 定格(dispatcher/
 commands 同步觸發,見 transcript.finalize 呼叫點)。
 
-限制(記錄):首個 attempt 進行中 session_id 尚未持久化(attempt 結束才寫
-store)→ 首輪快照可能落空;resume 後的 attempt 即時可見。根治 = sid 預派
-(DESIGN_idempotency #5,W4+)。
+(W5.1 起)rawcli+claude 的 sid 於 attempt 開跑前**預派並持久化**——首個
+attempt 進行中即可快照。其餘 backend/codex 首跑仍要等 attempt 結束才有 sid
+(codex thread id 由 CLI 自生無法預派),resume 後即時可見。
 """
 
 from __future__ import annotations

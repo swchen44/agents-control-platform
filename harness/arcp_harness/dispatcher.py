@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
+import uuid
 
 _A_ROUTE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))),
@@ -186,14 +187,55 @@ class Dispatcher:
         feedback: str | None = None
         res = None  # 若 attempts 已達 max、while 一次都沒跑,FAILURE 段仍安全
 
+        # W5.1 crash 偵測(W30):attempts 已計但該輪 envelope 缺 = 上輪
+        # harness 於 attempt 中途死。有 sid(任一引擎)→ 退還該 attempt、
+        # native resume 續跑(transcript 重放不重工);無 sid → 不能證明
+        # 副作用 → UNKNOWN 交人(loop on evidence)。
+        if sess.attempts > 0 and not os.path.exists(
+                os.path.join(artifacts, f"a{sess.attempts}.envelope.json")):
+            if sess.session_id:
+                sess.attempts -= 1
+                self.store.upsert_session(sess)
+                events.append(self.store.journal(
+                    "attempt_crash_recovered", ticket.id, ticket.key,
+                    resume=sess.session_id))
+                log.info("%s attempt 中途 crash → 退還並 resume(%s)",
+                         ticket.key, sess.session_id)
+            else:
+                sess.outcome, sess.pending_reason = "UNKNOWN", "unknown"
+                self.store.upsert_session(sess)
+                self.source.add_comment(ticket.id, (
+                    f"[agent] outcome=UNKNOWN:harness 於 attempt "
+                    f"{sess.attempts} 中途中斷且無 session id 可續,"
+                    f"無法證明副作用。請人工檢查後下指令。"
+                    f"\n{_resume_hint(sess)}"))
+                events.append(self.store.journal(
+                    "pending", ticket.id, ticket.key, reason="unknown",
+                    cause="harness-crash"))
+                return events
+
         while sess.attempts < profile.max_attempts:
             sess.attempts += 1
+            # W5.1 sid 預派(W29):rawcli+claude 首跑先派 uuid,attempt 狀態
+            # 先持久化再 spawn——crash 後可 resume;快照器首 attempt 就有 sid
+            resume_sid = sess.session_id
+            preassigned = None
+            if (resume_sid is None
+                    and agent_cfg.get("backend") == "rawcli"
+                    and agent_cfg.get("engine", "claude") == "claude"):
+                preassigned = str(uuid.uuid4())
+                sess.session_id = preassigned
+            self.store.upsert_session(sess)
+            events.append(self.store.journal(
+                "attempt_started", ticket.id, ticket.key,
+                attempt=sess.attempts, preassigned=bool(preassigned)))
             prompt = BASE_PROMPT if not feedback else (
                 f"{BASE_PROMPT}\n\n上次嘗試未通過驗證,失敗證據:\n{feedback}\n"
                 f"請只修正缺失的部分,不要重做已完成的部分。")
             res = run_attempt(agent_cfg, sess.workspace, prompt,
                               artifacts, sess.attempts,
-                              resume_session_id=sess.session_id)
+                              resume_session_id=resume_sid,
+                              preassigned_session_id=preassigned)
             sess.session_id = res.session_id or sess.session_id
             sess.cost_usd += res.cost_usd or 0.0
             events.append(self.store.journal(

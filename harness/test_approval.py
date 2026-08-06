@@ -168,7 +168,7 @@ def test_escalate_over_max_revisions():
 def _fork_recording():
     calls = []
 
-    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None):
+    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None, **kw):
         calls.append(ws)
         return AttemptResult(raw_outcome="completed", session_id="s1",
                              truly_resumed=False, cost_usd=0.0, error=None,

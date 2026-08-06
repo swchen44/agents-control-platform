@@ -56,7 +56,9 @@ def main() -> int:
             engine=engine,
             model=job.get("acp_model") or ("haiku" if engine == "claude"
                                            else None),
-            session_id=resume_sid,
+            # W5.1(W29):resume 優先;否則用 harness 預派的 sid(claude
+            # --session-id)——crash 後 harness 憑已持久化的 sid resume
+            session_id=resume_sid or job.get("preassigned_session_id"),
             resume=bool(resume_sid),
             raw_events_path=raw_path,
             os_sandbox=job.get("os_sandbox", False),         # claude seatbelt

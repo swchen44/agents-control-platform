@@ -72,7 +72,7 @@ class FakeSource:
 
 
 def fake_run(structured):
-    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None):
+    def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None, **kw):
         return AttemptResult(
             raw_outcome="completed", session_id="s1", truly_resumed=False,
             cost_usd=0.01, error=None, events_path="", envelope_path="",
