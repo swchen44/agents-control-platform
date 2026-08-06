@@ -122,6 +122,8 @@ try:
     check("欄位:summary/assignee/created/finished/換手起點",
           all(x in index for x in ("summary", "assignee", "created",
                                    "finished", "換手起點")))
+    check("欄位:停留時間/lifetime/人力$(W5.2)",
+          all(x in index for x in ("停留時間", "lifetime", "人力$")))
     check("欄位值:P-3 assignee=fox44", ">fox44</td>" in index)
     check("過濾器置頂:時間快選/自訂 range/狀態/summary/desc", all(
         x in index for x in ("id='qr'", "過去 30 天", "id='from'", "id='to'",
@@ -141,7 +143,8 @@ try:
     by = {r["iid"]: r for r in dat["rows"]}
     check("/data:rows 齊 + 欄位", 3 in by and all(
         k in by[3] for k in ("key", "summary", "desc", "status", "created",
-                             "finished", "cost", "human_min", "handoff")))
+                             "finished", "cost", "human_min", "handoff",
+                             "last_change")))
     check("/data:summary/desc 可過濾來源", by[3]["summary"] == "任務摘要 3"
           and by[3]["desc"] == "細節描述 3")
     check("/data:rate_default 欄位存在", "rate_default" in dat)

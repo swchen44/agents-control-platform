@@ -92,6 +92,7 @@ def build_data(journal, sessions, watch) -> dict:
     hs = handoff_starts(journal)
     hm: dict[int, float] = {}
     first_ts: dict[int, float] = {}
+    last_change: dict[int, float] = {}   # W5.2 停留時間:state/assignee 變動
     for e in journal:
         iid = e.get("issue_id")
         if not isinstance(iid, int) or iid == 0:
@@ -99,6 +100,9 @@ def build_data(journal, sessions, watch) -> dict:
         ts = e.get("ts") or 0
         if ts and (iid not in first_ts or ts < first_ts[iid]):
             first_ts[iid] = ts
+        if (e.get("type") in ("status_changed", "assignee_changed")
+                and ts > last_change.get(iid, 0)):
+            last_change[iid] = ts
         if (e.get("type") in ("resolved", "trigger_finished")
                 and e.get("human_minutes_saved")):
             hm[iid] = hm.get(iid, 0) + float(e["human_minutes_saved"])
@@ -123,6 +127,10 @@ def build_data(journal, sessions, watch) -> dict:
             "attempts": s.get("attempts") or 0,
             "cost": s.get("cost_usd") or 0,
             "human_min": hm.get(iid, 0),
+            # W5.2 停留時間基準:最近一次 state/assignee 變動(無變動=created)
+            "last_change": last_change.get(iid)
+                           or w.get("first_seen_ts")
+                           or first_ts.get(iid) or 0,
         })
     rate = os.environ.get("ARCP_HOURLY_RATE")
     return {"rows": rows,
@@ -459,8 +467,18 @@ function renderMoney(rows){
 // ---- 表格(排序 + 分頁) ----
 const COLS=[['key','ticket'],['summary','summary'],['profile','profile'],
   ['status','status'],['assignee','assignee'],['created','created'],
-  ['finished','finished'],['handoff','換手起點'],['attempts','attempts'],
-  ['cost','cost']];
+  ['finished','finished'],['handoff','換手起點'],
+  ['dwell','停留時間'],['lifetime','lifetime'],['human_cost','人力$'],
+  ['attempts','attempts'],['cost','cost']];
+// W5.2 計算欄:停留時間(state/assignee 最後變動起算,close 凍結)、
+// lifetime(create→close 或→現在)、人力$(預估分鐘×時薪)
+function prep(){const now=Date.now()/1000;D.rows.forEach(r=>{
+  const end=r.finished||now;
+  r.lifetime=r.created?Math.max(0,(end-r.created)/86400):0;
+  const lc=r.last_change||r.created;
+  r.dwell=lc?Math.max(0,(end-lc)/86400):0;
+  r.human_cost=r.human_min/60*(S.rate||0);});}
+function fdays(d){return d>=1?d.toFixed(1)+'d':Math.round(d*24)+'h';}
 function fmt(ts){if(!ts)return '-';const d=new Date(ts*1000);
   return (d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0')
   +' '+(d.getHours()+'').padStart(2,'0')+':'+(d.getMinutes()+'').padStart(2,'0');}
@@ -485,11 +503,14 @@ function renderTable(rows){
     `<td><span class='badge ${badgeCls(r.status)}'>${esc(r.status)}</span></td>`+
     `<td>${esc(r.assignee||'-')}</td><td>${fmt(r.created)}</td>`+
     `<td>${fmt(r.finished)}</td><td>${fmt(r.handoff)}</td>`+
+    `<td>${r.created?fdays(r.dwell):'-'}</td>`+
+    `<td>${r.created?fdays(r.lifetime):'-'}</td>`+
+    `<td>${r.human_min?'$'+r.human_cost.toFixed(2):'-'}</td>`+
     `<td>${r.attempts}</td><td>$${r.cost.toFixed(4)}</td></tr>`).join('');
   $('pginfo').textContent=rows.length+' 筆 · 第 '+(S.page+1)+'/'+pages+' 頁';
 }
-function render(){const rows=filtered();renderStats(rows);renderTime(rows);
-  renderMoney(rows);renderTable(rows);save();}
+function render(){prep();const rows=filtered();renderStats(rows);
+  renderTime(rows);renderMoney(rows);renderTable(rows);save();}
 function pg(d){S.page=Math.max(0,S.page+d);render();}
 // ---- 事件綁定(shell 元素只綁一次) ----
 function bind(){
@@ -536,27 +557,35 @@ def render_index(journal, sessions, watch=None) -> str:
     """W4.7 dashboard v2:過濾器置頂(統管統計/圖表/表格)+ 時間圖/金錢圖
     + 排序表格。初始表格由 server 渲染(no-JS/e2e 可讀),JS 從 /data 接手。"""
     watch = watch or {}
-    ids = sorted({e["issue_id"] for e in journal
-                  if isinstance(e.get("issue_id"), int) and e["issue_id"]}
-                 | set(sessions))
-    qpos = queue_positions(sessions)
-    hs = handoff_starts(journal)
+    import time as _t
+    now = _t.time()
+    rate = os.environ.get("ARCP_HOURLY_RATE")
+    rate = float(rate) if rate else None
+
+    def _days(d: float) -> str:
+        return f"{d:.1f}d" if d >= 1 else f"{round(d * 24)}h"
+
     rows = ""
-    for iid in ids:
-        s = sessions.get(iid, {})
-        w = watch.get(iid, {})
-        key = s.get("key") or w.get("key") or f"#{iid}"
-        label, cls = session_status(s, qpos) if s else ("-", "")
-        rows += (f"<tr><td><a href='/ticket/{iid}'>{esc(key)}</a></td>"
-                 f"<td>{esc((w.get('summary') or '')[:28])}</td>"
-                 f"<td>{esc(s.get('profile', '-'))}</td>"
-                 f"<td><span class='badge {cls}'>{esc(label)}</span></td>"
-                 f"<td>{esc(w.get('last_assignee') or '-')}</td>"
-                 f"<td>{esc(fmt_ts(w.get('first_seen_ts')))}</td>"
-                 f"<td>{esc(fmt_ts(s.get('finished_at')))}</td>"
-                 f"<td>{esc(fmt_ts(hs.get(iid)))}</td>"
-                 f"<td>{esc(s.get('attempts', 0))}</td>"
-                 f"<td>${s.get('cost_usd', 0) or 0:.4f}</td></tr>")
+    for r in build_data(journal, sessions, watch)["rows"]:
+        end = r["finished"] or now
+        life = _days(max(0.0, (end - r["created"]) / 86400)) \
+            if r["created"] else "-"
+        dwell = _days(max(0.0, (end - (r["last_change"] or r["created"]))
+                          / 86400)) if r["created"] else "-"
+        hcost = (f"${r['human_min'] / 60 * rate:.2f}"
+                 if r["human_min"] and rate else "-")
+        rows += (f"<tr><td><a href='/ticket/{r['iid']}'>{esc(r['key'])}"
+                 f"</a></td>"
+                 f"<td>{esc(r['summary'][:28])}</td>"
+                 f"<td>{esc(r['profile'])}</td>"
+                 f"<td><span class='badge'>{esc(r['status'])}</span></td>"
+                 f"<td>{esc(r['assignee'] or '-')}</td>"
+                 f"<td>{esc(fmt_ts(r['created']))}</td>"
+                 f"<td>{esc(fmt_ts(r['finished']))}</td>"
+                 f"<td>{esc(fmt_ts(r['handoff']))}</td>"
+                 f"<td>{dwell}</td><td>{life}</td><td>{hcost}</td>"
+                 f"<td>{r['attempts']}</td>"
+                 f"<td>${r['cost']:.4f}</td></tr>")
     filterbar = (
         "<div class='ctl card' style='flex-wrap:wrap'>"
         "<b style='color:#8b949e'>過濾</b>"
@@ -606,6 +635,8 @@ def render_index(journal, sessions, watch=None) -> str:
             f"<td><b>profile</b></td><td><b>status</b></td>"
             f"<td><b>assignee</b></td><td><b>created</b></td>"
             f"<td><b>finished</b></td><td><b>換手起點</b></td>"
+            f"<td><b>停留時間</b></td><td><b>lifetime</b></td>"
+            f"<td><b>人力$</b></td>"
             f"<td><b>attempts</b></td><td><b>cost</b></td></tr></thead>"
             f"<tbody>{rows}</tbody></table></div>"
             f"<p style='color:#8b949e'>四層 trace:L0 ticket · L1 attempt · "
