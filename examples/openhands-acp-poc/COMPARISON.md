@@ -165,3 +165,19 @@ trace + grader + cost + ticket 語義)比 tmux attach 更結構化、可讀、**
 **自動化(headless:grader/stall/細粒度/自動 resume) vs 人工可接管(tmux)**。
 多數 Jira 例行工單要自動化;極少數需人盯著操盤的可走 tmux。彈性/debug 需求已由
 detail page 用結構化方式滿足——又一個「backend 可插拔、視角統一」的受益點。
+
+## 補記(2026-08-06,W5.4):codex 兩路對照完成
+
+quota 解禁後補跑(harness `e2e_codex_openhands.py`,adapter =
+`@agentclientprotocol/codex-acp@1.1.2`):
+
+| | B(openhands-acp)codex | B+(openhands-server)codex |
+|---|---|---|
+| raw_outcome | completed ✅ | completed ✅ |
+| session_id | thread id ✅ | thread id ✅ |
+| grader 檔案鏈 | 3/3 ✅ | 3/3 ✅ |
+| cost 回報 | $0(訂閱制不回報,同 rawcli codex;best-effort 不判分) | 同左 |
+
+**三 backend × 雙引擎 6 格全綠**:rawcli/openhands-acp/openhands-server ×
+claude/codex 共用同一 envelope 契約,dispatcher/grader/三態零改動——
+B 期存活守則(差異化層 runtime-agnostic)至此全矩陣實證。

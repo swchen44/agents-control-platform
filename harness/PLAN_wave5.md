@@ -49,9 +49,20 @@
 - [x] DESIGN_lifecycle §6 標已落地(含 assignee 自動即時 kill 的同步 poll
       限制註記);commit+push
 
+**W5.4 — openhands 系 codex 對照(使用者 2026-08-06 選做)** ✅
+- [x] `e2e_codex_openhands.py`:backend openhands-acp / openhands-server ×
+      acp_server=codex(SDK 釘死表 → `codex-acp@1.1.2` adapter;acp_model
+      不給用帳號預設)真跑 filechain → **兩路皆 completed + session_id +
+      grader 3/3**;cost $0(訂閱制不回報,best-effort 不判分)
+- [x] **三 backend × 雙引擎 6 格矩陣全綠**(rawcli/acp/server × claude/
+      codex 同 envelope 契約)——2026-08-03 被 quota 擋下的最後兩格補完;
+      COMPARISON.md 補記
+- [x] commit+push
+
 ## 後續候選(未排程,擇需)
 
 - ~~E3 evict/實時 killpg~~ → W5.3 完成;剩 rehydrate 對照(異步架構再議)
+- ~~openhands 系 codex 對照~~ → W5.4 完成
 - openhands-acp/server 的 codex 對照(quota)
 - landlock / docker 隔離實作(W22 介面已就緒)
 - 量產 python 標準結構(另開 repo)
