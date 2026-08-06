@@ -51,10 +51,19 @@
   偵測 resume/UNKNOWN;production 實證 SCRUM-27);**W5.3 E3 evict/實時
   killpg**(POST /evict → EVICT 檔 → 看門狗 killpg → 不耗 attempt resume;
   e2e 真測 9.3s 終結 sleep 90;ticket 頁按鈕)。21 個 test_*.py + e2e 全綠。
-- **恢復起點(剩餘候選)**:(a) openhands-acp/server 的 codex 對照(quota);
-  (b) landlock/docker 隔離實作(W22 介面已就緒);(c) 量產 python 標準結構
-  另開 repo(需使用者定 repo 名/範圍);(d) 異步架構(assignee 自動即時
-  kill + rehydrate,大工程另議)。
+- **W5.4-5.5 ✅(2026-08-06)**:W5.4 openhands 系 codex 對照(三 backend ×
+  雙引擎 6 格矩陣全綠,COMPARISON.md 補記);**W5.5 rawcli 脫離 OpenHands
+  依賴**——`arcp_rawcli/agent.py` 重寫純 stdlib(去 AgentBase/Conversation/
+  pydantic,`run(prompt,ws,on_event)` 取代 step,事件 dict 同 JSONL 形狀
+  dashboard 零改);rawcli 主線不再需要 591MB openhands venv(系統 python 即
+  跑,claude/codex/e2e_evict 真跑驗過);routes.yaml 四個 rawcli profile 移除
+  venv;openhands-acp/server backend 仍選配(需 venv)。live poller hot reload
+  帶入零重啟。
+- **恢復起點(剩餘候選)**:(a) landlock/docker 隔離實作(W22 介面已就緒,
+  等搬 Linux/部署前夕);(b) 量產 python 標準結構另開 repo(需使用者定 repo
+  名/公開與否);(c) 異步架構(assignee 自動即時 kill + rehydrate,大工程另議);
+  (d) 進一步剝離:openhands-acp/server backend 若確定不用可整個移除(六格對照
+  已存證,維護價值低)。
 - **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
   venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
   `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
