@@ -89,6 +89,17 @@
       Chrome 實測:表內容渲染、GROUP BY 聚合查詢、匯出按鈕
 - [x] commit+push
 
+**W5.7 — dashboard 表格欄寬可拖曳(使用者 2026-08-06)** ✅
+- [x] 共用 `resizable(table,key)`(兩頁載入):表頭右緣 7px 拖把 → 拖動調欄寬;
+      維持不變式「表寬=各欄寬總和」(`table-layout:fixed` 才不被瀏覽器重分配),
+      拖寬即整表加寬(水平捲動)、鄰欄不動
+- [x] 兩張表都套用:index Tickets(`#tix`,card 加 overflow-x:auto)+ DB
+      Browser(表內容 + 查詢結果);cells nowrap+ellipsis(長值截斷可拖寬看)
+- [x] 寬度存 **localStorage**(跨整頁重載留存)+ 凍結進 store(re-render/5s
+      刷新不重置);拖把 stopPropagation(不誤觸排序)
+- [x] e2e_dashboard +2(兩頁 resizable 存在);Chrome 實測:拖 status 欄變寬、
+      鄰欄不動、經 5s 刷新仍保持;ruff clean。commit+push
+
 ## 後續候選(未排程,擇需)
 
 - ~~E3 evict/實時 killpg~~ → W5.3 完成;剩 rehydrate 對照(異步架構再議)

@@ -242,6 +242,10 @@ a{color:#58a6ff;text-decoration:none}main{padding:0 24px 40px;max-width:1100px}
 .ev .t{color:#8b949e}.ev .k{color:#58a6ff}.layer{border-left:3px solid #30363d;padding-left:12px}
 .L0{border-color:#a371f7}.L1{border-color:#58a6ff}.L2{border-color:#3fb950}.L3{border-color:#d29922}
 table{border-collapse:collapse;width:100%;font-size:12px}td{padding:3px 8px;border-bottom:1px solid #21262d;vertical-align:top}
+table.resiz{table-layout:fixed}
+table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rz{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize;user-select:none}
+.rz:hover{background:#1f6feb}
 .tabs{display:flex;gap:8px;margin:16px 0 8px}.tab{padding:4px 14px;border-radius:6px;background:#21262d;cursor:pointer;user-select:none}.tab.on{background:#1f6feb;color:#fff}
 .pane{display:none}.pane.on{display:block}
 .msg{margin:8px 0;display:flex}.msg.user{justify-content:flex-end}
@@ -570,6 +574,7 @@ function renderTable(rows){
     `<td>${r.human_min?'$'+r.human_cost.toFixed(2):'-'}</td>`+
     `<td>${r.attempts}</td><td>$${r.cost.toFixed(4)}</td></tr>`).join('');
   $('pginfo').textContent=rows.length+' 筆 · 第 '+(S.page+1)+'/'+pages+' 頁';
+  resizable($('tix'),'tix');          // W5.7 欄寬可拖曳
 }
 function render(){prep();const rows=filtered();renderStats(rows);
   renderTime(rows);renderMoney(rows);renderTable(rows);save();}
@@ -651,6 +656,43 @@ _INPUT = ("style='background:#0d1117;color:#c9d1d9;border:1px solid #30363d;"
           "border-radius:6px;padding:4px 10px'")
 
 
+_RESIZE_JS = """
+<script>
+// W5.7 欄寬可拖曳:表頭右緣拖把 → 調欄寬;寬度存 localStorage 跨重載留存。
+// 先量測(切 table-layout:fixed 前)並凍結進 store,避免 re-render 後被平均重置。
+window.RESW=window.RESW||(function(){try{
+  return JSON.parse(localStorage.getItem('arcp-resw'))||{}}catch(e){return{}}})();
+function _saveResw(){try{
+  localStorage.setItem('arcp-resw',JSON.stringify(window.RESW))}catch(e){}}
+function resizable(table,key){
+  if(!table||!table.tHead||!table.tHead.rows.length)return;
+  const cells=[...table.tHead.rows[0].cells];
+  const store=window.RESW[key]||(window.RESW[key]={});
+  // 量測需在切 fixed 前(此時 offsetWidth 為自然寬);已存過就沿用
+  cells.forEach(function(c,i){if(store[i]==null)store[i]=c.offsetWidth;});
+  table.classList.add('resiz');
+  function applyW(){var tw=0; cells.forEach(function(c,j){
+    c.style.width=store[j]+'px'; tw+=store[j];}); table.style.width=tw+'px';}
+  applyW();                            // 不變式:表寬=各欄寬總和(免重分配)
+  cells.forEach(function(c,i){
+    c.style.position='relative';
+    const h=document.createElement('div'); h.className='rz';
+    h.addEventListener('click',function(e){e.stopPropagation();});
+    h.addEventListener('mousedown',function(e){
+      e.preventDefault(); e.stopPropagation();
+      const sx=e.clientX, sw=store[i];
+      function mv(ev){store[i]=Math.max(40,sw+ev.clientX-sx); applyW();}
+      function up(){document.removeEventListener('mousemove',mv);
+        document.removeEventListener('mouseup',up);
+        document.body.style.userSelect=''; _saveResw();}
+      document.addEventListener('mousemove',mv);
+      document.addEventListener('mouseup',up);
+      document.body.style.userSelect='none';});
+    c.appendChild(h);});
+}
+</script>"""
+
+
 def _nav(active: str) -> str:
     """W5.6 頂部導覽:Dashboard / DB 兩個 tab。"""
     def tab(key, href, label):
@@ -696,6 +738,7 @@ async function showTable(){
   $('dbtitle').textContent='📋 '+CUR;
   $('dbpg').style.display=d.total>LIM?'flex':'none';
   $('dbout').innerHTML=tbl(d.columns,d.rows,d.total);
+  resizable(document.querySelector('#dbout table'),'db:'+CUR);  // W5.7
 }
 function dpg(dir){OFF=Math.max(0,OFF+dir*LIM);showTable();}
 async function runQ(){
@@ -710,6 +753,7 @@ async function runQ(){
   $('dbout').innerHTML=tbl(d.columns,d.rows,null)+
     (d.rows.length>=500?"<p style='color:#d29922;font-size:12px'>"+
     "(上限 500 列)</p>":'');
+  resizable(document.querySelector('#dbout table'),'db:query');  // W5.7
 }
 $('qbox').addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key==='Enter')runQ();});
@@ -745,7 +789,7 @@ def render_db_page() -> str:
             "<div class='btn' onclick='dpg(1)'>下頁 ›</div></div>"
             "<div id='dbout'></div></div>"
             "</div></div></main>"
-            f"{_DB_JS}")
+            f"{_RESIZE_JS}{_DB_JS}")
 
 
 def render_index(journal, sessions, watch=None) -> str:
@@ -828,7 +872,8 @@ def render_index(journal, sessions, watch=None) -> str:
             f"<div class='stats' id='stats'>"
             f"{overview_cards(sessions, journal)}</div>"
             f"{control_bar()}{charts}"
-            f"<h2>Tickets</h2>{toolbar}<div class='card'>"
+            f"<h2>Tickets</h2>{toolbar}"
+            f"<div class='card' style='overflow-x:auto'>"
             f"<table id='tix'><thead><tr id='thead-row'>"
             f"<td><b>ticket</b></td><td><b>summary</b></td>"
             f"<td><b>profile</b></td><td><b>status</b></td>"
@@ -840,7 +885,7 @@ def render_index(journal, sessions, watch=None) -> str:
             f"<tbody>{rows}</tbody></table></div>"
             f"<p style='color:#8b949e'>四層 trace:L0 ticket · L1 attempt · "
             f"L2 envelope · L3 conversation events。點 ticket 展開。</p>"
-            f"{_APP_JS}</main>")
+            f"{_RESIZE_JS}{_APP_JS}</main>")
 
 
 def render_approval(s: dict, evs: list[dict]) -> str:

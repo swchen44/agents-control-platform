@@ -146,6 +146,11 @@ try:
     dbpage = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/db", timeout=5).read().decode()
     check("DB 頁:表格清單/查詢框", "唯讀查詢" in dbpage and "qbox" in dbpage)
+    # W5.7:欄寬可拖曳(兩頁都載入 resizable + 呼叫)
+    check("欄寬拖曳:index 表 resizable",
+          "function resizable" in index and "resizable($('tix')" in index)
+    check("欄寬拖曳:DB 表 resizable",
+          "function resizable" in dbpage and "#dbout table" in dbpage)
     tabs = json.loads(urllib.request.urlopen(
         f"http://127.0.0.1:{port}/db/tables", timeout=5).read())
     names = {t["name"] for t in tabs}
