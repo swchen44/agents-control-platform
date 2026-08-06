@@ -136,6 +136,42 @@ try:
     check("表格排序 JS(sortable/thead-row)",
           "sortable" in index and "thead-row" in index)
     check("index 無整頁 meta refresh", "http-equiv" not in index)
+    # W5.6:匯出按鈕 + DB tab 導覽
+    check("匯出按鈕 CSV/JSON", "expo(\"csv\")" in index
+          and "expo(\"json\")" in index)
+    check("導覽:Dashboard/DB tab",
+          "DB Browser" in index and "/db" in index)
+
+    # W5.6:DB 瀏覽器頁 + 端點
+    dbpage = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/db", timeout=5).read().decode()
+    check("DB 頁:表格清單/查詢框", "唯讀查詢" in dbpage and "qbox" in dbpage)
+    tabs = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/db/tables", timeout=5).read())
+    names = {t["name"] for t in tabs}
+    check("/db/tables:三表齊", {"ticket_session", "ticket_watch",
+                               "trigger_state"} <= names)
+    td = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/db/table/ticket_session?limit=5",
+        timeout=5).read())
+    check("/db/table:欄位+資料", "columns" in td and "issue_id" in td["columns"])
+    # 唯讀查詢 POST
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/db/query", method="POST",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({"sql": "SELECT COUNT(*) n FROM ticket_session"})
+        .encode())
+    qr = json.loads(urllib.request.urlopen(req, timeout=5).read())
+    check("/db/query:SELECT 可查", qr.get("columns") == ["n"]
+          and qr["rows"][0][0] >= 1)
+    # 寫入被擋(唯讀)
+    req2 = urllib.request.Request(
+        f"http://127.0.0.1:{port}/db/query", method="POST",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({"sql": "UPDATE ticket_session SET cost_usd=0"})
+        .encode())
+    qr2 = json.loads(urllib.request.urlopen(req2, timeout=5).read())
+    check("/db/query:非 SELECT 擋掉", "error" in qr2)
 
     # W4.7:/data 單一資料源
     dat = json.loads(urllib.request.urlopen(

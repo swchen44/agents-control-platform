@@ -77,6 +77,18 @@
       agent.py import 只剩 datetime/json/os/signal/subprocess/threading/
       time/uuid。commit+push
 
+**W5.6 — dashboard 匯出 + SQLite 瀏覽器(使用者 2026-08-06)** ✅
+- [x] 表格匯出 **CSV / JSON**(經 filter+sort 的資料,client-side Blob 下載;
+      timestamp 轉 ISO、dwell/lifetime 天數、human_cost 依時薪)
+- [x] **DB Browser tab**(頂部導覽 Dashboard/DB):左側表清單(名+筆數)、
+      點表看內容(分頁)、**唯讀 SQL 查詢框**(⌘/Ctrl+Enter;SELECT/WITH/
+      PRAGMA + 單語句 + `mode=ro` 連線三重保護,寫入引擎層擋);null 灰字、
+      水平捲動
+- [x] 端點:`GET /db/tables`、`GET /db/table/<name>`、`POST /db/query`
+      (唯讀連線讀 WAL 實證;write→404 error);e2e_dashboard +7 全 PASS;
+      Chrome 實測:表內容渲染、GROUP BY 聚合查詢、匯出按鈕
+- [x] commit+push
+
 ## 後續候選(未排程,擇需)
 
 - ~~E3 evict/實時 killpg~~ → W5.3 完成;剩 rehydrate 對照(異步架構再議)

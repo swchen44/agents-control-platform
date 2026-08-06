@@ -157,6 +157,68 @@ def esc(x) -> str:
     return html.escape(str(x))
 
 
+# -- W5.6 DB 瀏覽器(唯讀連線;寫入被引擎層擋,WAL 可讀)------------------- #
+def _db_ro():
+    db = os.path.join(ROOT, "harness.db")
+    if not os.path.exists(db):
+        return None
+    return sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+
+
+def db_tables() -> list[dict]:
+    con = _db_ro()
+    if con is None:
+        return []
+    out = []
+    try:
+        for (name,) in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "ORDER BY name"):
+            n = con.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
+            out.append({"name": name, "rows": n})
+    finally:
+        con.close()
+    return out
+
+
+def db_table(name: str, limit: int, offset: int) -> dict:
+    if name not in {t["name"] for t in db_tables()}:   # 白名單=真實表名
+        return {"error": "no such table"}
+    con = _db_ro()
+    try:
+        total = con.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
+        cur = con.execute(f'SELECT * FROM "{name}" LIMIT ? OFFSET ?',
+                          (limit, offset))
+        cols = [d[0] for d in cur.description]
+        rows = [list(r) for r in cur.fetchall()]
+        return {"columns": cols, "rows": rows, "total": total}
+    finally:
+        con.close()
+
+
+def db_query(sql: str) -> dict:
+    """唯讀查詢:連線 mode=ro(引擎層擋寫)+ 單語句 + SELECT/WITH/PRAGMA 前綴。"""
+    s = (sql or "").strip().rstrip(";")
+    low = s.lower()
+    if not (low.startswith("select") or low.startswith("with")
+            or low.startswith("pragma")):
+        return {"error": "只允許 SELECT / WITH / PRAGMA(唯讀)"}
+    if ";" in s:
+        return {"error": "只允許單一語句"}
+    con = _db_ro()
+    if con is None:
+        return {"error": "db 不存在"}
+    try:
+        cur = con.execute(s)
+        cols = [d[0] for d in cur.description] if cur.description else []
+        rows = [list(r) for r in cur.fetchmany(500)]
+        return {"columns": cols, "rows": rows}
+    except Exception as e:  # noqa: BLE001 — 把 SQL 錯誤回給 debug 頁
+        return {"error": str(e)}
+    finally:
+        con.close()
+
+
 CSS = """
 body{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:0;background:#0d1117;color:#c9d1d9}
 header{background:#161b22;padding:16px 24px;border-bottom:1px solid #30363d}
@@ -512,6 +574,42 @@ function renderTable(rows){
 function render(){prep();const rows=filtered();renderStats(rows);
   renderTime(rows);renderMoney(rows);renderTable(rows);save();}
 function pg(d){S.page=Math.max(0,S.page+d);render();}
+// ---- W5.6 匯出經 filter+sort 的資料(CSV / JSON)----
+const EXCOLS=[['key','ticket'],['summary','summary'],['profile','profile'],
+  ['status','status'],['assignee','assignee'],['created','created'],
+  ['finished','finished'],['handoff','handoff'],['dwell','dwell_days'],
+  ['lifetime','lifetime_days'],['human_cost','human_cost_usd'],
+  ['attempts','attempts'],['cost','cost_usd']];
+function iso(ts){return ts?new Date(ts*1000).toISOString():'';}
+function exval(r,k){
+  if(k==='created'||k==='finished'||k==='handoff')return iso(r[k]);
+  if(k==='dwell'||k==='lifetime')return r[k]?r[k].toFixed(2):'';
+  if(k==='human_cost')return r.human_min?r.human_cost.toFixed(2):'';
+  if(k==='cost')return r.cost.toFixed(4);
+  return r[k]==null?'':r[k];
+}
+function expoRows(){prep();return filtered().sort((a,b)=>{
+  const x=a[S.sort],y=b[S.sort];
+  return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*S.dir;});}
+function dl(blob,name){const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  URL.revokeObjectURL(a.href);}
+function expo(fmt){
+  const rows=expoRows();
+  if(fmt==='json'){
+    const arr=rows.map(r=>{const o={};EXCOLS.forEach(([k,l])=>{
+      o[l]=(k==='created'||k==='finished'||k==='handoff')?iso(r[k]):
+        (k==='human_cost'?(r.human_min?+r.human_cost.toFixed(2):null):r[k]);});
+      return o;});
+    dl(new Blob([JSON.stringify(arr,null,2)],{type:'application/json'}),
+       'arcp-tickets.json');
+  }else{
+    const q=v=>{v=''+v;return /[",\\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const head=EXCOLS.map(c=>c[1]).join(',');
+    const body=rows.map(r=>EXCOLS.map(c=>q(exval(r,c[0]))).join(',')).join('\\n');
+    dl(new Blob([head+'\\n'+body],{type:'text/csv'}),'arcp-tickets.csv');
+  }
+}
 // ---- 事件綁定(shell 元素只綁一次) ----
 function bind(){
   $('qr').value=S.qr;$('from').value=S.from;$('to').value=S.to;
@@ -551,6 +649,103 @@ bind();tick();setInterval(tick,5000);
 
 _INPUT = ("style='background:#0d1117;color:#c9d1d9;border:1px solid #30363d;"
           "border-radius:6px;padding:4px 10px'")
+
+
+def _nav(active: str) -> str:
+    """W5.6 頂部導覽:Dashboard / DB 兩個 tab。"""
+    def tab(key, href, label):
+        on = ("background:#1f6feb;color:#fff" if key == active
+              else "background:#21262d;color:#c9d1d9")
+        return (f"<a href='{href}' style='padding:6px 16px;border-radius:6px;"
+                f"text-decoration:none;{on}'>{label}</a>")
+    return ("<div style='display:flex;gap:8px;padding:12px 24px;"
+            "background:#161b22;border-bottom:1px solid #30363d'>"
+            + tab("dash", "/", "📊 Dashboard")
+            + tab("db", "/db", "🗃 DB Browser") + "</div>")
+
+
+_DB_JS = """
+<script>
+const $=id=>document.getElementById(id);
+let CUR=null, OFF=0, LIM=100;
+function esc(x){return (''+x).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function tbl(cols,rows,total){
+  if(!rows.length)return "<p style='color:#8b949e'>(無資料)</p>";
+  const h='<tr>'+cols.map(c=>`<td><b>${esc(c)}</b></td>`).join('')+'</tr>';
+  const b=rows.map(r=>'<tr>'+r.map(v=>`<td>${v==null?
+    "<span style='color:#6e7681'>null</span>":esc((''+v).slice(0,200))}`+
+    '</td>').join('')+'</tr>').join('');
+  return `<div style='overflow:auto;max-height:60vh'><table id='tix'>`+
+    `<thead>${h}</thead><tbody>${b}</tbody></table></div>`+
+    (total!=null?`<div style='color:#8b949e;font-size:12px;margin-top:6px'>`+
+    `${total} 筆;顯示 ${OFF+1}-${OFF+rows.length}</div>`:'');
+}
+async function loadTables(){
+  const t=await (await fetch('/db/tables')).json();
+  $('tlist').innerHTML=t.map(x=>
+    `<div class='btn' style='display:block;margin:4px 0;text-align:left' `+
+    `onclick="openT('${x.name}')">${esc(x.name)} `+
+    `<span style='color:#8b949e;float:right'>${x.rows}</span></div>`).join('');
+}
+async function openT(name){CUR=name;OFF=0;$('qbox').value='';showTable();}
+async function showTable(){
+  const d=await (await fetch(`/db/table/${CUR}?limit=${LIM}&offset=${OFF}`))
+    .json();
+  if(d.error){$('dbout').innerHTML="<p style='color:#f85149'>"+esc(d.error)+
+    "</p>";return;}
+  $('dbtitle').textContent='📋 '+CUR;
+  $('dbpg').style.display=d.total>LIM?'flex':'none';
+  $('dbout').innerHTML=tbl(d.columns,d.rows,d.total);
+}
+function dpg(dir){OFF=Math.max(0,OFF+dir*LIM);showTable();}
+async function runQ(){
+  const sql=$('qbox').value.trim();if(!sql)return;
+  CUR=null;$('dbpg').style.display='none';
+  const d=await (await fetch('/db/query',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sql})})).json();
+  if(d.error){$('dbtitle').textContent='⚠ 查詢錯誤';
+    $('dbout').innerHTML="<p style='color:#f85149'>"+esc(d.error)+"</p>";return;}
+  $('dbtitle').textContent='🔎 查詢結果';
+  $('dbout').innerHTML=tbl(d.columns,d.rows,null)+
+    (d.rows.length>=500?"<p style='color:#d29922;font-size:12px'>"+
+    "(上限 500 列)</p>":'');
+}
+$('qbox').addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key==='Enter')runQ();});
+loadTables();
+</script>"""
+
+
+def render_db_page() -> str:
+    """W5.6 SQLite 瀏覽器 tab(唯讀,debug 用)。"""
+    return (f"{_nav('db')}"
+            f"<header><h1>DB Browser · harness.db "
+            f"<span style='color:#8b949e;font-size:13px'>(唯讀)</span>"
+            f"</h1></header><main>"
+            "<div style='display:flex;gap:16px;align-items:flex-start'>"
+            "<div class='card' style='min-width:200px'>"
+            "<b style='color:#8b949e'>Tables</b><div id='tlist'></div></div>"
+            "<div style='flex:1'>"
+            "<div class='card'>"
+            "<b style='color:#8b949e'>唯讀查詢</b>"
+            "<span style='color:#6e7681;font-size:11px'> "
+            "SELECT / WITH / PRAGMA;⌘/Ctrl+Enter 執行</span>"
+            "<textarea id='qbox' placeholder='SELECT * FROM ticket_session "
+            "WHERE outcome IS NULL' style='width:100%;height:64px;margin-top:"
+            "6px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;"
+            "border-radius:6px;padding:8px;font-family:ui-monospace,monospace;"
+            "box-sizing:border-box'></textarea>"
+            "<div class='btn' style='margin-top:6px' onclick='runQ()'>▶ 執行"
+            "</div></div>"
+            "<div class='card'><h2 id='dbtitle' style='margin-top:0'>"
+            "← 點左側表格</h2>"
+            "<div id='dbpg' class='ctl' style='display:none;margin-bottom:8px'>"
+            "<div class='btn' onclick='dpg(-1)'>‹ 上頁</div>"
+            "<div class='btn' onclick='dpg(1)'>下頁 ›</div></div>"
+            "<div id='dbout'></div></div>"
+            "</div></div></main>"
+            f"{_DB_JS}")
 
 
 def render_index(journal, sessions, watch=None) -> str:
@@ -622,8 +817,12 @@ def render_index(journal, sessions, watch=None) -> str:
         "<option>50</option><option>100</option></select>"
         "<div class='btn' onclick='pg(-1)'>‹ 上頁</div>"
         "<div class='btn' onclick='pg(1)'>下頁 ›</div>"
-        "<span id='pginfo' style='color:#8b949e;font-size:12px'></span></div>")
-    return (f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
+        "<span id='pginfo' style='color:#8b949e;font-size:12px'></span>"
+        "<span style='margin-left:auto'></span>"
+        "<div class='btn' onclick='expo(\"csv\")'>⬇ CSV</div>"
+        "<div class='btn' onclick='expo(\"json\")'>⬇ JSON</div></div>")
+    return (f"{_nav('dash')}"
+            f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
             f"</h1></header><main>"
             f"{filterbar}"
             f"<div class='stats' id='stats'>"
@@ -793,18 +992,53 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _send_json(self, obj) -> None:
+        payload = json.dumps(obj, ensure_ascii=False,
+                             default=str).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_POST(self):
+        if self.path == "/db/query":               # W5.6 唯讀查詢
+            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+            except (ValueError, TypeError):
+                body = {}
+            self._send_json(db_query(body.get("sql", "")))
+            return
+        self.send_response(404)
+        self.end_headers()
+
     def do_GET(self):
         journal, sessions = read_journal(), read_sessions()
         if self.path == "/data":                   # W4.7 前端單一資料源
-            payload = json.dumps(
-                build_data(journal, sessions, read_watch()),
-                ensure_ascii=False).encode("utf-8")
+            self._send_json(build_data(journal, sessions, read_watch()))
+            return
+        if self.path == "/db/tables":              # W5.6 DB 瀏覽器
+            self._send_json(db_tables())
+            return
+        if self.path.startswith("/db/table/"):
+            from urllib.parse import parse_qs, urlparse
+            u = urlparse(self.path)
+            name = u.path.rsplit("/", 1)[1]
+            q = parse_qs(u.query)
+            self._send_json(db_table(
+                name, int((q.get("limit") or ["100"])[0]),
+                int((q.get("offset") or ["0"])[0])))
+            return
+        if self.path == "/db":
+            body = render_db_page()
+            page = (f"<!doctype html><html><head><meta charset='utf-8'>"
+                    f"<title>ARCP DB</title><style>{CSS}</style></head>"
+                    f"<body>{body}</body></html>")
             self.send_response(200)
-            self.send_header("Content-Type",
-                             "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(payload)
+            self.wfile.write(page.encode())
             return
         if self.path.startswith("/tfile/"):        # W4.2 transcript 產物服務
             try:
