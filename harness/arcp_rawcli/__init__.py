@@ -1,11 +1,10 @@
-"""RawCLIAgent — route C: OpenHands 骨架 + raw CLI 執行單元(不走 ACP)。
+"""RawCLIAgent — rawcli 執行單元:直接 spawn `claude -p`/`codex exec`。
 
-在 OpenHands SDK 內以自製 AgentBase 子類直接 spawn `claude -p`/`codex exec`、
-解析原生 stream-json、發細粒度事件進 event-sourced 體系。事件回到 A 級,
-無 ACP 的 14-vs-248 粒度損失、無 adapter 版本鏈、有中途控制窗口。
-
-Importing this package registers RawCLIAgent for server-side resolve_kind()
-(C.0 gate:server 啟動時 import 觸發 __init_subclass__ 註冊)。
+W5.5 起**零 OpenHands 依賴**(純 stdlib):自建進程 + 解析原生 stream-json +
+發細粒度事件(dict,與舊 SDK MessageEvent 同 JSONL 形狀,dashboard 零改)。
+事件保真回到 A 級,無 ACP 粒度損失、無 adapter 版本鏈、有中途控制窗口。
+(openhands-acp / openhands-server backend 仍走 SDK,需裝 openhands venv;
+rawcli 主線不再需要。)
 """
 
 from .agent import RawCLIAgent

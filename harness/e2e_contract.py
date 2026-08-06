@@ -35,7 +35,7 @@ def run_engine(engine: str) -> None:
         "model": "haiku" if engine == "claude" else None,
         "os_sandbox": False, "sandbox": "workspace-write",
         "output_schema": True,
-        "venv": "../examples/openhands-acp-poc/.venv", "timeout_sec": 240,
+        "timeout_sec": 240,
     }
     prompt = ("Create a file named done.txt containing exactly the text ok. "
               "Then report that the task is complete: status is done, "

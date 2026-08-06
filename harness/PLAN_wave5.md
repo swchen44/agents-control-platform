@@ -59,10 +59,29 @@
       COMPARISON.md 補記
 - [x] commit+push
 
+**W5.5 — rawcli 脫離 OpenHands 依賴(使用者 2026-08-06)** ✅
+- [x] `arcp_rawcli/agent.py` 重寫**純 stdlib**:去 AgentBase/Conversation/
+      pydantic/LLM 鷹架;`step(conversation,…)` → `run(prompt, ws, on_event)`;
+      `_emit` 產 dict(舊 SDK MessageEvent 的 JSONL 子集,dashboard 讀
+      kind/source/llm_message.content 零改)。建指令/watchdog(stall/evict/
+      fault)/ingest(claude+codex)/seatbelt 全數 stdlib 保留不動
+- [x] `inner_rawcli_runner.py`:去 `Conversation`/`send_message`,直呼
+      `agent.run()`;capture 直接 json.dumps(event 已是 dict)
+- [x] venv 選配:inner_runner rawcli 無 venv → 系統 python(`sys.executable`);
+      routes.yaml 四個 rawcli profile(filechain-rawcli/codex/approval-demo/
+      handoff-demo)移除 venv;openhands-acp/server 仍需 venv
+- [x] 真跑驗證(系統 python、零 OpenHands):claude(ok.txt+6 events 同形)、
+      codex(step1.txt)、e2e_evict 真 killpg 9.1s;20 測檔 + selftest 全綠;
+      ruff clean
+- [x] **成效**:rawcli 主線不再需要 591MB openhands venv(196 套件);
+      agent.py import 只剩 datetime/json/os/signal/subprocess/threading/
+      time/uuid。commit+push
+
 ## 後續候選(未排程,擇需)
 
 - ~~E3 evict/實時 killpg~~ → W5.3 完成;剩 rehydrate 對照(異步架構再議)
 - ~~openhands 系 codex 對照~~ → W5.4 完成
+- ~~rawcli 脫 OpenHands 依賴~~ → W5.5 完成(openhands-acp/server 仍選配)
 - openhands-acp/server 的 codex 對照(quota)
 - landlock / docker 隔離實作(W22 介面已就緒)
 - 量產 python 標準結構(另開 repo)

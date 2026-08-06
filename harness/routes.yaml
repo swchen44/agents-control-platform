@@ -171,7 +171,6 @@ inner_loop:
                                     # 檔案寫入只能到 workspace(codex 用內建
                                     # --sandbox=workspace-write,見 sandbox:)
         sandbox: workspace-write    # codex --sandbox: read-only|workspace-write
-        venv: ../examples/openhands-acp-poc/.venv
         timeout_sec: 300
       verify:                       # 確定性檢查,全過才 SUCCESS
         - name: filechain
@@ -219,7 +218,6 @@ inner_loop:
         backend: rawcli
         engine: codex
         sandbox: workspace-write
-        venv: ../examples/openhands-acp-poc/.venv
         timeout_sec: 300
       verify:
         - name: filechain
@@ -244,7 +242,6 @@ inner_loop:
         engine: claude
         model: haiku
         os_sandbox: true
-        venv: ../examples/openhands-acp-poc/.venv
         timeout_sec: 300
       verify:
         - name: done-file
@@ -271,7 +268,6 @@ inner_loop:
         model: haiku
         os_sandbox: true
         output_schema: true        # G1 契約:回報 {reason,status,next}
-        venv: ../examples/openhands-acp-poc/.venv
         timeout_sec: 300
       verify:
         - name: never-reached      # handoff 在 grade 前返回,不會用到

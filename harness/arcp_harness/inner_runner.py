@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from dataclasses import dataclass
 
 from .contract import CONTRACT_SCHEMA
@@ -89,8 +90,11 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
     with open(job_path, "w") as f:
         json.dump(job, f, ensure_ascii=False)
 
-    venv_python = os.path.abspath(
-        os.path.join(HERE, agent_cfg["venv"], "bin", "python"))
+    # W5.5:rawcli 純 stdlib → venv 選配,省略即用系統 python(免 591MB
+    # openhands venv);openhands-acp/server 仍需 venv(SDK 在裡面)。
+    venv = agent_cfg.get("venv")
+    venv_python = (os.path.abspath(os.path.join(HERE, venv, "bin", "python"))
+                   if venv else sys.executable)
     timeout = float(agent_cfg.get("timeout_sec", 300)) + 60  # server startup
     try:
         subprocess.run([venv_python, runner, job_path],

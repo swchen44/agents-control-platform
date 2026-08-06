@@ -1,17 +1,16 @@
-"""RawCLIAgent (C.1 minimal impl): spawn `claude -p` stream-json, emit events.
+"""RawCLIAgent — spawn `claude -p` / `codex exec`, parse stream-json → events.
 
-step() runs one full `claude -p` invocation to completion, parsing the
-stream-json lines into OpenHands events. C.1 emits the basic set (assistant
-MessageEvent + a summary of tool calls) and finishes; C.2 wires the full
-fine-grained mapping (thinking/token deltas, per-tool ActionEvent/Observation)
-by porting arcp_poc.drivers, and adds the codex engine.
+W5.5:純 stdlib(零 OpenHands 依賴)。`run(prompt, ws, on_event)` 跑一次完整
+CLI 呼叫到結束,把原生 stream-json 解析成細粒度事件(dict,經 on_event 回傳,
+runner 落 JSONL——與舊 SDK MessageEvent 同形,dashboard 零改)。
 
-session id / cost are exposed on the instance for the runner's envelope
-(C.3); a pre-assigned --session-id makes crash→resume possible (C.4).
+session id / cost / structured 曝在 instance 上供 runner 組 envelope;預派的
+`--session-id` 讓 crash→resume 可行(W5.1)。
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import signal
@@ -20,78 +19,72 @@ import threading
 import time
 import uuid
 
-from openhands.sdk import Message, TextContent
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.llm import LLM, content_to_str
-from pydantic import Field, PrivateAttr
+
+def _msg_event(text: str, source: str) -> dict:
+    """細粒度事件(舊 SDK MessageEvent 的 JSONL 子集;dashboard 只讀
+    kind/source/llm_message.content,故保留這三者即可)。"""
+    return {
+        "kind": "MessageEvent",
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now().isoformat(),
+        "source": source,
+        "parent_id": None,
+        "llm_message": {"role": "assistant" if source == "agent" else "user",
+                        "content": [{"type": "text", "text": text}]},
+    }
 
 
-def _dummy_llm() -> LLM:
-    # the LLM field is mandatory on AgentBase but never called — the CLI is
-    # the model (same trick ACPAgent uses).
-    try:
-        return LLM(model="rawcli", usage_id="rawcli")
-    except Exception:
-        return LLM(model="rawcli")
+class RawCLIAgent:
+    """執行單元 = `claude -p`(print 模式)/ `codex exec`。純 stdlib。"""
 
-
-class RawCLIAgent(AgentBase):
-    """Custom agent whose execution unit is `claude -p` (print mode)."""
-
-    llm: LLM = Field(default_factory=_dummy_llm)
-    engine: str = "claude"                 # claude | codex
-    model: str | None = "haiku"
-    permission_mode: str = "acceptEdits"
-    sandbox: str = "workspace-write"       # codex
-    allowed_tools: list[str] = Field(
-        default_factory=lambda: ["Write", "Read", "Bash(sleep:*)"])
-    session_id: str | None = None          # pre-assigned for resume (C.4)
-    resume: bool = False
-    raw_events_path: str | None = None      # full-fidelity stream dump (L3)
-    # execution isolation (no docker). claude has NO built-in OS sandbox, so we
-    # wrap it in macOS seatbelt (sandbox-exec) confining file-write to the
-    # workspace. codex has its OWN --sandbox (below) so os_sandbox is a no-op
-    # for it. Verified: workspace writes pass, /tmp writes are blocked.
-    os_sandbox: bool = False                # claude: macOS sandbox-exec wrap
-    # fault injection (TEST ONLY; None in production): kill the CLI child once
-    # <file> appears, +delay — mirrors A-route KillTrigger for the resume matrix
-    fault_kill_on_file: str | None = None
-    fault_delay: float = 1.0
-    # E3 evict(W5.3,生產用):harness 寫此檔 → 即刻 killpg CLI 釋放
-    # CPU/memory(DESIGN §6 實時 killpg);session 保留,之後 native resume
-    evict_file: str | None = None
-    # stall watchdog (N13, ported from A-route supervisor._watchdog): if no
-    # event advances the run for stall_seconds, EXIT (killpg) so the harness
-    # can resume instead of hanging. 0 = off. "slow is legal; stalled is not."
-    stall_seconds: float = 0.0
-    # G1:structured-output 契約(DESIGN §4.2)。dict=JSON Schema 傳給 CLI 強制
-    # 結構化輸出;None=關(向後相容,行為同現狀)。
-    output_schema: dict | None = None
-
-    # exposed to the runner after step() (C.3 envelope)
-    _final_session_id: str | None = PrivateAttr(default=None)
-    _cost_usd: float | None = PrivateAttr(default=None)
-    _error: str | None = PrivateAttr(default=None)
-    _structured: dict | None = PrivateAttr(default=None)   # G1 agent 自評
-    # terminal event seen (claude `result` / codex `turn.completed`). A crash
-    # kills the child BEFORE this → completed stays False even though the
-    # process "ended" (A-route SIGTERM-rc=0 lesson, RawCLIAgent edition).
-    _got_terminal: bool = PrivateAttr(default=False)
-    _stalled: bool = PrivateAttr(default=False)
-    _evicted: bool = PrivateAttr(default=False)     # E3(W5.3)
-    _last_progress: float = PrivateAttr(default=0.0)
-    _raw_count: int = PrivateAttr(default=0)
-    _event_count: int = PrivateAttr(default=0)
-
-    def init_state(self, state, on_event) -> None:  # noqa: ARG002
-        return  # the CLI brings its own tools; no SDK tool resolution
+    def __init__(self, engine: str = "claude", model: str | None = "haiku",
+                 permission_mode: str = "acceptEdits",
+                 sandbox: str = "workspace-write",
+                 allowed_tools: list[str] | None = None,
+                 session_id: str | None = None, resume: bool = False,
+                 raw_events_path: str | None = None, os_sandbox: bool = False,
+                 fault_kill_on_file: str | None = None, fault_delay: float = 1.0,
+                 evict_file: str | None = None, stall_seconds: float = 0.0,
+                 output_schema: dict | None = None):
+        self.engine = engine                   # claude | codex
+        self.model = model
+        self.permission_mode = permission_mode
+        self.sandbox = sandbox                 # codex
+        self.allowed_tools = (allowed_tools if allowed_tools is not None
+                              else ["Write", "Read", "Bash(sleep:*)"])
+        self.session_id = session_id           # pre-assigned for resume (W5.1)
+        self.resume = resume
+        self.raw_events_path = raw_events_path  # full-fidelity stream dump (L3)
+        # 執行隔離(無 docker)。claude 無內建 OS sandbox → macOS seatbelt 包住
+        # 檔案寫入限於 workspace;codex 有自己的 --sandbox 故 os_sandbox 對它無效。
+        self.os_sandbox = os_sandbox
+        # fault injection(TEST ONLY;生產為 None):<file> 出現即 kill CLI 子進程
+        self.fault_kill_on_file = fault_kill_on_file
+        self.fault_delay = fault_delay
+        # E3 evict(W5.3,生產用):harness 寫此檔 → 即刻 killpg 釋放資源
+        self.evict_file = evict_file
+        # stall watchdog(N13):stall_seconds 內無進展 → killpg,harness resume
+        self.stall_seconds = stall_seconds
+        # G1 結構化契約(DESIGN §4.2):dict=傳 JSON Schema 給 CLI;None=關
+        self.output_schema = output_schema
+        # runner 組 envelope 用(run() 後曝出)
+        self._final_session_id: str | None = None
+        self._cost_usd: float | None = None
+        self._error: str | None = None
+        self._structured: dict | None = None    # G1 agent 自評
+        # terminal 事件(claude result / codex turn.completed)。crash 在此之前
+        # 殺子進程 → completed 保持 False(A 路 SIGTERM-rc=0 教訓)。
+        self._got_terminal = False
+        self._stalled = False
+        self._evicted = False                    # E3(W5.3)
+        self._last_progress = 0.0
+        self._raw_count = 0
+        self._event_count = 0
 
     # -- command (ported from arcp_poc.drivers) ---------------------------- #
     def _build_command(self, prompt: str) -> list[str]:
         sid = self.session_id or str(uuid.uuid4())
-        self.__dict__["session_id"] = sid  # remember for the envelope
+        self.session_id = sid              # remember for the envelope
         if self.engine == "codex":
             base = ["codex", "exec", "--json", "--sandbox", self.sandbox,
                     "--skip-git-repo-check"]
@@ -124,16 +117,10 @@ class RawCLIAgent(AgentBase):
             json.dump(self.output_schema, f)
         return path
 
-    def step(self, conversation, on_event, on_token=None) -> None:  # noqa: ARG002
-        state = conversation.state
-        prompt = "Reply with exactly: pong"
-        for ev in reversed(list(state.events)):
-            if isinstance(ev, MessageEvent) and ev.source == "user":
-                prompt = " ".join(content_to_str(ev.llm_message.content))
-                break
-        wd = getattr(getattr(state, "workspace", None), "working_dir", None) \
-            or os.getcwd()
-
+    def run(self, prompt: str, ws: str, on_event) -> None:
+        """跑一次完整 CLI 呼叫到結束。on_event(dict) 落每個細粒度事件。"""
+        wd = ws or os.getcwd()
+        on_event(_msg_event(prompt, "user"))    # Conversation 視圖的起手 prompt
         cmd = self._build_command(prompt)
         if self.os_sandbox and self.engine == "claude":
             cmd = ["sandbox-exec", "-f", self._write_sandbox_profile(wd)] + cmd
@@ -179,8 +166,7 @@ class RawCLIAgent(AgentBase):
         proc.wait()
 
         if self._final_session_id:
-            self.__dict__["session_id"] = self._final_session_id
-        state.execution_status = ConversationExecutionStatus.FINISHED
+            self.session_id = self._final_session_id
 
     # -- stall watchdog (N13, reset-on-progress) --------------------------- #
     def _stall_watchdog(self, proc) -> None:
@@ -258,10 +244,7 @@ class RawCLIAgent(AgentBase):
         if not text.strip():
             return
         self._event_count += 1
-        on_event(MessageEvent(
-            source="agent",
-            llm_message=Message(role="assistant",
-                                content=[TextContent(text=text)])))
+        on_event(_msg_event(text, "agent"))
 
     # -- fine-grained stream-json → OpenHands events (C.2) ----------------- #
     def _ingest_claude(self, o: dict, on_event) -> None:

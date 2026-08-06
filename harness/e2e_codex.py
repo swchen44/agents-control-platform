@@ -36,7 +36,7 @@ ws = tempfile.mkdtemp()
 artifacts = tempfile.mkdtemp()
 agent_cfg = {
     "backend": "rawcli", "engine": "codex", "sandbox": "workspace-write",
-    "venv": "../examples/openhands-acp-poc/.venv", "timeout_sec": 240,
+    "timeout_sec": 240,
 }
 
 r1 = run_attempt(agent_cfg, ws,

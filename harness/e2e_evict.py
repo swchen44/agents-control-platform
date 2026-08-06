@@ -30,7 +30,7 @@ artifacts = tempfile.mkdtemp()
 agent_cfg = {
     "backend": "rawcli", "engine": "claude", "model": "haiku",
     "os_sandbox": False,
-    "venv": "../examples/openhands-acp-poc/.venv", "timeout_sec": 150,
+    "timeout_sec": 150,
 }
 prompt = ("Run the bash command `sleep 90` and wait for it to finish. "
           "After it finishes, create a file named done.txt containing ok.")
