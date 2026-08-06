@@ -100,6 +100,18 @@
 - [x] e2e_dashboard +2(兩頁 resizable 存在);Chrome 實測:拖 status 欄變寬、
       鄰欄不動、經 5s 刷新仍保持;ruff clean。commit+push
 
+**W5.8 — DB 匯出 + Control 獨立頁(使用者 2026-08-07)** ✅
+- [x] DB Browser 表格加 **CSV / JSON 下載**:table 模式抓全表(limit=1000000
+      免分頁截斷)、query 模式匯出查詢結果(≤500);欄名為表頭、值原樣。
+      DB 表欄寬調整沿用 W5.7 resizable(已接 showTable/runQ,實證 fixed-layout
+      +截斷+水平捲軸)
+- [x] Control 面板**獨立成 `/control` 頁** + 頂部第三 tab(📊 Dashboard /
+      🗃 DB Browser / 🎛 Control);即時狀態卡(運行/暫停/關閉中 + in-flight/
+      queued/inactive/pending/cost/sessions,3s 輪詢)+ Pause/Resume/Reload/
+      **Graceful Shutdown**(防誤觸:按兩次確認,不用對話框);index 移除控制列
+- [x] e2e_dashboard 37 checks 全 PASS;Chrome 實測:Control 頁 Pause→暫停→
+      Resume→運行、DB 匯出鈕渲染、DB 表 fixed-layout;ruff clean。commit+push
+
 ## 後續候選(未排程,擇需)
 
 - ~~E3 evict/實時 killpg~~ → W5.3 完成;剩 rehydrate 對照(異步架構再議)

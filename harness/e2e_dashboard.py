@@ -114,9 +114,16 @@ try:
     check("徽章:FAILURE(outcome 優先於 pending)",
           ">FAILURE</span>" in index)
     # 控制列指向 control API
-    check("控制列:Pause/Resume/Reload 按鈕",
-          all(x in index for x in ("Pause", "Resume", "Reload")))
-    check("控制列:指向 control API", json.dumps(ctl_url) in index)
+    # W5.8:control 移到獨立頁,index 不再有控制列
+    check("index 不含控制列(已移 /control)", "Pause" not in index)
+    cpage = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/control", timeout=5).read().decode()
+    check("Control 頁:Pause/Resume/Reload/Shutdown + 狀態",
+          all(x in cpage for x in ("Pause", "Resume", "Reload",
+                                   "Shutdown", "cstatus")))
+    check("Control 頁:指向 control API", json.dumps(ctl_url) in cpage)
+    check("導覽:三 tab(Dashboard/DB/Control)",
+          "🎛 Control" in cpage and "DB Browser" in cpage)
 
     # W4.1/W4.7:新欄位 + 過濾器置頂 + 圖表 + 排序
     check("欄位:summary/assignee/created/finished/換手起點",
@@ -146,6 +153,9 @@ try:
     dbpage = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/db", timeout=5).read().decode()
     check("DB 頁:表格清單/查詢框", "唯讀查詢" in dbpage and "qbox" in dbpage)
+    check("DB 頁:匯出 CSV/JSON 鈕",
+          "dbExport(\"csv\")" in dbpage and "dbExport(\"json\")" in dbpage
+          and "function dbExport" in dbpage)
     # W5.7:欄寬可拖曳(兩頁都載入 resizable + 呼叫)
     check("欄寬拖曳:index 表 resizable",
           "function resizable" in index and "resizable($('tix')" in index)

@@ -385,26 +385,55 @@ def overview_cards(sessions: dict[int, dict],
     ) + "</div>"
 
 
-def control_bar() -> str:
-    """控制列:Pause/Resume/Reload → fetch POST 到 control API(W2.6)。"""
-    return (
-        "<div class='ctl card'><b style='color:#8b949e'>Control</b>"
-        "<div class='btn' onclick=\"ctl('pause')\">⏸ Pause</div>"
-        "<div class='btn' onclick=\"ctl('resume')\">▶ Resume</div>"
-        "<div class='btn' onclick=\"ctl('reload')\">🔄 Reload</div>"
-        "<span id='ctl-state' style='color:#8b949e;font-size:12px'></span>"
-        "</div><script>"
-        "const CTL=" + json.dumps(CONTROL) + ";"
-        "const ST=document.getElementById('ctl-state');"
-        "function off(){ST.textContent='control 離線('+CTL+')';}"
-        "function ctl(a){fetch(CTL+'/'+a,{method:'POST'})"
-        ".then(r=>r.json()).then(j=>ST.textContent=JSON.stringify(j))"
-        ".catch(off);}"
-        "fetch(CTL+'/status').then(r=>r.json()).then(j=>{"
-        "ST.textContent=(j.paused?'⏸ paused':'▶ running')"
-        "+' · in-flight '+j.in_flight+' · queued '+j.queued;})"
-        ".catch(off);"
-        "</script>")
+_CONTROL_JS = ("<script>"
+    "const CTL=" + json.dumps(CONTROL) + ";"
+    "const $c=id=>document.getElementById(id);"
+    "let armed=null;"
+    # shutdown 防誤觸:第一次按「武裝」、3 秒內再按才執行(不用 confirm 對話框)
+    "function cc(a){"
+    "if(a==='shutdown'){"
+    "if(armed!=='shutdown'){armed='shutdown';"
+    "$c('sd').textContent='⏻ 再按一次確認';"
+    "setTimeout(()=>{if(armed==='shutdown'){armed=null;"
+    "$c('sd').textContent='⏻ Graceful Shutdown';}},3000);return;}"
+    "armed=null;$c('sd').textContent='⏻ Graceful Shutdown';}"
+    "fetch(CTL+'/'+a,{method:'POST'}).then(r=>r.json())"
+    ".then(j=>{$c('cmsg').textContent=JSON.stringify(j);poll();})"
+    ".catch(()=>{$c('cmsg').textContent='control 離線 '+CTL;});}"
+    "async function poll(){try{"
+    "const j=await (await fetch(CTL+'/status')).json();"
+    "const t=[[j.paused?'⏸ 暫停':(j.stopping?'⏻ 關閉中':'▶ 運行'),'狀態'],"
+    "[j.in_flight,'in-flight'],[j.queued,'queued'],[j.inactive,'inactive'],"
+    "[(j.pending?Object.values(j.pending).reduce((a,b)=>a+b,0):0),'pending'],"
+    "['$'+(j.cost_usd||0).toFixed(4),'總 cost'],[j.sessions,'sessions']];"
+    "$c('cstatus').innerHTML=t.map(x=>`<div class='stat'><div class='n'>`+"
+    "`${x[0]}</div><div class='l'>${x[1]}</div></div>`).join('');"
+    "}catch(e){$c('cstatus').innerHTML=\"<span style='color:#f85149'>"
+    "control API 離線(\"+CTL+\")——poller 未啟動?</span>\";}}"
+    "poll();setInterval(poll,3000);"
+    "</script>")
+
+
+def render_control_page() -> str:
+    """W5.8 Control 獨立頁:poller 全域控制(Pause/Resume/Reload/Shutdown)+
+    即時狀態。作用於正在跑的 poller 進程(REST /8787,W2.6/W4.5)。"""
+    return (f"{_nav('control')}"
+            "<header><h1>Control · poller</h1></header><main>"
+            "<div class='stats' id='cstatus'>載入中…</div>"
+            "<div class='ctl card' style='margin-top:12px'>"
+            "<div class='btn' onclick=\"cc('pause')\">⏸ Pause</div>"
+            "<div class='btn' onclick=\"cc('resume')\">▶ Resume</div>"
+            "<div class='btn' onclick=\"cc('reload')\">🔄 Reload</div>"
+            "<div class='btn' id='sd' style='color:#f2a8a8' "
+            "onclick=\"cc('shutdown')\">⏻ Graceful Shutdown</div>"
+            "<span id='cmsg' style='color:#8b949e;font-size:12px'></span>"
+            "</div>"
+            "<p style='color:#8b949e;font-size:12px'>"
+            "Pause=只 watch 不派新工(正在跑的不中斷);Reload=熱載 routes.yaml"
+            "(壞 config 不生效、舊設定續用);Graceful Shutdown=當前輪(含壓縮"
+            "打包)跑完後 poller 退出。詳見 DESIGN_hotreload.md。即時 kill 單張"
+            "票用 ticket 頁的 Evict。</p></main>"
+            f"{_CONTROL_JS}")
 
 
 _APP_JS = """
@@ -703,14 +732,40 @@ def _nav(active: str) -> str:
     return ("<div style='display:flex;gap:8px;padding:12px 24px;"
             "background:#161b22;border-bottom:1px solid #30363d'>"
             + tab("dash", "/", "📊 Dashboard")
-            + tab("db", "/db", "🗃 DB Browser") + "</div>")
+            + tab("db", "/db", "🗃 DB Browser")
+            + tab("control", "/control", "🎛 Control") + "</div>")
 
 
 _DB_JS = """
 <script>
 const $=id=>document.getElementById(id);
-let CUR=null, OFF=0, LIM=100;
+let CUR=null, OFF=0, LIM=100, DBMODE='', LASTQ=null;
 function esc(x){return (''+x).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+// W5.8 匯出:table 模式抓全表(免分頁截斷),query 模式用查詢結果(≤500)
+function _dl(blob,name){const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  URL.revokeObjectURL(a.href);}
+async function dbExport(fmt){
+  let cols,rows,name;
+  if(DBMODE==='table'&&CUR){
+    const d=await (await fetch(`/db/table/${CUR}?limit=1000000&offset=0`))
+      .json();
+    if(d.error){alert(d.error);return;}
+    cols=d.columns;rows=d.rows;name=CUR;
+  }else if(LASTQ){cols=LASTQ.cols;rows=LASTQ.rows;name='query';}
+  else return;
+  if(fmt==='json'){
+    const arr=rows.map(r=>{const o={};cols.forEach((c,i)=>o[c]=r[i]);return o;});
+    _dl(new Blob([JSON.stringify(arr,null,2)],{type:'application/json'}),
+        name+'.json');
+  }else{
+    const q=v=>{if(v==null)return '';v=''+v;
+      return /[",\\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const csv=[cols.join(',')].concat(
+      rows.map(r=>r.map(q).join(','))).join('\\n');
+    _dl(new Blob([csv],{type:'text/csv'}),name+'.csv');
+  }
+}
 function tbl(cols,rows,total){
   if(!rows.length)return "<p style='color:#8b949e'>(無資料)</p>";
   const h='<tr>'+cols.map(c=>`<td><b>${esc(c)}</b></td>`).join('')+'</tr>';
@@ -735,6 +790,7 @@ async function showTable(){
     .json();
   if(d.error){$('dbout').innerHTML="<p style='color:#f85149'>"+esc(d.error)+
     "</p>";return;}
+  DBMODE='table';
   $('dbtitle').textContent='📋 '+CUR;
   $('dbpg').style.display=d.total>LIM?'flex':'none';
   $('dbout').innerHTML=tbl(d.columns,d.rows,d.total);
@@ -749,6 +805,7 @@ async function runQ(){
     body:JSON.stringify({sql})})).json();
   if(d.error){$('dbtitle').textContent='⚠ 查詢錯誤';
     $('dbout').innerHTML="<p style='color:#f85149'>"+esc(d.error)+"</p>";return;}
+  DBMODE='query';LASTQ={cols:d.columns,rows:d.rows};
   $('dbtitle').textContent='🔎 查詢結果';
   $('dbout').innerHTML=tbl(d.columns,d.rows,null)+
     (d.rows.length>=500?"<p style='color:#d29922;font-size:12px'>"+
@@ -782,12 +839,15 @@ def render_db_page() -> str:
             "box-sizing:border-box'></textarea>"
             "<div class='btn' style='margin-top:6px' onclick='runQ()'>▶ 執行"
             "</div></div>"
-            "<div class='card'><h2 id='dbtitle' style='margin-top:0'>"
-            "← 點左側表格</h2>"
-            "<div id='dbpg' class='ctl' style='display:none;margin-bottom:8px'>"
+            "<div class='card'>"
+            "<div style='display:flex;align-items:center'>"
+            "<h2 id='dbtitle' style='margin:0;flex:1'>← 點左側表格</h2>"
+            "<div class='btn' onclick='dbExport(\"csv\")'>⬇ CSV</div>"
+            "<div class='btn' onclick='dbExport(\"json\")'>⬇ JSON</div></div>"
+            "<div id='dbpg' class='ctl' style='display:none;margin:8px 0'>"
             "<div class='btn' onclick='dpg(-1)'>‹ 上頁</div>"
             "<div class='btn' onclick='dpg(1)'>下頁 ›</div></div>"
-            "<div id='dbout'></div></div>"
+            "<div id='dbout' style='margin-top:8px'></div></div>"
             "</div></div></main>"
             f"{_RESIZE_JS}{_DB_JS}")
 
@@ -871,7 +931,7 @@ def render_index(journal, sessions, watch=None) -> str:
             f"{filterbar}"
             f"<div class='stats' id='stats'>"
             f"{overview_cards(sessions, journal)}</div>"
-            f"{control_bar()}{charts}"
+            f"{charts}"
             f"<h2>Tickets</h2>{toolbar}"
             f"<div class='card' style='overflow-x:auto'>"
             f"<table id='tix'><thead><tr id='thead-row'>"
@@ -1075,10 +1135,11 @@ class Handler(BaseHTTPRequestHandler):
                 name, int((q.get("limit") or ["100"])[0]),
                 int((q.get("offset") or ["0"])[0])))
             return
-        if self.path == "/db":
-            body = render_db_page()
+        if self.path in ("/db", "/control"):       # W5.6 / W5.8 獨立頁
+            body = (render_db_page() if self.path == "/db"
+                    else render_control_page())
             page = (f"<!doctype html><html><head><meta charset='utf-8'>"
-                    f"<title>ARCP DB</title><style>{CSS}</style></head>"
+                    f"<title>ARCP</title><style>{CSS}</style></head>"
                     f"<body>{body}</body></html>")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
