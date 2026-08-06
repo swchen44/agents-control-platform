@@ -42,11 +42,19 @@
   auto-collapse bug 修(meta refresh→fetch 局部更新)、script trigger 萬用化
   (uvx/npx/.sh/.py,log 保存+run.tgz,session 註冊全設施重用)。19 個
   test_*.py + selftest + e2e 全綠。
-- **恢復起點(W5 候選)**:(a) 真 Jira 實測 W4(快照器/打包/換手定格全鏈路,
-  建議跑一張 handoff-demo 票肉眼看 dashboard);(b) 冪等盤點 #5——sid 預派
-  (兼修「首 attempt 快照落空」限制);(c) E3 evict/實時 killpg(異步);
-  (d) openhands 系 codex 對照(quota);(e) landlock/docker 隔離實作;
-  (f) 量產 python 標準結構另開 repo。
+- **W4 真 Jira 實測 ✅ + W4.5-4.7 追加 ✅ + W5.1-5.3 ✅(2026-08-06)**:
+  W4 全鏈路實測 PASS(SCRUM-23/24,cron script trigger/close 打包/KPI/離手
+  定格/graceful shutdown);`DESIGN_hotreload.md`(reload 範圍表+關閉語意,
+  缺口補強+POST /shutdown);cron 排程(W4.6);dashboard v2(W4.7:過濾器
+  置頂+時間圖/金錢圖+排序,/data 單一資料源)+ 三欄(W5.2:停留時間/
+  lifetime/人力$);**W5.1 sid 預派**(冪等 #5 關閉:attempt 前持久化+crash
+  偵測 resume/UNKNOWN;production 實證 SCRUM-27);**W5.3 E3 evict/實時
+  killpg**(POST /evict → EVICT 檔 → 看門狗 killpg → 不耗 attempt resume;
+  e2e 真測 9.3s 終結 sleep 90;ticket 頁按鈕)。21 個 test_*.py + e2e 全綠。
+- **恢復起點(剩餘候選)**:(a) openhands-acp/server 的 codex 對照(quota);
+  (b) landlock/docker 隔離實作(W22 介面已就緒);(c) 量產 python 標準結構
+  另開 repo(需使用者定 repo 名/範圍);(d) 異步架構(assignee 自動即時
+  kill + rehydrate,大工程另議)。
 - **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
   venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
   `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。

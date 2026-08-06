@@ -1,4 +1,16 @@
-# TEST_real_jira — 審批門 / handoff / W4 可視化 真 Jira 實測
+# TEST_real_jira — 審批門 / handoff / W4 可視化 / W5 真 Jira 實測
+
+> ## ★ W5 補實測(2026-08-06,SCRUM-25/26/27)
+>
+> - **sid 預派 production 實證**(W5.1):attempt 執行中 store 已有預派 sid
+>   (SCRUM-27 attempts=1 進行中查得 sid);resume 迴路照常(SCRUM-25
+>   attempt 2 truly_resumed SUCCESS)。
+> - **快照器解鎖實證**:SCRUM-26 transcript 卡出現 **latest.html**——首
+>   attempt 執行中就被快照到(W4 實測時的落空限制,經 sid 預派後消失)。
+> - **Evict 按鈕**:終態票正確隱藏(SCRUM-26 SUCCESS 頁無按鈕);active 有
+>   /終態無入 e2e 檢查。**live 點擊未搶到窗口**——haiku 任務數十秒完成,
+>   且本機 claude hook 擋 `sleep`(Blocked: standalone sleep)——機制本體由
+>   test_evict(端點/退還/resume)+ e2e_evict(真 killpg 9.3s)覆蓋。
 
 > ## ★ W4 全鏈路實測(2026-08-06 08:38-08:42,SCRUM-23/24)— PASS
 >
