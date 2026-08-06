@@ -152,9 +152,28 @@
 - **不漏 claude/codex sub-session** transcript。
 - **Why**:定時產正在執行的太耗;改事件+按需,且要知道每份是何時、為何產的。
 
-### 10.4 REST API 文件
-目前**無**任何連結。加自包 `/docs` 頁(零外部)+ `/openapi.json`(機器可讀、
-約定俗成),連結放 Server 頁。**Why**:Swagger UI 要外部 CDN,違反內網原則,故自寫。
+### 10.4 REST API 文件(2026-08-07 更新:改用 vendored Swagger UI)
+目前**無**任何連結。~~加自寫 `/docs` 頁~~ → **vendor Swagger UI**(swagger-ui-dist
+5.32.12,Apache-2.0,~1.7MB)進 repo,serve `/docs` = Swagger UI(讀本地
+`/openapi.json`),連結放 Server 頁。
+**Why**:使用者 2026-08-07 指示 vendor 回來——Swagger UI 美觀實用、可 try-it-out;
+評估確認它是自包靜態檔,vendor 後完全離線(不違反內網原則)。原「手寫」理由
+(Swagger UI 需 CDN)在 vendor 後不成立。⚠️ try-it-out 對寫入端點=真操控,頁面標註。
+
+### 10.6 事件時間軸(2026-08-07 新增)
+使用者看到 `aN.events.jsonl`(L3 events)不解其用,想要「有時間、看得到 user/agent
+事件、何時留言 Jira/改 status」+ 類似 transcript 的 timeline 元件。
+**釐清(重要)**:
+- `aN.events.jsonl`(L3)= **agent 自身對話**(有時間戳),餵 Conversation 分頁 +
+  cclog transcript(cclog 本身已有 vis-timeline)。**不記 Jira 互動**。
+- **journal `events.jsonl`** = **harness↔Jira 生命週期**(comment_added/assignee_changed/
+  resolved/handoff/evicted/transcript_packed…),**都有時間**——這才是「何時留言/改
+  status」的來源,資料已齊,只是沒做成時間軸。
+**做法**:per-ticket 詳情頁加「**事件時間軸**」,用 journal 事件(重用已 vendor 的
+vis-timeline 元件)+ 明確補記 harness 的 Jira 寫入(留言/assign/transition 於寫入
+時 journal 一筆 `jira_write`,讓時間軸清楚顯示「HH:MM 留言 Jira: SUCCESS」)。
+**決策(待確認)**:時間軸範圍 = 只 harness/Jira 生命週期(乾淨) vs 併入 agent 對話
+(可能吵雜;agent 對話已有 transcript 的 timeline)。
 
 ### 10.5 連線 IP 追蹤 + history
 dashboard/control 記錄連線 client IP + 時間;Server 頁顯示目前連線 + 近期 history。

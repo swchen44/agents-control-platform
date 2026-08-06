@@ -20,6 +20,8 @@
 | W35 | transcript **移除 snapshotter 定時**,改事件觸發(dispatcher/commands 既有點)+ Jira 頁按鈕(`POST /gen_transcript/<id>`);每份存 `<name>.meta.json`(ts+reason+session+subs) | 使用者:定時產 in-progress 太耗;要知每份何時/為何產 |
 | W36 | REST 文件自寫 `/docs`(HTML,零外部)+ `/openapi.json`;連結放 Server 頁 | Swagger UI 需外部 CDN,違反內網原則 |
 | W37 | 連線 IP:BaseHTTPRequestHandler 記 `client_address` + 時間進環形緩衝(記憶體,上限 N 筆);Server 頁顯示 | 內網開放後要知誰在連;history 不落盤(重啟清,夠用) |
+| W38 | REST 文件改 **vendored Swagger UI**(swagger-ui-dist 5.32.12,Apache-2.0,~1.7MB)+ 手寫 `/openapi.json`;`/docs` serve Swagger UI | 使用者指示 vendor 回來;評估確認自包靜態檔、離線可用、美觀可 try-it-out(取代原手寫 /docs) |
+| W39 | per-ticket 詳情頁「事件時間軸」= journal 事件 → **重用 vendored vis-timeline**;harness 寫 Jira 時補 journal `jira_write`(留言/assign/transition) | 使用者要「何時留言/改 status」的時間軸;資料在 journal 已有,補記寫入點讓時間軸更清楚 |
 
 ## Checklist
 
@@ -67,11 +69,25 @@
 - [ ] 單元測 + e2e(meta.json 內容、按鈕、卡片顯示)
 - [ ] commit+push
 
-**W6.5 — REST /docs + /openapi.json**
-- [ ] control API(或 dashboard)加 `GET /docs`(自寫 HTML,列所有端點:方法/路徑/
-      說明/範例;寫入端點標 ⚠️)+ `GET /openapi.json`(手寫 spec)
+**W6.5 — REST 文件(vendored Swagger UI + /openapi.json)**
+- [ ] vendor swagger-ui-dist 5.32.12(Apache-2.0)→ `tools/vendor/swagger-ui/`
+      (swagger-ui.css + swagger-ui-bundle.js;NOTICE 記版本/授權/出處)
+- [ ] `GET /openapi.json`(手寫 spec,涵蓋 dashboard + control API 所有端點;
+      寫入端點 description 標 ⚠️)
+- [ ] `GET /docs` = Swagger UI HTML(讀本地 /openapi.json + /swagger-assets/*);
+      `/swagger-assets/<file>` 路由服務 vendored 檔;CSP 放行同源
 - [ ] Server 頁放「REST API 文件」連結
-- [ ] e2e:/docs 200、/openapi.json valid JSON、含所有端點
+- [ ] e2e:/docs 200、/openapi.json valid、swagger 資產本地服務、含所有端點
+- [ ] commit+push
+
+**W6.7 — 事件時間軸(per-ticket,重用 vis-timeline)**
+- [ ] harness 寫 Jira 時補 journal `jira_write`(action=comment/assign/transition,
+      target/摘要);dispatcher/approval/commands 的 add_comment/assign 點都補
+- [ ] ticket 頁「事件時間軸」分頁/卡:讀該票 journal → vis-timeline items
+      (grouped:Jira 生命週期 / attempt);時間戳人類可讀;無 vis-timeline 時
+      降級成時間排序清單
+- [ ] 時間軸範圍照決策(預設 harness/Jira 生命週期;agent 對話留 transcript)
+- [ ] e2e:時間軸元素存在 + jira_write 事件入 journal
 - [ ] commit+push
 
 **W6.6 — 連線 IP 追蹤 + history**
