@@ -130,6 +130,22 @@
       全綠;20 測檔全綠
 - [x] commit+push
 
+**Phase W4.7 — dashboard v2(使用者 2026-08-06 規格)** ✅
+- [x] **過濾器置頂統管全部**(統計卡/圖表/表格只含過濾後 Jira):時間快選
+      (7/30/60/90 天,依 created)+ 自訂日期 range、status 下拉、summary
+      keyword、description keyword;watch 新欄 summary/description(migration,
+      poller/adopt 回填,desc 截 2000)
+- [x] **時間圖**(SVG 零依賴,長條+累積曲線同圖、雙軸):Create/Close/成功/
+      失敗四系列——長條=單期數量、曲線=累積;「以每週呈現」勾選
+- [x] **金錢圖**:累積曲線 AI 花費/人類預估/失敗浪費(FAILURE 的 token 錢);
+      長條=單期 AI vs 人類;「以每週呈現」勾選;**人類時薪 USD 輸入欄**
+      (localStorage 持久,預設 env ARCP_HOURLY_RATE 或 40)
+- [x] **表格欄位排序**(點表頭切 ▲▼,字串/數值感知)+ summary 欄;分頁保留
+- [x] 架構:`/data` JSON 單一資料源,前端 vanilla JS 全量重算(5s 更新;
+      server 仍渲染初始表格供 no-JS/e2e);e2e_dashboard 29 checks 全 PASS;
+      Chrome 實測:雙圖渲染、排序、人力成本對比卡($10 vs $0.30)
+- [x] commit+push
+
 ## W4 明確不做(留後續)
 
 - cchv-server 的 `--serve` WebUI 模式(我們只用 --export;dashboard 自己的)

@@ -28,6 +28,8 @@ class TicketWatch:
     last_assignee_id: str
     route_name: str | None
     last_assignee: str = ""        # W4.1:displayName(dashboard 顯示用)
+    summary: str = ""              # W4.7:dashboard 過濾/顯示用
+    description: str = ""          # W4.7:過濾用(截 2000 字)
 
 
 @dataclass
@@ -113,15 +115,18 @@ class Store:
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
         wcols = {r[1] for r in self._db.execute(
             "PRAGMA table_info(ticket_watch)")}
-        if "last_assignee" not in wcols:               # W4.1 dashboard 顯示
-            self._db.execute("ALTER TABLE ticket_watch ADD COLUMN"
-                             " last_assignee TEXT NOT NULL DEFAULT ''")
+        for name in ("last_assignee",                  # W4.1 dashboard 顯示
+                     "summary", "description"):        # W4.7 過濾用
+            if name not in wcols:
+                self._db.execute(f"ALTER TABLE ticket_watch ADD COLUMN"
+                                 f" {name} TEXT NOT NULL DEFAULT ''")
 
     def get(self, issue_id: int) -> TicketWatch | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT issue_id, key, last_comment_id, last_state,"
-                " last_assignee_id, route_name, last_assignee"
+                " last_assignee_id, route_name, last_assignee, summary,"
+                " description"
                 " FROM ticket_watch WHERE issue_id=?", (issue_id,)).fetchone()
         return TicketWatch(*row) if row else None
 
@@ -133,18 +138,20 @@ class Store:
                 INSERT INTO ticket_watch
                     (issue_id, key, last_comment_id, last_state,
                      last_assignee_id, route_name, first_seen_ts,
-                     last_assignee)
-                VALUES (?,?,?,?,?,?,?,?)
+                     last_assignee, summary, description)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key,
                     last_comment_id=excluded.last_comment_id,
                     last_state=excluded.last_state,
                     last_assignee_id=excluded.last_assignee_id,
                     route_name=excluded.route_name,
-                    last_assignee=excluded.last_assignee
+                    last_assignee=excluded.last_assignee,
+                    summary=excluded.summary,
+                    description=excluded.description
             """, (w.issue_id, w.key, w.last_comment_id, w.last_state,
                   w.last_assignee_id, w.route_name, time.time(),
-                  w.last_assignee))
+                  w.last_assignee, w.summary, w.description[:2000]))
 
     def journal(self, event_type: str, issue_id: int, key: str,
                 **fields) -> dict:

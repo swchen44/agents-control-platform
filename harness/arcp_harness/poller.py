@@ -114,7 +114,9 @@ class OuterLoop:
                 last_state=t.state,
                 last_assignee_id=t.assignee_id or "",
                 route_name=route.name if route else None,
-                last_assignee=t.assignee or ""))       # W4.1 dashboard 顯示
+                last_assignee=t.assignee or "",        # W4.1 dashboard 顯示
+                summary=t.summary or "",               # W4.7 過濾用
+                description=t.description or ""))
 
             # collect dispatch AFTER watch state is persisted (idempotency
             # first: a crash mid-dispatch must not replay watch events)

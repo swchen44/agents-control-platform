@@ -71,7 +71,8 @@ for iid in range(1, 8):
     store.upsert(TicketWatch(                      # W4.1:assignee/created 來源
         issue_id=iid, key=f"P-{iid}", last_comment_id=0, last_state="To Do",
         last_assignee_id="", route_name=None,
-        last_assignee="fox44" if iid == 3 else ""))
+        last_assignee="fox44" if iid == 3 else "",
+        summary=f"任務摘要 {iid}", description=f"細節描述 {iid}"))  # W4.7 過濾
 store.journal("approval", 7, "P-7", decision="reprompt", revisions=1)
 store.journal("handoff", 3, "P-3", kind="agent", to="other")   # 換手起點
 
@@ -117,15 +118,33 @@ try:
           all(x in index for x in ("Pause", "Resume", "Reload")))
     check("控制列:指向 control API", json.dumps(ctl_url) in index)
 
-    # W4.1:新欄位 + 工具列 + 分頁 JS
-    check("欄位:assignee/created/finished/換手起點",
-          all(x in index for x in ("assignee", "created", "finished",
-                                   "換手起點")))
+    # W4.1/W4.7:新欄位 + 過濾器置頂 + 圖表 + 排序
+    check("欄位:summary/assignee/created/finished/換手起點",
+          all(x in index for x in ("summary", "assignee", "created",
+                                   "finished", "換手起點")))
     check("欄位值:P-3 assignee=fox44", ">fox44</td>" in index)
-    check("工具列:kw/status/psize/分頁", all(
-        x in index for x in ("id='kw'", "id='st'", "id='psize'", "pg(1)")))
+    check("過濾器置頂:時間快選/自訂 range/狀態/summary/desc", all(
+        x in index for x in ("id='qr'", "過去 30 天", "id='from'", "id='to'",
+                             "id='st'", "id='ksum'", "id='kdesc'")))
+    check("時間圖:svg + 每週勾選 + 圖例", all(
+        x in index for x in ("chart-time", "id='wk1'", "lg-time")))
+    check("金錢圖:svg + 每週勾選 + 時薪輸入", all(
+        x in index for x in ("chart-money", "id='wk2'", "id='rate'",
+                             "人類時薪 USD")))
+    check("表格排序 JS(sortable/thead-row)",
+          "sortable" in index and "thead-row" in index)
     check("index 無整頁 meta refresh", "http-equiv" not in index)
-    check("index 有局部更新 JS", "DOMParser" in index)
+
+    # W4.7:/data 單一資料源
+    dat = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/data", timeout=5).read())
+    by = {r["iid"]: r for r in dat["rows"]}
+    check("/data:rows 齊 + 欄位", 3 in by and all(
+        k in by[3] for k in ("key", "summary", "desc", "status", "created",
+                             "finished", "cost", "human_min", "handoff")))
+    check("/data:summary/desc 可過濾來源", by[3]["summary"] == "任務摘要 3"
+          and by[3]["desc"] == "細節描述 3")
+    check("/data:rate_default 欄位存在", "rate_default" in dat)
 
     # 審批門 ticket 卡
     t7 = urllib.request.urlopen(

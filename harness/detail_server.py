@@ -86,6 +86,49 @@ def fmt_ts(ts) -> str:
     return datetime.datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
 
 
+def build_data(journal, sessions, watch) -> dict:
+    """W4.7:/data JSON——前端過濾/圖表/排序的單一資料源。"""
+    qpos = queue_positions(sessions)
+    hs = handoff_starts(journal)
+    hm: dict[int, float] = {}
+    first_ts: dict[int, float] = {}
+    for e in journal:
+        iid = e.get("issue_id")
+        if not isinstance(iid, int) or iid == 0:
+            continue
+        ts = e.get("ts") or 0
+        if ts and (iid not in first_ts or ts < first_ts[iid]):
+            first_ts[iid] = ts
+        if (e.get("type") in ("resolved", "trigger_finished")
+                and e.get("human_minutes_saved")):
+            hm[iid] = hm.get(iid, 0) + float(e["human_minutes_saved"])
+    ids = sorted(set(sessions) | set(watch) | set(first_ts))
+    rows = []
+    for iid in ids:
+        s = sessions.get(iid, {})
+        w = watch.get(iid, {})
+        label, _cls = session_status(s, qpos) if s else ("-", "")
+        rows.append({
+            "iid": iid,
+            "key": s.get("key") or w.get("key") or f"#{iid}",
+            "summary": w.get("summary") or "",
+            "desc": w.get("description") or "",
+            "profile": s.get("profile") or "-",
+            "status": label,
+            "outcome": s.get("outcome") or "",
+            "assignee": w.get("last_assignee") or "",
+            "created": w.get("first_seen_ts") or first_ts.get(iid) or 0,
+            "finished": s.get("finished_at") or 0,
+            "handoff": hs.get(iid) or 0,
+            "attempts": s.get("attempts") or 0,
+            "cost": s.get("cost_usd") or 0,
+            "human_min": hm.get(iid, 0),
+        })
+    rate = os.environ.get("ARCP_HOURLY_RATE")
+    return {"rows": rows,
+            "rate_default": float(rate) if rate else None}
+
+
 def handoff_starts(journal: list[dict]) -> dict[int, float]:
     """W4.1「最新換手起點」:每票最近一次 handoff / inactive_cleared 的時間
     (換手或交回機器人後重新開跑的起點)。"""
@@ -290,76 +333,223 @@ def control_bar() -> str:
         "</script>")
 
 
-_INDEX_JS = """
+_APP_JS = """
 <script>
-const LS='arcp-idx';
-function state(){try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}}
-function save(s){localStorage.setItem(LS,JSON.stringify(s));}
-function applyFilters(){
-  const s=state();
-  const kw=(s.kw||'').toLowerCase(), st=s.st||'', size=+(s.size||20);
-  let page=+(s.page||0);
-  const rows=[...document.querySelectorAll('#tix tbody tr')];
-  const vis=rows.filter(r=>{
-    const okKw=!kw||r.textContent.toLowerCase().includes(kw);
-    const okSt=!st||(r.dataset.status===st);
-    return okKw&&okSt;});
-  rows.forEach(r=>r.style.display='none');
-  const pages=Math.max(1,Math.ceil(vis.length/size));
-  if(page>=pages)page=pages-1;
-  vis.slice(page*size,(page+1)*size).forEach(r=>r.style.display='');
-  document.getElementById('pginfo').textContent=
-    vis.length+' 筆 · 第 '+(page+1)+'/'+pages+' 頁';
-  s.page=page;save(s);
+const LS='arcp-v2';
+let D={rows:[],rate_default:null};
+let S=Object.assign({qr:'all',from:'',to:'',st:'',ksum:'',kdesc:'',
+  size:20,page:0,sort:'created',dir:-1,wk1:false,wk2:false,rate:null},
+  (()=>{try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}})());
+function save(){localStorage.setItem(LS,JSON.stringify(S));}
+const $=id=>document.getElementById(id);
+const C={created:'#58a6ff',closed:'#a371f7',success:'#3fb950',fail:'#f85149',
+  ai:'#d29922',human:'#58a6ff',waste:'#f85149'};
+// ---- 過濾(置頂,統管全部) ----
+function filtered(){
+  const now=Date.now()/1000;
+  let lo=0,hi=Infinity;
+  if(S.from){lo=new Date(S.from+'T00:00:00').getTime()/1000;}
+  if(S.to){hi=new Date(S.to+'T23:59:59').getTime()/1000;}
+  if(!S.from&&!S.to&&S.qr!=='all'){lo=now-(+S.qr)*86400;}
+  const ks=S.ksum.toLowerCase(),kd=S.kdesc.toLowerCase();
+  return D.rows.filter(r=>
+    r.created>=lo&&r.created<=hi&&
+    (!S.st||r.status===S.st)&&
+    (!ks||(r.key+' '+r.summary).toLowerCase().includes(ks))&&
+    (!kd||r.desc.toLowerCase().includes(kd)));
 }
-function initIdx(){
-  const s=state();
-  const sel=document.getElementById('st');
-  const sts=[...new Set([...document.querySelectorAll('#tix tbody tr')]
-    .map(r=>r.dataset.status))].sort();
-  sts.forEach(v=>{const o=document.createElement('option');
-    o.value=v;o.textContent=v;sel.appendChild(o);});
-  document.getElementById('kw').value=s.kw||'';
-  sel.value=s.st||'';
-  document.getElementById('psize').value=s.size||20;
-  document.getElementById('kw').addEventListener('input',e=>{
-    const s=state();s.kw=e.target.value;s.page=0;save(s);applyFilters();});
-  sel.addEventListener('change',e=>{
-    const s=state();s.st=e.target.value;s.page=0;save(s);applyFilters();});
-  document.getElementById('psize').addEventListener('change',e=>{
-    const s=state();s.size=+e.target.value;s.page=0;save(s);applyFilters();});
-  applyFilters();
+// ---- 統計卡 ----
+function renderStats(rows){
+  const cost=rows.reduce((a,r)=>a+r.cost,0);
+  const oc=o=>rows.filter(r=>r.outcome===o).length;
+  const st=p=>rows.filter(r=>r.status.startsWith(p)).length;
+  const succ=oc('SUCCESS'),fail=oc('FAILURE'),done=succ+fail;
+  const mins=rows.reduce((a,r)=>a+r.human_min,0);
+  const t=[["$"+cost.toFixed(4),'總 cost'],[st('active'),'in-flight'],
+    [st('QUEUED'),'queued'],[st('INACTIVE'),'inactive'],
+    [st('pending'),'pending'],[succ,'SUCCESS'],[fail,'FAILURE'],
+    [done?Math.round(fail/done*100)+'%':'–','失敗率']];
+  if(mins){t.push([(mins/60).toFixed(1)+'h','節省人時']);
+    if(S.rate)t.push(['$'+Math.round(mins/60*S.rate)+' vs $'+cost.toFixed(2),
+      '人力成本對比']);}
+  $('stats').innerHTML=t.map(([n,l])=>
+    `<div class='stat'><div class='n'>${n}</div><div class='l'>${l}</div></div>`).join('');
 }
-function pg(d){const s=state();s.page=Math.max(0,(+(s.page||0))+d);save(s);applyFilters();}
-initIdx();
-// 局部更新(W4.1):只換統計卡與表身,工具列/輸入框不動——打字不被打斷
-setInterval(async()=>{try{
-  const r=await fetch(location.pathname);
-  const doc=new DOMParser().parseFromString(await r.text(),'text/html');
-  const nb=doc.querySelector('#tix tbody'), ob=document.querySelector('#tix tbody');
-  if(nb&&ob&&nb.innerHTML!==ob.innerHTML){ob.innerHTML=nb.innerHTML;}
-  const ns=doc.querySelector('.stats'), os=document.querySelector('.stats');
-  if(ns&&os&&ns.innerHTML!==os.innerHTML){os.innerHTML=ns.innerHTML;}
-  applyFilters();
-}catch(e){}},5000);
+// ---- 分桶(日/週) ----
+function bkey(ts,wk){const d=new Date(ts*1000);
+  if(wk){const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);}
+  return (d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0');}
+function bidx(ts,lo,wk){return Math.floor((ts-lo)/(wk?604800:86400));}
+function buckets(rows,wk){
+  const ts=[];rows.forEach(r=>{if(r.created)ts.push(r.created);
+    if(r.finished)ts.push(r.finished);});
+  if(!ts.length)return null;
+  let lo=Math.min(...ts);const hi=Math.max(...ts);
+  const d=new Date(lo*1000);d.setHours(0,0,0,0);
+  if(wk){const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);}
+  lo=d.getTime()/1000;
+  const n=Math.min(400,bidx(hi,lo,wk)+1);
+  const keys=[];for(let i=0;i<n;i++)keys.push(bkey(lo+i*(wk?604800:86400)+43200,false));
+  return {lo,n,keys,wk};
+}
+function cum(a){let s=0;return a.map(v=>(s+=v));}
+// ---- SVG 組合圖(長條 + 累積曲線,雙軸) ----
+function drawCombo(el,B,bars,lines,fmtL,fmtR){
+  if(!B){el.innerHTML='';return;}
+  const W=el.parentElement.clientWidth-40||1000,H=240,L=46,R=52,T=8,BM=26;
+  const pw=W-L-R,ph=H-T-BM;
+  const bmax=Math.max(1,...bars.flatMap(b=>b.vals));
+  const lmax=Math.max(1,...lines.flatMap(l=>l.vals));
+  const gx=i=>L+pw*(i+0.5)/B.n, gw=Math.max(1,pw/B.n*0.8/Math.max(1,bars.length));
+  let s='';
+  for(let t=1;t<=3;t++){const y=T+ph-ph*t/3;
+    s+=`<line x1='${L}' y1='${y}' x2='${W-R}' y2='${y}' stroke='#21262d'/>`+
+    `<text x='${L-4}' y='${y+4}' fill='#8b949e' font-size='10' text-anchor='end'>${fmtL(bmax*t/3)}</text>`+
+    `<text x='${W-R+4}' y='${y+4}' fill='#8b949e' font-size='10'>${fmtR(lmax*t/3)}</text>`;}
+  bars.forEach((b,bi)=>{b.vals.forEach((v,i)=>{if(!v)return;
+    const h=ph*v/bmax,x=gx(i)-gw*bars.length/2+bi*gw;
+    s+=`<rect x='${x}' y='${T+ph-h}' width='${gw}' height='${h}' fill='${b.c}' opacity='0.75'/>`;});});
+  lines.forEach(l=>{const pts=l.vals.map((v,i)=>gx(i)+','+(T+ph-ph*v/lmax)).join(' ');
+    s+=`<polyline points='${pts}' fill='none' stroke='${l.c}' stroke-width='1.8'/>`;});
+  const step=Math.ceil(B.n/9);
+  for(let i=0;i<B.n;i+=step)
+    s+=`<text x='${gx(i)}' y='${H-8}' fill='#8b949e' font-size='10' text-anchor='middle'>${B.keys[i]}</text>`;
+  el.setAttribute('viewBox',`0 0 ${W} ${H}`);el.setAttribute('width',W);
+  el.setAttribute('height',H);el.innerHTML=s;
+}
+function legend(el,items){el.innerHTML=items.map(([c,n,dash])=>
+  `<span style='margin-right:14px;font-size:11px;color:#8b949e'>`+
+  `<span style='display:inline-block;width:${dash?14:9}px;height:${dash?3:9}px;background:${c};`+
+  `border-radius:2px;margin-right:4px;vertical-align:middle'></span>${n}</span>`).join('');}
+// ---- 時間圖 ----
+function renderTime(rows){
+  const B=buckets(rows,S.wk1);const el=$('chart-time');
+  if(!B){el.innerHTML='';return;}
+  const z=()=>Array(B.n).fill(0);
+  const cr=z(),cl=z(),su=z(),fa=z();
+  rows.forEach(r=>{
+    if(r.created){const i=bidx(r.created,B.lo,B.wk);if(i>=0&&i<B.n)cr[i]++;}
+    if(r.finished){const i=bidx(r.finished,B.lo,B.wk);
+      if(i>=0&&i<B.n){cl[i]++;if(r.outcome==='SUCCESS')su[i]++;
+        if(r.outcome==='FAILURE')fa[i]++;}}});
+  drawCombo(el,B,
+    [{c:C.created,vals:cr},{c:C.closed,vals:cl},{c:C.success,vals:su},{c:C.fail,vals:fa}],
+    [{c:C.created,vals:cum(cr)},{c:C.closed,vals:cum(cl)},{c:C.success,vals:cum(su)},{c:C.fail,vals:cum(fa)}],
+    v=>Math.round(v),v=>Math.round(v));
+  legend($('lg-time'),[[C.created,'Create'],[C.closed,'Close'],
+    [C.success,'成功'],[C.fail,'失敗'],['#c9d1d9','(條=單期,線=累積)',1]]);
+}
+// ---- 金錢圖 ----
+function renderMoney(rows){
+  const B=buckets(rows,S.wk2);const el=$('chart-money');
+  if(!B){el.innerHTML='';return;}
+  const z=()=>Array(B.n).fill(0);
+  const ai=z(),hu=z(),wa=z();
+  const rate=S.rate||0;
+  rows.forEach(r=>{if(!r.finished)return;
+    const i=bidx(r.finished,B.lo,B.wk);if(i<0||i>=B.n)return;
+    ai[i]+=r.cost;hu[i]+=r.human_min/60*rate;
+    if(r.outcome==='FAILURE')wa[i]+=r.cost;});
+  drawCombo(el,B,[{c:C.ai,vals:ai},{c:C.human,vals:hu}],
+    [{c:C.ai,vals:cum(ai)},{c:C.human,vals:cum(hu)},{c:C.waste,vals:cum(wa)}],
+    v=>'$'+v.toFixed(2),v=>'$'+v.toFixed(2));
+  legend($('lg-money'),[[C.ai,'AI 花費'],[C.human,'人類預估(時薪$'+(rate||'?')+')'],
+    [C.waste,'失敗浪費(累積)',1],['#c9d1d9','(條=單期,線=累積)',1]]);
+}
+// ---- 表格(排序 + 分頁) ----
+const COLS=[['key','ticket'],['summary','summary'],['profile','profile'],
+  ['status','status'],['assignee','assignee'],['created','created'],
+  ['finished','finished'],['handoff','換手起點'],['attempts','attempts'],
+  ['cost','cost']];
+function fmt(ts){if(!ts)return '-';const d=new Date(ts*1000);
+  return (d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0')
+  +' '+(d.getHours()+'').padStart(2,'0')+':'+(d.getMinutes()+'').padStart(2,'0');}
+function badgeCls(st){if(st==='SUCCESS'||st==='FAILURE'||st==='UNKNOWN'||st==='ABORTED')return st;
+  if(st.startsWith('pending'))return 'pending';if(st.startsWith('QUEUED'))return 'queued';
+  if(st==='INACTIVE')return 'inactive';return st==='active'?'running':'';}
+function esc(x){return (''+x).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function renderTable(rows){
+  const k=S.sort;
+  rows=[...rows].sort((a,b)=>{const x=a[k],y=b[k];
+    return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*S.dir;});
+  const pages=Math.max(1,Math.ceil(rows.length/S.size));
+  if(S.page>=pages)S.page=pages-1;
+  const pg=rows.slice(S.page*S.size,(S.page+1)*S.size);
+  $('thead-row').innerHTML=COLS.map(([c,l])=>
+    `<td class='sortable' data-col='${c}' style='cursor:pointer'><b>${l}${
+      S.sort===c?(S.dir>0?' ▲':' ▼'):''}</b></td>`).join('');
+  document.querySelector('#tix tbody').innerHTML=pg.map(r=>
+    `<tr><td><a href='/ticket/${r.iid}'>${esc(r.key)}</a></td>`+
+    `<td title='${esc(r.summary)}'>${esc(r.summary.slice(0,28))}</td>`+
+    `<td>${esc(r.profile)}</td>`+
+    `<td><span class='badge ${badgeCls(r.status)}'>${esc(r.status)}</span></td>`+
+    `<td>${esc(r.assignee||'-')}</td><td>${fmt(r.created)}</td>`+
+    `<td>${fmt(r.finished)}</td><td>${fmt(r.handoff)}</td>`+
+    `<td>${r.attempts}</td><td>$${r.cost.toFixed(4)}</td></tr>`).join('');
+  $('pginfo').textContent=rows.length+' 筆 · 第 '+(S.page+1)+'/'+pages+' 頁';
+}
+function render(){const rows=filtered();renderStats(rows);renderTime(rows);
+  renderMoney(rows);renderTable(rows);save();}
+function pg(d){S.page=Math.max(0,S.page+d);render();}
+// ---- 事件綁定(shell 元素只綁一次) ----
+function bind(){
+  $('qr').value=S.qr;$('from').value=S.from;$('to').value=S.to;
+  $('ksum').value=S.ksum;$('kdesc').value=S.kdesc;$('psize').value=S.size;
+  $('wk1').checked=S.wk1;$('wk2').checked=S.wk2;
+  if(S.rate!=null)$('rate').value=S.rate;
+  $('qr').onchange=e=>{S.qr=e.target.value;S.page=0;render();};
+  $('from').onchange=e=>{S.from=e.target.value;S.page=0;render();};
+  $('to').onchange=e=>{S.to=e.target.value;S.page=0;render();};
+  $('st').onchange=e=>{S.st=e.target.value;S.page=0;render();};
+  $('ksum').oninput=e=>{S.ksum=e.target.value;S.page=0;render();};
+  $('kdesc').oninput=e=>{S.kdesc=e.target.value;S.page=0;render();};
+  $('psize').onchange=e=>{S.size=+e.target.value;S.page=0;render();};
+  $('wk1').onchange=e=>{S.wk1=e.target.checked;render();};
+  $('wk2').onchange=e=>{S.wk2=e.target.checked;render();};
+  $('rate').oninput=e=>{S.rate=+e.target.value||0;render();};
+  document.querySelector('#tix thead').addEventListener('click',e=>{
+    const td=e.target.closest('.sortable');if(!td)return;
+    const c=td.dataset.col;
+    if(S.sort===c)S.dir=-S.dir;else{S.sort=c;S.dir=1;}
+    render();});
+}
+async function tick(){
+  try{
+    const r=await fetch('/data');D=await r.json();
+    if(S.rate==null)S.rate=D.rate_default!=null?D.rate_default:40;
+    const sel=$('st'),cur=S.st;
+    const sts=[...new Set(D.rows.map(r=>r.status))].sort();
+    sel.innerHTML=`<option value=''>全部狀態</option>`+
+      sts.map(v=>`<option${v===cur?' selected':''}>${esc(v)}</option>`).join('');
+    render();
+  }catch(e){}
+}
+bind();tick();setInterval(tick,5000);
 </script>"""
 
 
+_INPUT = ("style='background:#0d1117;color:#c9d1d9;border:1px solid #30363d;"
+          "border-radius:6px;padding:4px 10px'")
+
+
 def render_index(journal, sessions, watch=None) -> str:
+    """W4.7 dashboard v2:過濾器置頂(統管統計/圖表/表格)+ 時間圖/金錢圖
+    + 排序表格。初始表格由 server 渲染(no-JS/e2e 可讀),JS 從 /data 接手。"""
     watch = watch or {}
-    ids = sorted({e["issue_id"] for e in journal} | set(sessions))
+    ids = sorted({e["issue_id"] for e in journal
+                  if isinstance(e.get("issue_id"), int) and e["issue_id"]}
+                 | set(sessions))
     qpos = queue_positions(sessions)
     hs = handoff_starts(journal)
     rows = ""
     for iid in ids:
         s = sessions.get(iid, {})
         w = watch.get(iid, {})
-        key = s.get("key") or w.get("key") or next(
-            (e["key"] for e in journal if e["issue_id"] == iid), f"#{iid}")
+        key = s.get("key") or w.get("key") or f"#{iid}"
         label, cls = session_status(s, qpos) if s else ("-", "")
-        rows += (f"<tr data-status='{esc(label)}'>"
-                 f"<td><a href='/ticket/{iid}'>{esc(key)}</a></td>"
-                 f"<td>{esc(s.get('profile','-'))}</td>"
+        rows += (f"<tr><td><a href='/ticket/{iid}'>{esc(key)}</a></td>"
+                 f"<td>{esc((w.get('summary') or '')[:28])}</td>"
+                 f"<td>{esc(s.get('profile', '-'))}</td>"
                  f"<td><span class='badge {cls}'>{esc(label)}</span></td>"
                  f"<td>{esc(w.get('last_assignee') or '-')}</td>"
                  f"<td>{esc(fmt_ts(w.get('first_seen_ts')))}</td>"
@@ -367,16 +557,38 @@ def render_index(journal, sessions, watch=None) -> str:
                  f"<td>{esc(fmt_ts(hs.get(iid)))}</td>"
                  f"<td>{esc(s.get('attempts', 0))}</td>"
                  f"<td>${s.get('cost_usd', 0) or 0:.4f}</td></tr>")
+    filterbar = (
+        "<div class='ctl card' style='flex-wrap:wrap'>"
+        "<b style='color:#8b949e'>過濾</b>"
+        f"<select id='qr' {_INPUT}>"
+        "<option value='all'>全部時間</option>"
+        "<option value='7'>過去 7 天</option>"
+        "<option value='30'>過去 30 天</option>"
+        "<option value='60'>過去 60 天</option>"
+        "<option value='90'>過去 90 天</option></select>"
+        f"<input type='date' id='from' {_INPUT}>~"
+        f"<input type='date' id='to' {_INPUT}>"
+        f"<select id='st' {_INPUT}><option value=''>全部狀態</option></select>"
+        f"<input id='ksum' placeholder='summary keyword…' {_INPUT}>"
+        f"<input id='kdesc' placeholder='description keyword…' {_INPUT}>"
+        "<span style='color:#6e7681;font-size:11px'>↓ 底下統計/圖表/表格"
+        "皆只含過濾後的 Jira</span></div>")
+    charts = (
+        "<h2>時間圖(Create/Close/成功/失敗)</h2><div class='card'>"
+        "<label style='color:#8b949e;font-size:12px'>"
+        "<input type='checkbox' id='wk1'> 以每週呈現</label>"
+        "<svg id='chart-time'></svg><div id='lg-time'></div></div>"
+        "<h2>金錢圖(AI vs 人類)</h2><div class='card'>"
+        "<label style='color:#8b949e;font-size:12px'>"
+        "<input type='checkbox' id='wk2'> 以每週呈現</label>"
+        " <label style='color:#8b949e;font-size:12px'>人類時薪 USD $"
+        f"<input type='number' id='rate' min='0' step='1' {_INPUT} "
+        "style='width:70px;background:#0d1117;color:#c9d1d9;"
+        "border:1px solid #30363d;border-radius:6px;padding:2px 6px'>"
+        "</label><svg id='chart-money'></svg><div id='lg-money'></div></div>")
     toolbar = (
         "<div class='ctl card'>"
-        "<input id='kw' placeholder='keyword…' style='background:#0d1117;"
-        "color:#c9d1d9;border:1px solid #30363d;border-radius:6px;"
-        "padding:4px 10px'>"
-        "<select id='st' style='background:#0d1117;color:#c9d1d9;"
-        "border:1px solid #30363d;border-radius:6px;padding:4px'>"
-        "<option value=''>全部狀態</option></select>"
-        "<select id='psize' style='background:#0d1117;color:#c9d1d9;"
-        "border:1px solid #30363d;border-radius:6px;padding:4px'>"
+        f"<select id='psize' {_INPUT}>"
         "<option>10</option><option selected>20</option>"
         "<option>50</option><option>100</option></select>"
         "<div class='btn' onclick='pg(-1)'>‹ 上頁</div>"
@@ -384,18 +596,21 @@ def render_index(journal, sessions, watch=None) -> str:
         "<span id='pginfo' style='color:#8b949e;font-size:12px'></span></div>")
     return (f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
             f"</h1></header><main>"
-            f"{overview_cards(sessions, journal)}{control_bar()}"
+            f"{filterbar}"
+            f"<div class='stats' id='stats'>"
+            f"{overview_cards(sessions, journal)}</div>"
+            f"{control_bar()}{charts}"
             f"<h2>Tickets</h2>{toolbar}<div class='card'>"
-            f"<table id='tix'><thead>"
-            f"<tr><td><b>ticket</b></td><td><b>profile</b></td>"
-            f"<td><b>status</b></td><td><b>assignee</b></td>"
-            f"<td><b>created</b></td><td><b>finished</b></td>"
-            f"<td><b>換手起點</b></td><td><b>attempts</b></td>"
-            f"<td><b>cost</b></td></tr></thead><tbody>{rows}</tbody>"
-            f"</table></div>"
+            f"<table id='tix'><thead><tr id='thead-row'>"
+            f"<td><b>ticket</b></td><td><b>summary</b></td>"
+            f"<td><b>profile</b></td><td><b>status</b></td>"
+            f"<td><b>assignee</b></td><td><b>created</b></td>"
+            f"<td><b>finished</b></td><td><b>換手起點</b></td>"
+            f"<td><b>attempts</b></td><td><b>cost</b></td></tr></thead>"
+            f"<tbody>{rows}</tbody></table></div>"
             f"<p style='color:#8b949e'>四層 trace:L0 ticket · L1 attempt · "
             f"L2 envelope · L3 conversation events。點 ticket 展開。</p>"
-            f"{_INDEX_JS}</main>")
+            f"{_APP_JS}</main>")
 
 
 def render_approval(s: dict, evs: list[dict]) -> str:
@@ -542,6 +757,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         journal, sessions = read_journal(), read_sessions()
+        if self.path == "/data":                   # W4.7 前端單一資料源
+            payload = json.dumps(
+                build_data(journal, sessions, read_watch()),
+                ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type",
+                             "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if self.path.startswith("/tfile/"):        # W4.2 transcript 產物服務
             try:
                 _, _, iid_s, name = self.path.split("/", 3)
