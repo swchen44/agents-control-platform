@@ -770,7 +770,14 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<span class='kv'><b>attempts</b> {esc(s.get('attempts',0))}</span>"
             f"<span class='kv'><b>cost</b> ${s.get('cost_usd',0):.4f}</span>"
             f"<span class='kv'><b>workspace</b> {esc(s.get('workspace','-'))}</span>"
-            f"</div></div>"
+            + (("<span class='btn' style='margin-left:auto' "
+                f"onclick=\"fetch('{CONTROL}/evict/{iid}',"
+                "{method:'POST'}).then(r=>r.json()).then(j=>this.textContent="
+                "JSON.stringify(j)).catch(()=>this.textContent='control 離線')\""
+                ">⏻ Evict(killpg)</span>")
+               if s and not s.get("outcome")
+               and not str(s.get("workspace", "")).startswith("(") else "")
+            + f"</div></div>"
             f"{render_transcript_card(iid, s)}"
             f"{render_approval(s, evs)}"
             f"<div class='tabs'>"

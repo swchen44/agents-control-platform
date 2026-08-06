@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -71,6 +72,23 @@ class ControlAPI:
                     api.poller.stopping = True
                     log.info("control: shutdown(當前輪跑完後退出)")
                     return self._json(200, {"stopping": True})
+                if self.path.startswith("/evict/"):  # W5.3 E3 實時 killpg
+                    try:
+                        iid = int(self.path.rsplit("/", 1)[1])
+                    except ValueError:
+                        return self._json(400, {"error": "bad issue id"})
+                    s = api.store.get_session(iid)
+                    if (s is None or s.outcome
+                            or s.workspace.startswith("(")):
+                        return self._json(404,
+                                          {"error": "no active session"})
+                    artifacts = os.path.join(
+                        os.path.dirname(s.workspace), "attempts")
+                    os.makedirs(artifacts, exist_ok=True)
+                    with open(os.path.join(artifacts, "EVICT"), "w") as f:
+                        f.write("evict")
+                    log.info("control: evict %s(%s)", iid, s.key)
+                    return self._json(200, {"evicted": iid})
                 if self.path == "/reload":
                     if api.reload_fn is None:
                         return self._json(501, {"error": "reload 未接線"})

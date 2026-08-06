@@ -124,6 +124,13 @@ assignee = 人類                   → inactive (killpg 關子進程;釋放 CPU
 
 - **inactive = killpg 硬關 + `--resume` 復活**(N13/E3 現成)。**不可用 SIGSTOP soft 凍結**
   ——那樣進程還在、仍占 memory,違反「不占 memory」。
+- **★ W5.3 實時 killpg 已落地(E3)**:`POST /evict/<issue_id>`(control API)→
+  寫 `attempts/EVICT` 檔 → RawCLIAgent evict 看門狗(1s 輪詢)即刻 killpg CLI
+  進程組 → envelope `error_kind=evicted` → dispatcher **不消耗 attempt**、
+  session 留存 → 下輪 native resume 續跑(e2e 實測:t+8s 觸發、t+9.3s 全結束)。
+  ticket 詳情頁有 Evict 按鈕。限制:assignee 交人的「自動」即時 kill 仍受同步
+  poll 限制(attempt 期間 poll 阻塞,看不到 assignee 變化)——人工即時 kill
+  用 /evict;assignee 語意由下輪 inactive 接手。
 - **只釋放運算資源**:workspace 磁碟、store 記錄、session_id 留著(才能 resume)。
 - 邊角(交人類→inactive 時):
   1. **孤兒進程** → killpg 殺整個進程組杜絕(N13)。

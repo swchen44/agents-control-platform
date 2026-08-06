@@ -64,6 +64,7 @@ def main() -> int:
             os_sandbox=job.get("os_sandbox", False),         # claude seatbelt
             sandbox=job.get("sandbox", "workspace-write"),    # codex --sandbox
             stall_seconds=float(job.get("stall_seconds", 0)),  # N13 watchdog
+            evict_file=job.get("evict_file"),                # E3 實時 killpg
             output_schema=job.get("output_schema"))            # G1 契約(dict|None)
         conv = Conversation(agent=agent, workspace=os.path.abspath(job["ws"]),
                             callbacks=[capture])
@@ -81,6 +82,8 @@ def main() -> int:
         # crash/kill; task = agent ran but reported error
         if agent._stalled:
             envelope["error_kind"] = "stalled"
+        elif agent._evicted:                     # E3:主動驅逐(非故障)
+            envelope["error_kind"] = "evicted"
         elif not agent._got_terminal:
             envelope["error_kind"] = "no-terminal"
         elif agent._error:

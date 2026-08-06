@@ -70,6 +70,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "resume_session_id": resume_session_id,
         # W5.1 sid 預派(W29):claude --session-id 可指定;crash 後憑它 resume
         "preassigned_session_id": preassigned_session_id,
+        # W5.3 E3:control API 寫此檔 → agent 即刻 killpg(實時釋放資源)
+        "evict_file": os.path.join(artifacts_dir, "EVICT"),
         "timeout_sec": agent_cfg.get("timeout_sec", 300),
         "events_path": os.path.join(artifacts_dir, f"a{attempt}.events.jsonl"),
         "envelope_path": os.path.join(artifacts_dir, f"a{attempt}.envelope.json"),
@@ -78,6 +80,11 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "server_api_key": agent_cfg.get("server_api_key", "harness-local-only"),
         "persist_dir": os.path.join(artifacts_dir, f"a{attempt}.persist"),
     }
+    # E3:清掉殘留 EVICT 檔(上次驅逐留下的),否則新 attempt 秒被驅逐
+    try:
+        os.remove(job["evict_file"])
+    except FileNotFoundError:
+        pass
     job_path = os.path.join(artifacts_dir, f"a{attempt}.job.json")
     with open(job_path, "w") as f:
         json.dump(job, f, ensure_ascii=False)

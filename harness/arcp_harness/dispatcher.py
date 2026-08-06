@@ -246,6 +246,22 @@ class Dispatcher:
                 structured=res.structured,               # G1:agent 自評(記錄)
                 envelope=res.envelope_path))
 
+            # E3(W5.3):被主動驅逐(control /evict → killpg)——非故障,
+            # 不消耗 attempt;session 留 active,下輪 native resume 續跑
+            # (若 evict 是配合交人,下輪 external policy 會標 inactive 擋住)
+            if res.error_kind == "evicted":
+                sess.attempts -= 1
+                self.store.upsert_session(sess)
+                self.source.add_comment(ticket.id, (
+                    f"[agent] attempt 被 evict(即時 killpg 釋放資源);"
+                    f"session 保留,下輪 resume 續跑。\n{_resume_hint(sess)}"))
+                events.append(self.store.journal(
+                    "evicted", ticket.id, ticket.key,
+                    session=sess.session_id))
+                log.info("%s attempt evicted(resume=%s)",
+                         ticket.key, sess.session_id)
+                return events
+
             # infrastructure failure (server 掛/連不上, N3): NOT the agent's
             # fault → roll back the attempt (don't consume it) + pending:external.
             # server comes back → next poll resumes via session_id (不漏).

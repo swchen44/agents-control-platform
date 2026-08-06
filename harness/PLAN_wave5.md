@@ -28,9 +28,30 @@
       20 測檔 + selftest + e2e_gate/dashboard 全綠
 - [x] commit+push
 
+**W5.2 — dashboard 加欄(使用者 2026-08-06)** ✅
+- [x] 停留時間(state/assignee 最後變動起算、close 凍結)、lifetime(create→
+      close/現在)、人力$(預估×時薪連動);皆可排序;/data 加 last_change;
+      server 初始渲染共用 build_data;e2e 31 checks
+
+**W5.3 — E3 evict/實時 killpg** ✅
+- [x] RawCLIAgent `evict_file` 看門狗(鏡射 stall watchdog:1s 輪詢 EVICT 檔
+      → killpg CLI 進程組);runner `error_kind=evicted`;inner_runner 每
+      attempt 帶 `attempts/EVICT` 約定路徑 + spawn 前清殘留
+- [x] dispatcher:evicted **不消耗 attempt**、session 留 active(sid 在,
+      下輪 native resume);comment + journal。與交人組合:下輪 external
+      policy 標 inactive 自然擋住
+- [x] 觸發 = `POST /evict/<iid>`(control API 線程——poll 於 attempt 期間
+      阻塞,唯 control 可即時);active 才准(終態/哨值 404);ticket 頁
+      Evict 按鈕
+- [x] 測試:test_evict 3(端點寫檔/404/400、dispatcher 退還+resume、路徑
+      約定)+ **e2e_evict 真 killpg 4/4**(sleep 90 於 t+9.3s 被終結、
+      副作用中斷、error_kind=evicted);21 測檔全綠
+- [x] DESIGN_lifecycle §6 標已落地(含 assignee 自動即時 kill 的同步 poll
+      限制註記);commit+push
+
 ## 後續候選(未排程,擇需)
 
-- E3 evict/rehydrate + 實時 killpg(需異步架構)
+- ~~E3 evict/實時 killpg~~ → W5.3 完成;剩 rehydrate 對照(異步架構再議)
 - openhands-acp/server 的 codex 對照(quota)
 - landlock / docker 隔離實作(W22 介面已就緒)
 - 量產 python 標準結構(另開 repo)

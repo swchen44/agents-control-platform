@@ -59,6 +59,9 @@ class RawCLIAgent(AgentBase):
     # <file> appears, +delay — mirrors A-route KillTrigger for the resume matrix
     fault_kill_on_file: str | None = None
     fault_delay: float = 1.0
+    # E3 evict(W5.3,生產用):harness 寫此檔 → 即刻 killpg CLI 釋放
+    # CPU/memory(DESIGN §6 實時 killpg);session 保留,之後 native resume
+    evict_file: str | None = None
     # stall watchdog (N13, ported from A-route supervisor._watchdog): if no
     # event advances the run for stall_seconds, EXIT (killpg) so the harness
     # can resume instead of hanging. 0 = off. "slow is legal; stalled is not."
@@ -77,6 +80,7 @@ class RawCLIAgent(AgentBase):
     # process "ended" (A-route SIGTERM-rc=0 lesson, RawCLIAgent edition).
     _got_terminal: bool = PrivateAttr(default=False)
     _stalled: bool = PrivateAttr(default=False)
+    _evicted: bool = PrivateAttr(default=False)     # E3(W5.3)
     _last_progress: float = PrivateAttr(default=0.0)
     _raw_count: int = PrivateAttr(default=0)
     _event_count: int = PrivateAttr(default=0)
@@ -146,6 +150,9 @@ class RawCLIAgent(AgentBase):
         if self.stall_seconds > 0:
             threading.Thread(target=self._stall_watchdog, args=(proc,),
                              daemon=True).start()
+        if self.evict_file:
+            threading.Thread(target=self._evict_watchdog, args=(proc,),
+                             daemon=True).start()
         assert proc.stdout is not None
         try:
             for line in proc.stdout:
@@ -184,6 +191,21 @@ class RawCLIAgent(AgentBase):
                 self._stalled = True
                 self._error = (f"stalled: no progress for "
                                f"{self.stall_seconds:.0f}s")
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    pass
+                return
+
+    # -- E3 evict watchdog(W5.3,鏡射 stall watchdog 模式)------------------ #
+    def _evict_watchdog(self, proc) -> None:
+        """EVICT 檔出現 → 即刻 killpg(釋放 CPU/memory);harness 之後憑
+        session id native resume,不重工(DESIGN §6 實時 killpg)。"""
+        while proc.poll() is None:
+            time.sleep(1.0)
+            if self.evict_file and os.path.exists(self.evict_file):
+                self._evicted = True
+                self._error = "evicted by harness (killpg)"
                 try:
                     os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 except (ProcessLookupError, OSError):
