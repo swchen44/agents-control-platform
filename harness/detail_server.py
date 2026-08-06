@@ -36,6 +36,18 @@ ROOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else \
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8788   # 8787 讓給 control API
 CONTROL = (sys.argv[3] if len(sys.argv) > 3
            else os.environ.get("ARCP_CONTROL_URL", "http://127.0.0.1:8787"))
+# 內網/離線:transcript(cclog)本需從 CDN 載 vis-timeline,已 vendor 到本地
+_VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "tools", "cclog", "vendor")
+# transcript HTML(外部工具產出)硬擋任何外部載入(只允許同源 + 內嵌 + data:)
+_CSP_TRANSCRIPT = ("default-src 'none'; script-src 'self' 'unsafe-inline'; "
+                   "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                   "font-src 'self' data:; connect-src 'self'")
+# 主頁(我們自寫,已無外部引用)——同樣擋外部,但放行本地 control API 的
+# 跨埠 fetch(Evict / 狀態);defense-in-depth,防未來誤加 CDN。
+_CSP_MAIN = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+             "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+             "font-src 'self' data:; connect-src 'self' " + CONTROL)
 
 
 def read_journal() -> list[dict]:
@@ -1143,8 +1155,29 @@ class Handler(BaseHTTPRequestHandler):
                     f"<body>{body}</body></html>")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", _CSP_MAIN)
             self.end_headers()
             self.wfile.write(page.encode())
+            return
+        if self.path.startswith("/tvendor/"):      # W5.9 vendored transcript 資產
+            try:
+                name = os.path.basename(self.path)  # 防 traversal
+                p = os.path.join(_VENDOR_DIR, name)
+                if not os.path.isfile(p):
+                    raise FileNotFoundError(p)
+                data = open(p, "rb").read()
+                ct = ("text/css" if name.endswith(".css")
+                      else "application/javascript" if name.endswith(".js")
+                      else "application/octet-stream")
+                self.send_response(200)
+                self.send_header("Content-Type", f"{ct}; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "max-age=86400")
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception:
+                self.send_response(404)
+                self.end_headers()
             return
         if self.path.startswith("/tfile/"):        # W4.2 transcript 產物服務
             try:
@@ -1160,6 +1193,9 @@ class Handler(BaseHTTPRequestHandler):
                 if name.endswith(".html"):
                     self.send_header("Content-Type",
                                      "text/html; charset=utf-8")
+                    # 硬擋外部載入(cclog HTML 曾含 unpkg CDN;內網不可外連)
+                    self.send_header("Content-Security-Policy",
+                                     _CSP_TRANSCRIPT)
                 elif name.endswith(".log"):        # W4.4 script log 檢視
                     self.send_header("Content-Type",
                                      "text/plain; charset=utf-8")
@@ -1203,6 +1239,7 @@ class Handler(BaseHTTPRequestHandler):
                 f"<body>{body}</body></html>")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Security-Policy", _CSP_MAIN)
         self.end_headers()
         self.wfile.write(page.encode())
 

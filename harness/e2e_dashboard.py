@@ -225,6 +225,14 @@ try:
         f"http://127.0.0.1:{port}/tfile/1/final.html", timeout=5)
     check("tfile:HTML 內容可讀",
           "FINAL-TRANSCRIPT" in fh.read().decode())
+    # W5.9:transcript HTML 帶 CSP 硬擋外部;vendored 資產本地服務
+    check("tfile:HTML 有 CSP(擋外部)",
+          "default-src 'none'" in (fh.headers.get(
+              "Content-Security-Policy") or ""))
+    tv = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/tvendor/vis-timeline.min.css", timeout=5)
+    check("tvendor:vis-timeline 本地服務(離線可用)",
+          tv.status == 200 and int(tv.headers.get("Content-Length") or 0) > 0)
     th = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/tfile/1/transcript.tgz", timeout=5)
     check("tfile:tgz 下載 header",

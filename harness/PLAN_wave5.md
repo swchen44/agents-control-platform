@@ -112,6 +112,20 @@
 - [x] e2e_dashboard 37 checks 全 PASS;Chrome 實測:Control 頁 Pause→暫停→
       Resume→運行、DB 匯出鈕渲染、DB 表 fixed-layout;ruff clean。commit+push
 
+**W5.9 — dashboard 零外部依賴(內網/離線;使用者 2026-08-07)** ✅
+- [x] 稽核:我們自寫的三頁(/、/db、/control)+ ticket 頁 **零外部引用**
+      (只 127.0.0.1);字型全系統字型、SVG 內嵌、emoji unicode
+- [x] 唯一外部依賴 = cclog transcript HTML 的**互動時間軸從 unpkg CDN 動態載
+      vis-timeline**。修:①**vendor 進 `tools/cclog/vendor/`**(vis-timeline
+      8.5.3,MIT,進 git);②`render_transcript._delocalize` 把 HTML 內 unpkg
+      URL 改寫成本地 `/tvendor/...`(新舊 on-disk HTML 都處理);③dashboard
+      加 `/tvendor/<file>` 路由服務(防 traversal)
+- [x] **CSP 硬擋(雙保險)**:transcript HTML 回 `default-src 'none'`(只放行
+      同源+內嵌+data:);主頁回 `default-src 'self'`(connect-src 另放行本地
+      control API 跨埠 fetch)——未來誤加 CDN 也會被瀏覽器擋
+- [x] e2e_dashboard +2(transcript CSP、/tvendor 本地服務);離線重產 transcript
+      驗證零可載入外部資源;全套回歸 + ruff clean。commit+push
+
 ## 後續候選(未排程,擇需)
 
 - ~~E3 evict/實時 killpg~~ → W5.3 完成;剩 rehydrate 對照(異步架構再議)

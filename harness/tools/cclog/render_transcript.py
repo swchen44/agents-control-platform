@@ -58,13 +58,42 @@ def find_codex_rollout(thread_id: str) -> str | None:
     return hits[0] if hits else None
 
 
+# cclog 的互動時間軸會從 unpkg CDN 動態載 vis-timeline。內網/離線環境
+# 不可下載外部元件 → 改指向 dashboard 本地路徑(vendor 版,見 vendor/)。
+# CSP 另在 dashboard 端硬擋任何外部載入(雙保險)。
+_CDN_REWRITES = (
+    ("https://unpkg.com/vis-timeline/standalone/umd/"
+     "vis-timeline-graph2d.min.js", "/tvendor/vis-timeline.min.js"),
+    ("https://unpkg.com/vis-timeline/styles/vis-timeline-graph2d.min.css",
+     "/tvendor/vis-timeline.min.css"),
+)
+
+
+def _delocalize(html_path: str) -> None:
+    """把 cclog HTML 內的外部 CDN URL 改成 dashboard 本地路徑(離線可用)。"""
+    try:
+        with open(html_path, encoding="utf-8") as f:
+            html = f.read()
+    except OSError:
+        return
+    orig = html
+    for cdn, local in _CDN_REWRITES:
+        html = html.replace(cdn, local)
+    if html != orig:
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+
+
 def _render_jsonl(jsonl: str, out_html: str) -> bool:
     """單一 claude 格式 .jsonl → HTML(cli 會在同目錄產出,再搬到目標)。"""
     r = _cli(jsonl, "-o", out_html)
     if r.returncode != 0:
         print(f"[cclog] 轉檔失敗 {jsonl}: {r.stderr[-300:]}", file=sys.stderr)
         return False
-    return os.path.isfile(out_html)
+    if os.path.isfile(out_html):
+        _delocalize(out_html)          # 去外部 CDN 依賴
+        return True
+    return False
 
 
 def render_claude(session: str, output_dir: str,
@@ -102,7 +131,10 @@ def render_codex(session: str, output_dir: str) -> list[str]:
         print(f"[cclog] codex 轉檔失敗 {session}: {r.stderr[-300:]}",
               file=sys.stderr)
         return []
-    return [main] if os.path.isfile(main) else []
+    if os.path.isfile(main):
+        _delocalize(main)              # 去外部 CDN 依賴
+        return [main]
+    return []
 
 
 def main() -> int:

@@ -15,6 +15,18 @@
   pyproject.toml);重建:
   `python3 -m venv .venv && .venv/bin/pip install click dateparser pydantic jinja2 mistune toml textual packaging gitpython pygments 'quickjs-ng>=0.15.1.1,<0.16'`
 
+## vendor/ — 內含元件(W5.9,離線/內網用)
+
+cclog 的互動時間軸原會從 unpkg CDN 動態載 vis-timeline。內網不可外連 →
+把元件抓進 `vendor/`,`render_transcript.py` 把 HTML 內的 unpkg URL 改寫成
+dashboard 本地路徑 `/tvendor/...`;dashboard 另對 transcript HTML 加 CSP
+硬擋任何外部載入(雙保險)。
+
+- `vendor/vis-timeline.min.js` / `.min.css`:**vis-timeline 8.5.3**
+  (https://github.com/visjs/vis-timeline,MIT/Apache-2.0),
+  vendor 於 2026-08-07,來源 `https://unpkg.com/vis-timeline/...`。
+  升級:重新 curl 兩檔覆蓋即可(URL 見 render_transcript._CDN_REWRITES)。
+
 ## 為什麼選它(W4/V0 除險結論,詳 ../../DESIGN_transcript.md)
 
 Python 同棧可控、**原生渲染 sidechain/agentId(sub-agent)**、
