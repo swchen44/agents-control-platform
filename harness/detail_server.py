@@ -459,10 +459,79 @@ def render_control_page() -> str:
             f"{_CONTROL_JS}")
 
 
+def _du_kb(path: str) -> int:
+    """目錄磁碟用量(KB,best-effort du)。"""
+    import subprocess
+    try:
+        r = subprocess.run(["du", "-sk", path], capture_output=True,
+                           text=True, timeout=8)
+        return int(r.stdout.split()[0]) if r.stdout.strip() else 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def _workspace_info(s: dict, journal_starts: dict) -> dict:
+    """W6.2 per-workspace:skill 名/session/sub-session/transcript/磁碟/跑時間。"""
+    import glob
+    ws = s.get("workspace") or ""
+    base = os.path.dirname(ws) if ws.endswith("/ws") else ws
+    skills, subs, tdir = [], [], ""
+    if ws and not ws.startswith("("):
+        skills = [os.path.basename(p) for p in
+                  glob.glob(os.path.join(ws, ".claude", "skills", "*"))]
+        td = transcript_dir_of(ws)
+        if os.path.isdir(td):
+            tdir = td
+        # sub-session:~/.claude/projects/<slug>/<sid>/subagents/agent-*.jsonl
+        sid = s.get("session_id") or ""
+        if sid:
+            hits = glob.glob(os.path.expanduser(
+                f"~/.claude/projects/*/{sid}/subagents/agent-*.jsonl"))
+            subs = [os.path.basename(h).removesuffix(".jsonl") for h in hits]
+    started = journal_starts.get(s.get("issue_id"))
+    return {
+        "iid": s.get("issue_id"), "key": s.get("key"),
+        "profile": s.get("profile"), "workspace": ws,
+        "skills": skills, "session_id": s.get("session_id") or "",
+        "subs": subs, "transcript_dir": tdir,
+        "disk_mb": round(_du_kb(base) / 1024, 1) if base
+                   and not base.startswith("(") and os.path.isdir(base)
+                   else 0,
+        "run_since": started,
+    }
+
+
 def build_server_data() -> dict:
-    """W6.1 Server 頁單一資料源(W6.2 加 processes/workspaces、W6.6 加 conns)。"""
+    """W6.1/6.2/6.6 Server 頁單一資料源。"""
     data = {"sys": sysinfo_collect() if sysinfo_collect else None}
     data["conns"] = list(_CONNS)[-30:][::-1]        # W6.6 近期連線(新→舊)
+    # W6.2:進程 + per-workspace(只掃 active session,省成本)
+    procs = []
+    try:
+        from arcp_harness.sysinfo import processes
+        procs = processes()
+    except Exception:  # noqa: BLE001
+        procs = []
+    sessions = read_sessions()
+    journal = read_journal()
+    starts = {}
+    for e in journal:
+        if e.get("type") == "attempt_started":
+            iid = e.get("issue_id")
+            starts.setdefault(iid, e.get("ts"))     # 首個 attempt_started
+    active = [s for s in sessions.values()
+              if not s.get("outcome") and not s.get("pending_reason")
+              and not s.get("inactive")]
+    workspaces = [_workspace_info(s, starts) for s in active]
+    # 進程對應 workspace(cwd 前綴比對)→ 附 Jira
+    for p in procs:
+        cwd = p.get("cwd") or ""
+        for w in workspaces:
+            if w["workspace"] and cwd.startswith(w["workspace"].rstrip("/")):
+                p["iid"], p["ticket"] = w["iid"], w["key"]
+                break
+    data["processes"] = procs
+    data["workspaces"] = workspaces
     return data
 
 
@@ -506,6 +575,29 @@ _SERVER_JS = ("<script>"
     "`<div class='kv'><b>claude 已設定</b> ${badge(a.claude_configured)}</div>`+"
     "`<div class='kv'><b>ANTHROPIC_API_KEY(env)</b> "
     "${badge(a.anthropic_api_key_env)}</div>`+'</div>';"
+    # per-process(W6.2)
+    "const ps=d.processes||[];"
+    "h+=\"<h2>Agent 進程(claude/codex)</h2><div class='card'>\"+(ps.length?"
+    "\"<table id='tix'><thead><tr><td><b>engine</b></td><td><b>Jira</b></td>\"+"
+    "\"<td><b>PID</b></td><td><b>CPU%</b></td><td><b>MEM</b></td>\"+"
+    "\"<td><b>cwd</b></td></tr></thead><tbody>\"+ps.map(p=>`<tr><td>`+"
+    "`${esc(p.engine)}</td><td>${esc(p.ticket||'-')}</td><td>${esc(p.pid)}`+"
+    "`</td><td>${p.cpu}</td><td>${p.rss_mb}MB</td><td>${esc(p.cwd||'-')}`+"
+    "`</td></tr>`).join('')+'</tbody></table>':"
+    "\"<span style='color:#8b949e'>(目前無 claude/codex 進程在跑)</span>\")"
+    "+'</div>';"
+    # per-workspace(W6.2)
+    "const ws=d.workspaces||[];"
+    "h+=\"<h2>Workspace(進行中)</h2><div class='card'>\"+(ws.length?"
+    "\"<table id='tix'><thead><tr><td><b>Jira</b></td><td><b>profile</b></td>\"+"
+    "\"<td><b>skills</b></td><td><b>session</b></td><td><b>sub</b></td>\"+"
+    "\"<td><b>磁碟</b></td><td><b>path</b></td></tr></thead><tbody>\"+"
+    "ws.map(w=>`<tr><td>${esc(w.key)}</td><td>${esc(w.profile)}</td>`+"
+    "`<td>${esc((w.skills||[]).join(',')||'-')}</td>`+"
+    "`<td>${esc((w.session_id||'').slice(0,8)||'-')}</td>`+"
+    "`<td>${(w.subs||[]).length}</td><td>${w.disk_mb}MB</td>`+"
+    "`<td>${esc(w.workspace)}</td></tr>`).join('')+'</tbody></table>':"
+    "\"<span style='color:#8b949e'>(目前無進行中 workspace)</span>\")+'</div>';"
     # 連線(W6.6)
     "const cs=d.conns||[];"
     "h+=\"<h2>連線(近期)</h2><div class='card'>\"+(cs.length?"

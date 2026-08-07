@@ -257,6 +257,11 @@ try:
               ("versions", "auth", "resources", "anomalies")))
     check("/server/data:auth 只布林(不外洩金鑰值)",
           all(isinstance(v, bool) for v in sd["sys"]["auth"].values()))
+    check("/server/data:W6.2 processes/workspaces 欄位",
+          "processes" in sd and "workspaces" in sd
+          and isinstance(sd["processes"], list))
+    check("Server 頁:進程/workspace 區塊",
+          "Agent 進程" in spage and "Workspace" in spage)
     import re as _re
     check("Server 頁無金鑰值樣式",
           not _re.search(r"sk-ant|eyJ[A-Za-z0-9_-]{20}",

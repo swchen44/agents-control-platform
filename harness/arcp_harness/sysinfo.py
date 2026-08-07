@@ -111,6 +111,49 @@ def _mem() -> dict:
         return {"total": 0, "free": 0, "used": 0}
 
 
+def _proc_cwd(pid: str) -> str:
+    """pid → cwd(macOS/Linux 用 lsof;best-effort,拿不到回空)。"""
+    out = _sh(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"], timeout=3)
+    for line in out.splitlines():
+        if line.startswith("n"):
+            return line[1:]
+    return ""
+
+
+def processes(want_cwd: bool = True) -> list[dict]:
+    """列 claude/codex CLI 進程(pid/cpu%/mem%/rss/cwd/engine)。best-effort ps。
+
+    claude 常以 node 執行,故以**完整命令列**含 'claude'/'codex' 判定,並排除
+    harness/dashboard 自身與 grep。cwd 供對應 workspace→Jira(W6.2)。
+    """
+    raw = _sh(["ps", "-axo", "pid=,pcpu=,pmem=,rss=,command="], timeout=6)
+    out = []
+    for line in raw.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 5:
+            continue
+        pid, cpu, mem, rss, cmd = parts
+        low = cmd.lower()
+        if "detail_server.py" in low or "run_poller.py" in low \
+                or "sysinfo" in low or " grep " in low:
+            continue
+        # codex exec / claude -p(claude 可能是 node .../claude);抓 CLI 執行體
+        is_codex = "codex" in low and ("exec" in low or "codex-cli" in low
+                                       or low.rstrip().endswith("codex"))
+        is_claude = ("claude" in low and ("-p " in low or "--print" in low
+                     or "stream-json" in low or "/claude " in low
+                     or low.rstrip().endswith("claude")))
+        if not (is_codex or is_claude):
+            continue
+        rec = {"pid": pid, "cpu": float(cpu or 0), "mem": float(mem or 0),
+               "rss_mb": round(int(rss or 0) / 1024, 1),
+               "engine": "codex" if is_codex else "claude",
+               "cmd": cmd[:120]}
+        rec["cwd"] = _proc_cwd(pid) if want_cwd else ""
+        out.append(rec)
+    return out
+
+
 def collect() -> dict:
     """Server 頁單一資料源。"""
     try:
