@@ -365,6 +365,20 @@ try:
     except urllib.error.HTTPError as e:
         check("/swagger-assets:traversal 擋掉", e.code == 404)
 
+    # W7.5:Agent Detail tab(harness 設定 + 全 Profile 參數;憑證不外洩)
+    apage = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/agent", timeout=5).read().decode()
+    check("Agent Detail:頁 + tab + 設定/路由/Profile 區塊",
+          "🧩 Agent Detail" in apage
+          and "harness 設定(routes.yaml)" in apage
+          and "路由(route" in apage and "Profile · " in apage)
+    check("Agent Detail:W7 新欄位可見",
+          "max_budget_monthly_usd(月)" in apage
+          and "est_minutes(有效" in apage and "goal" in apage)
+    check("Agent Detail:不外洩憑證",
+          "JIRA_API_TOKEN" not in apage and "api_token" not in apage)
+    check("Server 頁導覽含 Agent Detail tab", "🧩 Agent Detail" in spage)
+
     # 按鈕背後的端點契約(JS fetch 打的就是這些)
     req = urllib.request.Request(f"{ctl_url}/pause", method="POST")
     body = json.loads(urllib.request.urlopen(req, timeout=5).read())

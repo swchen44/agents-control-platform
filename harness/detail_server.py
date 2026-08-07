@@ -26,6 +26,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import sqlite3
 import sys
 from collections import Counter, deque
@@ -45,6 +46,8 @@ CONTROL = (sys.argv[3] if len(sys.argv) > 3
 # W6.1:綁定 host = config,預設 0.0.0.0(內網開放,使用者 2026-08-07 決定;
 # ⚠️ dashboard 唯讀但會顯示系統/程序資訊,內網任何人可見)。設 127.0.0.1 可鎖本機。
 HOST = os.environ.get("ARCP_DASH_HOST", "0.0.0.0")
+# W7.5:Agent Detail 讀 routes.yaml(harness 設定 + profiles)。憑證在 ~/.env 不在此。
+_CONFIG_PATH = os.environ.get("ARCP_CONFIG", "routes.yaml")
 # W6.6:連線 IP 環形緩衝(記憶體,重啟清)
 _CONNS: deque = deque(maxlen=200)
 # 內網/離線:transcript(cclog)本需從 CDN 載 vis-timeline,已 vendor 到本地
@@ -1054,6 +1057,7 @@ def _nav(active: str) -> str:
             + tab("dash", "/", "📊 Dashboard")
             + tab("db", "/db", "🗃 DB Browser")
             + tab("control", "/control", "🎛 Control")
+            + tab("agent", "/agent", "🧩 Agent Detail")
             + tab("server", "/server", "🖥 Server") + "</div>")
 
 
@@ -1736,6 +1740,103 @@ _SWAGGER_CT = {".css": "text/css", ".js": "application/javascript",
                ".txt": "text/plain"}
 
 
+# ── W7.5:Agent Detail — harness 設定 + 全 Profile 參數(唯讀,server-render)── #
+def _redact(d):
+    """遮蔽疑似敏感 key(routes.yaml 本無憑證,防禦性;憑證在 ~/.env)。"""
+    sens = re.compile(r"token|secret|password|api[_-]?key", re.I)
+    if isinstance(d, dict):
+        return {k: ("***" if sens.search(str(k)) else _redact(v))
+                for k, v in d.items()}
+    if isinstance(d, list):
+        return [_redact(x) for x in d]
+    return d
+
+
+def _kv_table(pairs) -> str:
+    """(label, value) → 小表格(value 為 dict/list 時 JSON 呈現)。"""
+    rows = ""
+    for k, v in pairs:
+        if isinstance(v, (dict, list)):
+            v = json.dumps(v, ensure_ascii=False, default=str)
+        rows += (f"<tr><td style='color:#8b949e;padding:2px 12px 2px 0;"
+                 f"white-space:nowrap;vertical-align:top'>{esc(k)}</td>"
+                 f"<td style='font-family:ui-monospace,monospace;font-size:12px'>"
+                 f"{esc('' if v is None else v)}</td></tr>")
+    return f"<table>{rows}</table>"
+
+
+def render_agent_page() -> str:
+    """W7.5:harness 設定(routes.yaml)+ 每個 Profile 全參數。憑證不在此檔。"""
+    try:
+        import sys as _sys
+        _here = os.path.dirname(os.path.abspath(__file__))
+        if _here not in _sys.path:
+            _sys.path.insert(0, _here)
+        from arcp_harness.profiles import load_profiles
+        from arcp_harness.routing import load_config
+        src, routes = load_config(_CONFIG_PATH)
+        profiles = load_profiles(_CONFIG_PATH)
+        err = None
+    except Exception as e:  # noqa: BLE001 — 壞 config/缺套件不擋頁
+        src, routes, profiles, err = {}, [], {}, str(e)
+
+    head = (f"{_nav('agent')}<header><h1>Agent Detail · 設定與 Profile</h1>"
+            f"</header><main><p class='sys' style='text-align:left'>"
+            f"來源 <code>{esc(_CONFIG_PATH)}</code>(唯讀;憑證在 ~/.env,不顯示)。"
+            f"</p>")
+    if err:
+        return (head + f"<div class='card'><b style='color:#f85149'>"
+                f"讀取設定失敗</b><div class='sys' style='text-align:left'>"
+                f"{esc(err)}</div></div></main>")
+
+    # harness 設定(source/concurrency/control/commands/external_change…)
+    cfg = _redact(src)
+    cfg_card = ("<h2>harness 設定(routes.yaml)</h2><div class='card'>"
+                + _kv_table(sorted(cfg.items())) + "</div>")
+
+    # 路由
+    rrows = "".join(
+        f"<tr><td>{esc(r.name)}</td>"
+        f"<td style='font-family:ui-monospace,monospace;font-size:12px'>"
+        f"{esc(json.dumps(r.when, ensure_ascii=False, default=str))}</td>"
+        f"<td>{esc(r.profile or '-')}</td><td>{esc(r.on_match)}</td></tr>"
+        for r in routes)
+    routes_card = (
+        "<h2>路由(route → profile)</h2><div class='card'>"
+        "<table><thead><tr><td><b>route</b></td><td><b>when</b></td>"
+        "<td><b>profile</b></td><td><b>on_match</b></td></tr></thead>"
+        f"<tbody>{rrows or '<tr><td>(無)</td></tr>'}</tbody></table></div>")
+
+    # 每個 profile 全參數
+    pcards = ""
+    for name in sorted(profiles):
+        p = profiles[name]
+        verify = [{"name": v.name, "files": v.files, "cmd": v.cmd}
+                  for v in p.verify]
+        pcards += (
+            f"<h2>Profile · {esc(name)}</h2><div class='card'>"
+            + _kv_table([
+                ("goal", p.goal or "(未設)"),
+                ("agent", p.agent),
+                ("workspace_template", p.workspace_template),
+                ("workspace_folder", p.workspace_folder),
+                ("skills", p.skills),
+                ("verify", verify),
+                ("max_attempts", p.max_attempts),
+                ("max_budget_usd(單次)", p.max_budget_usd),
+                ("max_budget_monthly_usd(月)", p.max_budget_monthly_usd),
+                ("human_minutes_est", p.human_minutes_est),
+                ("est_minutes(有效,未設→240)", p.est_minutes()),
+                ("require_approval", p.require_approval),
+                ("approver", p.approver),
+                ("max_revisions", p.max_revisions),
+                ("retention_days", p.retention_days),
+                ("on_unknown", p.on_unknown),
+            ]) + "</div>")
+
+    return head + cfg_card + routes_card + pcards + "</main>"
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -1823,9 +1924,10 @@ class Handler(BaseHTTPRequestHandler):
                 name, int((q.get("limit") or ["100"])[0]),
                 int((q.get("offset") or ["0"])[0])))
             return
-        if self.path in ("/db", "/control", "/server"):  # 獨立頁
+        if self.path in ("/db", "/control", "/server", "/agent"):  # 獨立頁
             body = (render_db_page() if self.path == "/db"
                     else render_control_page() if self.path == "/control"
+                    else render_agent_page() if self.path == "/agent"
                     else render_server_page())
             page = (f"<!doctype html><html><head><meta charset='utf-8'>"
                     f"<title>ARCP</title><style>{CSS}</style></head>"
