@@ -11,6 +11,10 @@ extend-exclude = [
     "**/claude_code_log/**",   # cclog 上游套件(MIT,zero-diff vendor)
     "**/tools/vendor/**",      # swagger-ui / vis-timeline(zero-diff vendor)
 ]
+# pre-commit hook 會把「明確檔案路徑」丟給 ruff,預設對明確傳入的檔不套 exclude
+# → vendored 會漏網。force-exclude 讓 exclude 對明確路徑也生效(ruff 官方對 pre-commit
+# 的建議設定)。
+force-exclude = true
 
 [lint]
 select = ["E", "F", "W", "I"]   # pycodestyle(E/W)+ pyflakes(F)+ isort(I)

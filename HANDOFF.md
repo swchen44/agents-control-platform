@@ -67,6 +67,10 @@
 - **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
   venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
   `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
+- **pre-commit hook(W6.8)**:`.githooks/pre-commit` 對 staged `harness/*.py` 跑
+  `ruff check`(擋 import 亂序/lint;vendored 與 examples/ 不管)。**每台機器啟用一次**:
+  `git config core.hooksPath .githooks`(此設定不進版控);單次略過 `git commit --no-verify`。
+  ruff 缺席時只警告放行。`harness/ruff.toml` 已 `known-first-party` 釘死 + 排除 vendored。
 - **真 Jira 實測 ✅(2026-08-05,SCRUM-20)**:審批門完整鏈路一次通過 —— ADF 往返
   保真(人 UI 編輯後機器段 hash 仍符)、approver/human_email email→accountId 解析、
   填表放行、fork claude($0.0544)、SUCCESS、冪等、審批中資源開關不誤標。

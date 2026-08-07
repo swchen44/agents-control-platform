@@ -1,0 +1,32 @@
+#!/bin/sh
+# ARCP pre-commit — 對 staged 的 harness/*.py 跑 ruff check(擋不過的 import/lint)。
+#
+# 啟用(每台機器/每次 clone 各設一次;core.hooksPath 不進版控):
+#     git config core.hooksPath .githooks
+# 停用單次提交:git commit --no-verify
+#
+# 設計取捨:
+#  - 只檢 harness/(ruff 設定所在;examples/ 目前刻意不納管,見 harness/ruff.toml)。
+#  - 額外 grep 濾掉 vendored 路徑當保險:從 repo 根呼叫 ruff 時,force-exclude 對
+#    「明確傳入的路徑」錨定不可靠(實測仍會檢 claude_code_log),故雙保險。
+#  - ruff 缺席 → 警告放行(不因環境缺工具硬擋提交)。
+#  - 只檢查、不自動改(不偷改 staged 內容);不過就叫使用者自己 --fix。
+
+files=$(git diff --cached --name-only --diff-filter=ACM \
+  | grep -E '^harness/.*\.py$' \
+  | grep -vE '/claude_code_log/|/tools/vendor/')
+
+[ -z "$files" ] && exit 0
+
+if ! command -v ruff >/dev/null 2>&1; then
+  echo "⚠ pre-commit: 找不到 ruff,略過 lint(要啟用檢查請 pip install ruff)"
+  exit 0
+fi
+
+if ! echo "$files" | xargs ruff check; then
+  echo ""
+  echo "✗ pre-commit: ruff 未過。修復後重新 git add:"
+  echo "    ruff check --fix <檔案>"
+  echo "  (要略過這次檢查:git commit --no-verify)"
+  exit 1
+fi
