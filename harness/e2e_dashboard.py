@@ -66,8 +66,11 @@ _ad1 = os.path.join(root, "tickets", "1", "attempts")
 os.makedirs(_ad1, exist_ok=True)
 open(os.path.join(_ad1, "a1.envelope.json"), "w").write('{"completed":true}')
 with open(os.path.join(_ad1, "a1.events.jsonl"), "w") as _f:
-    _f.write(json.dumps({"kind": "MessageEvent", "source": "user"}) + "\n")
-    _f.write(json.dumps({"kind": "MessageEvent", "source": "agent"}) + "\n")
+    # W9.3:補 timestamp(L3 時間軸 item 需要),真資料一律有;缺則被略過
+    _f.write(json.dumps({"kind": "MessageEvent", "source": "user",
+                         "timestamp": "2026-08-06T16:47:00"}) + "\n")
+    _f.write(json.dumps({"kind": "MessageEvent", "source": "agent",
+                         "timestamp": "2026-08-06T16:47:05"}) + "\n")
 store.upsert_session(sess(1, session_id="s1", attempts=2, workspace=ws1,
                           outcome="SUCCESS", cost_usd=1.25, human_score=8,
                           clearquest_id="CR-1001"))
@@ -263,41 +266,50 @@ try:
     # W6.4:被動產生按鈕(有 session_id 才有;打 control /gen_transcript)
     check("transcript 卡:被動產生按鈕",
           "/gen_transcript/1" in t1 and "重新產生" in t1)
-    # W6.7/W9.2:兩條時間軸(生命週期 + L3 對話)收在右下浮動鈕抽屜(vis 離線)
-    check("時間軸:浮動鈕 + 抽屜 + vendored vis 資產(離線)",
+    # W6.7/W9.2/W9.3:單一事件時間軸(L3 對話 + Jira 生命週期合一,共用時間軸)
+    # 收在右下浮動鈕抽屜(vis 離線),左側兩層 nested groups 分類
+    check("時間軸:浮動鈕 + 抽屜 + 合一 widget + vendored vis 資產(離線)",
           "id='tlfab'" in t1 and "id='tlwrap'" in t1
-          and "生命週期時間軸" in t1 and "agent 對話時間軸" in t1
+          and "L3 對話 + Jira 生命週期" in t1
           and "/tvendor/vis-timeline.min.js" in t1
           and "/tvendor/vis-timeline.min.css" in t1
-          and "id='evtl'" in t1 and "id='l3tl'" in t1)
+          and "id='evtl'" in t1 and "id='tl-data'" in t1
+          and "id='l3tl'" not in t1)               # 合一後不再有第二個 widget
     check("時間軸:浮動鈕/抽屜在 </main> 之外(刷新不摧毀 widget)",
           "</main>" in t1
           and t1.index("id='tlwrap'") > t1.index("</main>"))
     import re as _re2
-    # L3 對話時間軸資料島(來自 attempt 的 aN.events.jsonl)
-    ml3 = _re2.search(
-        r"<script id='l3tl-data' type='application/json'>(.*?)</script>",
-        t1, _re2.S)
-    check("時間軸:L3 對話資料島可解析",
-          bool(ml3) and isinstance(json.loads(ml3.group(1)).get("items"), list))
     mtl = _re2.search(
-        r"<script id='evtl-data' type='application/json'>(.*?)</script>",
+        r"<script id='tl-data' type='application/json'>(.*?)</script>",
         t1, _re2.S)
-    check("時間軸:資料島可解析", bool(mtl))
+    check("時間軸:合一資料島可解析", bool(mtl))
     tld = json.loads(mtl.group(1)) if mtl else {"groups": [], "items": []}
     gids = {g["id"] for g in tld["groups"]}
-    check("時間軸:四分組(外部/Jira/生命週期/執行)",
-          gids == {"in", "jira", "life", "run"})
-    jira_items = [i for i in tld["items"] if i["group"] == "jira"]
-    check("時間軸:jira_write→jira 組 + 中文標籤",
+    # 兩層:類別列 cat_l3/cat_life + 子列(對話 aN + 生命週期四分組)
+    check("時間軸:兩層 nested 分類(對話類別 + 生命週期四分組)",
+          {"cat_l3", "cat_life"}.issubset(gids)
+          and {"in", "jira", "life", "run"}.issubset(gids)
+          and any(g["id"] == "cat_life"
+                  and set(g.get("nestedGroups") or [])
+                  == {"in", "jira", "life", "run"}
+                  for g in tld["groups"]))
+    # 生命週期 item id 加 lf- 前綴,與 L3 的 aN-i 不撞;L3 item 用 className l3-
+    jira_items = [i for i in tld["items"] if i.get("group") == "jira"]
+    check("時間軸:jira_write→jira 組 + 中文標籤 + lf- 前綴",
           any("留言 Jira" in i["content"] for i in jira_items)
-          and any("transition" in i["content"] for i in jira_items))
-    check("時間軸:new_issue→外部、resolved→生命週期、start 為 epoch ms",
-          any(i["group"] == "in" and "新票" in i["content"]
+          and any("transition" in i["content"] for i in jira_items)
+          and all(str(i["id"]).startswith("lf-") for i in jira_items))
+    check("時間軸:合一含 L3 對話 item(className l3-*)+ 生命週期 item",
+          any(str(i.get("className", "")).startswith("l3-")
               for i in tld["items"])
-          and any(i["group"] == "life" and "結案" in i["content"]
+          and any(i.get("group") == "in" and "新票" in i["content"]
+                  for i in tld["items"])
+          and any(i.get("group") == "life" and "結案" in i["content"]
                   for i in tld["items"])
           and all(isinstance(i["start"], int) for i in tld["items"]))
+    # W9.3 item#1:ticket 頁載入 localizeTimes(過去缺 _nav→時間停在「—」)
+    check("trace 事件時間:ticket 頁有 localizeTimes + data-ts 佔位",
+          "localizeTimes" in t1 and "data-ts=" in t1)
     fh = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/tfile/1/final.html", timeout=5)
     check("tfile:HTML 內容可讀",

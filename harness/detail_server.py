@@ -439,6 +439,9 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vis-current-time{background:var(--s-failure)}
 .vis-item.l3-user{background:var(--s-running);color:#fff}
 .vis-item.l3-agent{background:var(--s-success);color:#fff}
+/* W9.3 兩層分類:類別列(對話/生命週期)粗體 accent;子列略縮排 */
+.vis-labelset .vis-label.vis-nesting-group{font-weight:700;color:var(--accent-ink)}
+.vis-labelset .vis-label.vis-nested-group .vis-inner{padding-left:6px}
 /* W9.2 時間軸浮動鈕 + 抽屜(仿 transcript;右下角開/關) */
 #tlfab{position:fixed;right:18px;bottom:18px;z-index:30;background:var(--accent);
   color:#fff;border:none;border-radius:24px;padding:11px 18px;cursor:pointer;
@@ -448,7 +451,7 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   max-height:72vh;overflow:auto;background:var(--panel);border:1px solid var(--line);
   border-radius:12px;box-shadow:var(--shadow);padding:14px 18px}
 #tlwrap.on{display:block}
-#tlwrap #evtl,#tlwrap #l3tl{background:var(--bg);border:1px solid var(--line);
+#tlwrap #evtl{background:var(--bg);border:1px solid var(--line);
   border-radius:8px}
 /* W8.2 狀態機 SVG(用 CSS 上色,隨明暗主題;--nc=節點色) */
 #smsvg .sm-box{fill:var(--panel);stroke:var(--nc,var(--line-2));stroke-width:1.6}
@@ -1742,46 +1745,71 @@ def l3_timeline_data(iid: int) -> dict:
     return {"groups": groups, "items": items}
 
 
+def merged_timeline_data(evs: list[dict], iid: int) -> dict:
+    """W9.3:L3 對話 + Jira 生命週期合成**單一** vis-timeline 的 groups/items。
+
+    共用一條時間軸 → 拖曳/縮放兩區一起動;左側仍以兩層 nested groups 分類:
+    類別列『💬 對話(L3)』(各 attempt aN 為子列)+『📅 生命週期』(外部輸入/
+    Jira 寫入/決策/執行 四子列)。item id 生命週期加 lf- 前綴,與 L3 的 aN-i 不撞。"""
+    l3 = l3_timeline_data(iid)
+    life = timeline_data(evs)
+    groups: list[dict] = []
+    a_ids = [g["id"] for g in l3["groups"]]
+    if a_ids:                                    # 有 attempt 才放對話類別
+        groups.append({"id": "cat_l3", "content": "💬 對話(L3)",
+                       "nestedGroups": a_ids, "showNested": True,
+                       "treeLevel": 1})
+        for g in l3["groups"]:
+            groups.append({"id": g["id"], "content": g["content"],
+                           "treeLevel": 2})
+    life_ids = [g["id"] for g in life["groups"]]
+    groups.append({"id": "cat_life", "content": "📅 生命週期",
+                   "nestedGroups": life_ids, "showNested": True,
+                   "treeLevel": 1})
+    for g in life["groups"]:
+        groups.append({"id": g["id"], "content": g["content"], "treeLevel": 2})
+    items = list(l3["items"])
+    for it in life["items"]:
+        it = dict(it)
+        it["id"] = f"lf-{it['id']}"
+        items.append(it)
+    return {"groups": groups, "items": items}
+
+
 def render_timeline_section(evs: list[dict], iid: int) -> str:
-    """W6.7/W9.2:兩條時間軸(agent 對話 L3 + Jira 生命週期),收在**右下浮動鈕**
-    切換的抽屜裡(仿 transcript)。**刻意放 <main> 之外**——ticket 頁每 5s 整段換
+    """W6.7/W9.2/W9.3:單一事件時間軸(L3 對話 + Jira 生命週期合一,共用時間軸),
+    收在**右下浮動鈕**切換的抽屜裡。**刻意放 <main> 之外**——ticket 頁每 5s 整段換
     main.innerHTML,widget 在裡面會被反覆摧毀;放外面只初始化一次,刷新只抽資料島更新。"""
-    life = json.dumps(timeline_data(evs), ensure_ascii=False)
-    l3 = json.dumps(l3_timeline_data(iid), ensure_ascii=False)
+    data = json.dumps(merged_timeline_data(evs, iid), ensure_ascii=False)
     return (
         "<button type='button' id='tlfab' aria-expanded='false' "
         "aria-controls='tlwrap'>🕑 時間軸</button>"
         "<section id='tlwrap' aria-hidden='true'>"
-        "<h2 style='margin:4px 0 6px'>💬 agent 對話時間軸(L3)</h2>"
-        "<p class='sys' style='margin:0 0 6px;text-align:left'>每則訊息隨時間"
-        "(🧑=user/harness prompt、🤖=agent 回覆);滾輪縮放按 Ctrl。</p>"
-        "<div id='l3tl'></div>"
-        f"<script id='l3tl-data' type='application/json'>{l3}</script>"
-        "<h2 style='margin:16px 0 6px'>📅 Jira 生命週期時間軸</h2>"
-        "<p class='sys' style='margin:0 0 6px;text-align:left'>harness↔Jira "
-        "生命週期事件(留言/派工/結案…)。</p>"
+        "<h2 style='margin:4px 0 6px'>🕑 事件時間軸(L3 對話 + Jira 生命週期)</h2>"
+        "<p class='sys' style='margin:0 0 6px;text-align:left'>單一時間軸:上半"
+        "『對話(L3)』(🧑=user/harness prompt、🤖=agent 回覆)、下半『生命週期』"
+        "(留言/派工/結案…);左側分類、拖曳平移、Ctrl+滾輪縮放,兩區一起動。</p>"
         "<div id='evtl'></div>"
-        f"<script id='evtl-data' type='application/json'>{life}</script>"
+        f"<script id='tl-data' type='application/json'>{data}</script>"
         "</section>"
         "<link rel='stylesheet' href='/tvendor/vis-timeline.min.css'>"
         "<script src='/tvendor/vis-timeline.min.js'></script>"
         "<script>(function(){"
         "function rd(id){try{return JSON.parse("
         "document.getElementById(id).textContent)}catch(e){return{groups:[],items:[]}}}"
-        "function build(el,d){if(!el||!window.vis)return null;"
+        "var el=document.getElementById('evtl');if(!el||!window.vis)return;"
+        "var d=rd('tl-data');"
         "var items=new vis.DataSet(d.items),groups=new vis.DataSet(d.groups);"
         "var tl=new vis.Timeline(el,items,groups,{stack:true,orientation:'top',"
-        "zoomKey:'ctrlKey',margin:{item:6},tooltip:{followMouse:true},maxHeight:340});"
-        "return{tl:tl,items:items};}"
-        "var L3=build(document.getElementById('l3tl'),rd('l3tl-data'));"
-        "var LF=build(document.getElementById('evtl'),rd('evtl-data'));"
-        "window.__evtlUpdate=function(nd){if(LF){LF.items.clear();LF.items.add(nd.items);}};"
+        "zoomKey:'ctrlKey',margin:{item:6},tooltip:{followMouse:true},maxHeight:440});"
+        "window.__tlUpdate=function(nd){items.clear();items.add(nd.items);"
+        "groups.clear();groups.add(nd.groups);};"
         "var fab=document.getElementById('tlfab'),wrap=document.getElementById('tlwrap');"
         "function setOpen(o){wrap.classList.toggle('on',o);"
         "fab.setAttribute('aria-expanded',o);wrap.setAttribute('aria-hidden',!o);"
         "fab.textContent=o?'✕ 收起時間軸':'🕑 時間軸';"
         "try{localStorage.setItem('arcp-tl',o?'1':'0')}catch(e){}"
-        "if(o){setTimeout(function(){if(L3)L3.tl.redraw();if(LF)LF.tl.redraw();},30);}}"
+        "if(o)setTimeout(function(){tl.redraw();},30);}"
         "fab.addEventListener('click',function(){"
         "setOpen(!wrap.classList.contains('on'));});"
         "var s;try{s=localStorage.getItem('arcp-tl')}catch(e){}"
@@ -2703,7 +2731,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/ticket/"):
             iid = int(self.path.split("/")[-1])
-            body = render_ticket(iid, journal, sessions)
+            # W9.3:ticket 頁無 _nav(),過去因此缺 localizeTimes → trace 事件時間
+            # 停在「—」佔位。補進 _THEME_JS(內含 localizeTimes + 主題套用),
+            # 讓每個事件前的 data-ts 都轉成瀏覽器時區時間。
+            body = render_ticket(iid, journal, sessions) + _THEME_JS
             # W4.1 修 auto-collapse bug:原 <meta refresh> 整頁重載會重置
             # 展開/捲動 → 改 fetch 局部更新,保留 <details> 展開狀態與分頁籤
             body += ("<script>setInterval(async()=>{try{"
@@ -2721,13 +2752,14 @@ class Handler(BaseHTTPRequestHandler):
                      "if(window.localizeTimes)localizeTimes(cur);"  # W9.1 重localize
                      "if(typeof tab==='function')"
                      "tab((location.hash||'#convo').slice(1));}"
-                     # W6.7:時間軸在 main 之外——單獨抽資料島更新(不摧毀 widget)
-                     "const nd=doc.querySelector('#evtl-data'),"
-                     "live=document.querySelector('#evtl-data');"
-                     "if(nd&&window.__evtlUpdate&&(!live||"
+                     # W6.7/W9.3:時間軸在 main 之外——單獨抽資料島更新(不摧毀
+                     # widget);合一後只剩一個資料島 #tl-data
+                     "const nd=doc.querySelector('#tl-data'),"
+                     "live=document.querySelector('#tl-data');"
+                     "if(nd&&window.__tlUpdate&&(!live||"
                      "live.textContent!==nd.textContent)){"
                      "if(live)live.textContent=nd.textContent;"
-                     "window.__evtlUpdate(JSON.parse(nd.textContent));}"
+                     "window.__tlUpdate(JSON.parse(nd.textContent));}"
                      "}catch(e){}},5000);</script>")
         else:
             body = render_index(journal, sessions, read_watch())
