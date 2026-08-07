@@ -59,6 +59,28 @@
   跑,claude/codex/e2e_evict 真跑驗過);routes.yaml 四個 rawcli profile 移除
   venv;openhands-acp/server backend 仍選配(需 venv)。live poller hot reload
   帶入零重啟。
+- **W6 全部完成 ✅(2026-08-07)** `harness/PLAN_wave6.md` + REQUIREMENTS §10:
+  W6.1 Server tab(系統/版本/登入狀態只顯布林/資源,純 stdlib)、W6.2 per-process +
+  per-workspace(best-effort ps)、W6.3 evict 正名「強制驅逐」+ 計數 + hover、
+  W6.4 transcript **移定時快照**改事件觸發 + 被動按鈕(`/gen_transcript`)+ meta.json、
+  W6.5 REST 文件 **vendored Swagger UI**(離線)+ 手寫 `/openapi.json` + `/docs`、
+  W6.6 連線 IP 追蹤、W6.7 per-ticket **事件時間軸**(vendored vis-timeline;source 層
+  `on_write`→`jira_write`)。另:`.githooks/pre-commit`(ruff)+ `harness/ruff.toml`
+  釘 known-first-party/排除 vendored。
+- **W7 全部完成 ✅(2026-08-07)** `harness/PLAN_wave7.md` + REQUIREMENTS §12
+  (源自使用者口述 brainstorming,11 題決策樹對齊):W7.1 Profile `goal`/月預算 +
+  `est_minutes` 預設 240 + DB `clearquest_id`、W7.2 **人類完成度評分**(終態交人寫
+  goal 到 agent 段 + human 段 `score` 0–10,每輪抓分→journal,軟性催評;人關票不變)、
+  W7.3 **預算 spawn 前預檢**(單次 + human `budget_override` + 日曆月上限)、
+  W7.4 dashboard profile filter + 完成度欄 + 三張 per-profile 圖(8態/花費·效益/完成度)、
+  W7.5 **Agent Detail tab**(harness 設定 + 全 Profile,憑證不外洩)、W7.6 **概念/狀態機頁**
+  (純 SVG 8 態)+ README、W7.7 **REST `/api/v1`**(三合一 ref = Jira key/id/CR id;單票
+  狀態/L3 事件/原始 log `?tail=N`,納入 Swagger)。24 test_*.py + e2e_dashboard 全綠。
+  全 additive、未動 Jira 原生。
+- **W7 待續**:R9 ClearQuest 監控流程(監控 CQ→命中建資料夾+套模板+開追蹤票+記 CR id)
+  只先備 `clearquest_id` 欄,**流程未做**;一點待使用者確認(「目前會監控 CQ」= 現有
+  流程 vs ARCP 未來,見 REQUIREMENTS §12.8)。另 to-do:複驗 e2e_commands C3/C5
+  (真 Jira+真 agent,疑時序 flaky 非程式)。
 - **恢復起點(剩餘候選)**:(a) landlock/docker 隔離實作(W22 介面已就緒,
   等搬 Linux/部署前夕);(b) 量產 python 標準結構另開 repo(需使用者定 repo
   名/公開與否);(c) 異步架構(assignee 自動即時 kill + rehydrate,大工程另議);
