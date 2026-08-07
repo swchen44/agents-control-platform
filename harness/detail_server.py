@@ -262,6 +262,7 @@ CSS = """
 /* W8.1 暖色編輯風(claude.com/blog)+ 明暗雙主題。token-based:light 為預設,
    dark 由 prefers-color-scheme + [data-theme] 覆寫;元件一律走 var() 不直接寫色。 */
 :root{
+  color-scheme:light;
   --bg:#F1EEE6;--panel:#FBFAF5;--panel-2:#F6F3EA;--raise:#FFFFFF;
   --line:#E4E0D4;--line-2:#D7D2C2;
   --ink:#191712;--ink-dim:#3C382F;--muted:#6E695C;--faint:#9C968A;
@@ -275,6 +276,7 @@ CSS = """
   --font-mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
   --bg:#1E1C19;--panel:#262420;--panel-2:#2B2925;--raise:#2E2C27;
   --line:#37342D;--line-2:#423E36;
   --ink:#EEE8DB;--ink-dim:#D0CABB;--muted:#A39C8C;--faint:#746E61;
@@ -285,6 +287,7 @@ CSS = """
   --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 30px -16px rgba(0,0,0,.6);
 }}
 :root[data-theme="dark"]{
+  color-scheme:dark;
   --bg:#1E1C19;--panel:#262420;--panel-2:#2B2925;--raise:#2E2C27;
   --line:#37342D;--line-2:#423E36;
   --ink:#EEE8DB;--ink-dim:#D0CABB;--muted:#A39C8C;--faint:#746E61;
@@ -356,11 +359,12 @@ code{font-family:var(--font-mono);font-size:.92em;background:var(--panel-2);
 /* 按鈕 / 分頁籤 */
 .ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .btn{padding:6px 14px;border-radius:7px;background:var(--panel);cursor:pointer;
-  border:1px solid var(--line-2);user-select:none;color:var(--ink-dim);font-size:13px}
+  border:1px solid var(--line-2);user-select:none;color:var(--ink-dim);
+  font-size:13px;font-family:var(--font-body)}
 .btn:hover{border-color:var(--accent);color:var(--accent)}
 .tabs{display:flex;gap:6px;margin:18px 0 10px}
 .tab{padding:6px 14px;border-radius:7px;background:var(--panel);border:1px solid var(--line);
-  cursor:pointer;user-select:none;color:var(--muted)}
+  cursor:pointer;user-select:none;color:var(--muted);font:inherit;font-size:14px}
 .tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .pane{display:none}.pane.on{display:block}
 /* trace */
@@ -413,6 +417,15 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #smsvg .st-inactive{--nc:var(--s-inactive)}#smsvg .st-success{--nc:var(--s-success)}
 #smsvg .st-failure{--nc:var(--s-failure)}#smsvg .st-aborted{--nc:var(--s-aborted)}
 #smsvg .st-exit{--nc:var(--accent)}
+/* W8.3 可及性:全域可見焦點環(勿只靠 hover;鍵盤使用者需要) */
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,
+textarea:focus-visible,[tabindex]:focus-visible,.sortable:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+button{font-family:var(--font-body)}   /* 按鈕預設不繼承字型,補上 */
+@media (prefers-reduced-motion:reduce){
+  .cmdbar .live i{animation:none}
+  *{transition-duration:0.01ms!important}
+}
 """
 
 
@@ -600,10 +613,10 @@ def render_control_page() -> str:
             "<header><h1>Control · poller</h1></header><main>"
             "<div class='stats' id='cstatus'>載入中…</div>"
             "<div class='ctl card' style='margin-top:12px'>"
-            "<div class='btn' onclick=\"cc('pause')\">⏸ Pause</div>"
-            "<div class='btn' onclick=\"cc('resume')\">▶ Resume</div>"
-            "<div class='btn' onclick=\"cc('reload')\">🔄 Reload</div>"
-            "<div class='btn' id='sd' style='color:var(--s-failure)' "
+            "<button type='button' class='btn' onclick=\"cc('pause')\">⏸ Pause</button>"
+            "<button type='button' class='btn' onclick=\"cc('resume')\">▶ Resume</button>"
+            "<button type='button' class='btn' onclick=\"cc('reload')\">🔄 Reload</button>"
+            "<button type='button' class='btn' id='sd' style='color:var(--s-failure)' "
             "onclick=\"cc('shutdown')\">⏻ Graceful Shutdown</div>"
             "<span id='cmsg' style='color:var(--muted);font-size:12px'></span>"
             "</div>"
@@ -1116,7 +1129,8 @@ bind();tick();setInterval(tick,5000);
 </script>"""
 
 
-_INPUT = ("style='background:var(--raise);color:var(--ink);"
+_INPUT = ("autocomplete='off' spellcheck='false' "
+          "style='background:var(--raise);color:var(--ink);"
           "border:1px solid var(--line-2);border-radius:7px;padding:6px 10px;"
           "font-family:var(--font-body);font-size:13px'")
 
@@ -1192,7 +1206,7 @@ def _nav(active: str) -> str:
             "<span class='brand'>ARCP<span class='sub'>Control&nbsp;Plane</span>"
             "</span><span class='live'><i></i>Live</span>"
             f"<nav class='navtabs'>{tabs}</nav>"
-            "<button class='tgl' id='arcp-tgl' type='button'>"
+            "<button class='tgl' id='arcp-tgl' type='button' aria-label='切換明暗主題'>"
             "<span id='arcp-tgi'>☾</span><span id='arcp-tgn'>深色</span>"
             "</button></div>" + _THEME_JS)
 
@@ -1241,7 +1255,7 @@ function tbl(cols,rows,total){
 async function loadTables(){
   const t=await (await fetch('/db/tables')).json();
   $('tlist').innerHTML=t.map(x=>
-    `<div class='btn' style='display:block;margin:4px 0;text-align:left' `+
+    `<button type='button' class='btn' style='display:block;margin:4px 0;text-align:left' `+
     `onclick="openT('${x.name}')">${esc(x.name)} `+
     `<span style='color:var(--muted);float:right'>${x.rows}</span></div>`).join('');
 }
@@ -1293,21 +1307,21 @@ def render_db_page() -> str:
             "<b style='color:var(--muted)'>唯讀查詢</b>"
             "<span style='color:var(--faint);font-size:11px'> "
             "SELECT / WITH / PRAGMA;⌘/Ctrl+Enter 執行</span>"
-            "<textarea id='qbox' placeholder='SELECT * FROM ticket_session "
+            "<textarea id='qbox' aria-label='唯讀 SQL 查詢' spellcheck='false' placeholder='SELECT * FROM ticket_session "
             "WHERE outcome IS NULL' style='width:100%;height:64px;margin-top:"
             "6px;background:var(--raise);color:var(--ink);border:1px solid var(--line-2);"
             "border-radius:6px;padding:8px;font-family:ui-monospace,monospace;"
             "box-sizing:border-box'></textarea>"
-            "<div class='btn' style='margin-top:6px' onclick='runQ()'>▶ 執行"
-            "</div></div>"
+            "<button type='button' class='btn' style='margin-top:6px' onclick='runQ()'>▶ 執行"
+            "</button></div>"
             "<div class='card'>"
             "<div style='display:flex;align-items:center'>"
             "<h2 id='dbtitle' style='margin:0;flex:1'>← 點左側表格</h2>"
-            "<div class='btn' onclick='dbExport(\"csv\")'>⬇ CSV</div>"
-            "<div class='btn' onclick='dbExport(\"json\")'>⬇ JSON</div></div>"
+            "<button type='button' class='btn' onclick='dbExport(\"csv\")'>⬇ CSV</button>"
+            "<button type='button' class='btn' onclick='dbExport(\"json\")'>⬇ JSON</button></div>"
             "<div id='dbpg' class='ctl' style='display:none;margin:8px 0'>"
-            "<div class='btn' onclick='dpg(-1)'>‹ 上頁</div>"
-            "<div class='btn' onclick='dpg(1)'>下頁 ›</div></div>"
+            "<button type='button' class='btn' onclick='dpg(-1)'>‹ 上頁</button>"
+            "<button type='button' class='btn' onclick='dpg(1)'>下頁 ›</button></div>"
             "<div id='dbout' style='margin-top:8px'></div></div>"
             "</div></div></main>"
             f"{_RESIZE_JS}{_DB_JS}")
@@ -1348,20 +1362,24 @@ def render_index(journal, sessions, watch=None) -> str:
                  f"<td>{r['attempts']}</td>"
                  f"<td>${r['cost']:.4f}</td></tr>")
     filterbar = (
-        "<div class='ctl card' style='flex-wrap:wrap'>"
+        "<div class='ctl card' style='flex-wrap:wrap' role='search'>"
         "<b style='color:var(--muted)'>過濾</b>"
-        f"<select id='qr' {_INPUT}>"
+        f"<select id='qr' aria-label='時間範圍' {_INPUT}>"
         "<option value='all'>全部時間</option>"
         "<option value='7'>過去 7 天</option>"
         "<option value='30'>過去 30 天</option>"
         "<option value='60'>過去 60 天</option>"
         "<option value='90'>過去 90 天</option></select>"
-        f"<input type='date' id='from' {_INPUT}>~"
-        f"<input type='date' id='to' {_INPUT}>"
-        f"<select id='st' {_INPUT}><option value=''>全部狀態</option></select>"
-        f"<input id='kprofile' placeholder='profile keyword…' {_INPUT}>"
-        f"<input id='ksum' placeholder='summary keyword…' {_INPUT}>"
-        f"<input id='kdesc' placeholder='description keyword…' {_INPUT}>"
+        f"<input type='date' id='from' aria-label='起始日期' {_INPUT}>~"
+        f"<input type='date' id='to' aria-label='結束日期' {_INPUT}>"
+        f"<select id='st' aria-label='狀態' {_INPUT}>"
+        "<option value=''>全部狀態</option></select>"
+        f"<input id='kprofile' aria-label='profile 關鍵字' "
+        f"placeholder='profile keyword…' {_INPUT}>"
+        f"<input id='ksum' aria-label='summary 關鍵字' "
+        f"placeholder='summary keyword…' {_INPUT}>"
+        f"<input id='kdesc' aria-label='description 關鍵字' "
+        f"placeholder='description keyword…' {_INPUT}>"
         "<span style='color:var(--faint);font-size:11px'>↓ 底下統計/圖表/表格"
         "皆只含過濾後的 Jira</span></div>")
     charts = (
@@ -1373,7 +1391,8 @@ def render_index(journal, sessions, watch=None) -> str:
         "<label style='color:var(--muted);font-size:12px'>"
         "<input type='checkbox' id='wk2'> 以每週呈現</label>"
         " <label style='color:var(--muted);font-size:12px'>人類時薪 USD $"
-        f"<input type='number' id='rate' min='0' step='1' {_INPUT} "
+        f"<input type='number' id='rate' min='0' step='1' "
+        f"aria-label='人類時薪(USD)' inputmode='numeric' {_INPUT} "
         "style='width:70px;background:var(--raise);color:var(--ink);"
         "border:1px solid var(--line-2);border-radius:7px;padding:4px 8px'>"
         "</label><svg id='chart-money'></svg><div id='lg-money'></div></div>"
@@ -1386,15 +1405,15 @@ def render_index(journal, sessions, watch=None) -> str:
         "<div id='chart-pscore'></div><div id='lg-pscore'></div></div>")
     toolbar = (
         "<div class='ctl card'>"
-        f"<select id='psize' {_INPUT}>"
+        f"<select id='psize' aria-label='每頁筆數' {_INPUT}>"
         "<option>10</option><option selected>20</option>"
         "<option>50</option><option>100</option></select>"
-        "<div class='btn' onclick='pg(-1)'>‹ 上頁</div>"
-        "<div class='btn' onclick='pg(1)'>下頁 ›</div>"
+        "<button type='button' class='btn' onclick='pg(-1)'>‹ 上頁</button>"
+        "<button type='button' class='btn' onclick='pg(1)'>下頁 ›</button>"
         "<span id='pginfo' style='color:var(--muted);font-size:12px'></span>"
         "<span style='margin-left:auto'></span>"
-        "<div class='btn' onclick='expo(\"csv\")'>⬇ CSV</div>"
-        "<div class='btn' onclick='expo(\"json\")'>⬇ JSON</div></div>")
+        "<button type='button' class='btn' onclick='expo(\"csv\")'>⬇ CSV</button>"
+        "<button type='button' class='btn' onclick='expo(\"json\")'>⬇ JSON</button></div>")
     return (f"{_nav('dash')}"
             f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
             f"</h1></header><main>"
@@ -1510,7 +1529,7 @@ def render_transcript_card(iid: int, s: dict) -> str:
     if s.get("session_id"):
         label = "🔄 重新產生" if names else "📄 產生 transcript"
         gen_btn = (
-            "<span class='btn' "
+            "<button type='button' class='btn' "
             "title='對此票當前 session 立即產生 transcript HTML(定格)。"
             "進行中/等待人類/已完成皆可;會覆蓋既有產物並更新產生時間與原因為"
             "「手動」。' "
@@ -1519,7 +1538,7 @@ def render_transcript_card(iid: int, s: dict) -> str:
             ".then(r=>r.json()).then(j=>{this.textContent="
             "j.generated?'已產生('+j.files+' 檔),重整中…':'失敗:'+(j.error||'?');"
             "if(j.generated)setTimeout(()=>location.reload(),800);})"
-            f".catch(()=>this.textContent='control 離線')\">{label}</span>")
+            f".catch(()=>this.textContent='control 離線')\">{label}</button>")
 
     return (f"<h2>Transcript(可視化 / 下載)</h2>"
             f"<div class='card'><div class='row'>{info}</div>"
@@ -1703,7 +1722,7 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<span class='kv'><b>workspace</b> {esc(s.get('workspace','-'))}</span>"
             + (f"<span class='kv'><b>驅逐次數</b> {s.get('evict_count', 0)}</span>"
                if s.get("evict_count") else "")
-            + (("<span class='btn' style='margin-left:auto;color:var(--s-failure)' "
+            + (("<button type='button' class='btn' style='margin-left:auto;color:var(--s-failure)' "
                 "title='強制驅逐:agent 卡住不動或要立即讓出 CPU/記憶體時按。"
                 "會 killpg 殺掉此票的 agent 進程組;session 保留,下一輪 poll "
                 "自動 native resume 續跑、不重花錢。屬異常處理,發生次數會記錄。' "
@@ -1715,15 +1734,15 @@ def render_ticket(iid, journal, sessions) -> str:
                 ".then(r=>r.json()).then(j=>this.textContent="
                 "'已驅逐:'+JSON.stringify(j)).catch(()=>this.textContent="
                 "'control 離線')\""
-                ">⏻ 強制驅逐(killpg)</span>")
+                ">⏻ 強制驅逐(killpg)</button>")
                if s and not s.get("outcome")
                and not str(s.get("workspace", "")).startswith("(") else "")
             + f"</div></div>"
             f"{render_transcript_card(iid, s)}"
             f"{render_approval(s, evs)}"
             f"<div class='tabs'>"
-            f"<div class='tab on' id='tab-convo' onclick='tab(\"convo\")'>💬 Conversation</div>"
-            f"<div class='tab' id='tab-trace' onclick='tab(\"trace\")'>🔍 Trace (L0-L3)</div>"
+            f"<button type='button' class='tab on' id='tab-convo' onclick='tab(\"convo\")'>💬 Conversation</button>"
+            f"<button type='button' class='tab' id='tab-trace' onclick='tab(\"trace\")'>🔍 Trace (L0-L3)</button>"
             f"</div>"
             f"<div class='pane on' id='pane-convo'>{convo_view}</div>"
             f"<div class='pane' id='pane-trace'>{trace_view}</div>"
@@ -1904,7 +1923,7 @@ def openapi_spec() -> dict:
 def render_docs_page() -> str:
     """W6.5:Swagger UI 載入頁(全本地資產:/swagger-assets/* + /openapi.json)。"""
     return (
-        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><meta name='theme-color' content='#F1EEE6' media='(prefers-color-scheme:light)'><meta name='theme-color' content='#1E1C19' media='(prefers-color-scheme:dark)'>"
         "<title>ARCP API — Swagger UI</title>"
         "<link rel='stylesheet' href='/swagger-assets/swagger-ui.css'>"
         "<style>body{margin:0}.topbar{display:none}</style></head><body>"
@@ -2440,7 +2459,7 @@ class Handler(BaseHTTPRequestHandler):
                     else render_agent_page() if self.path == "/agent"
                     else render_concepts_page() if self.path == "/concepts"
                     else render_server_page())
-            page = (f"<!doctype html><html><head><meta charset='utf-8'>"
+            page = (f"<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><meta name='theme-color' content='#F1EEE6' media='(prefers-color-scheme:light)'><meta name='theme-color' content='#1E1C19' media='(prefers-color-scheme:dark)'>"
                     f"<title>ARCP</title><style>{CSS}</style></head>"
                     f"<body>{body}</body></html>")
             self.send_response(200)
@@ -2531,7 +2550,7 @@ class Handler(BaseHTTPRequestHandler):
             body = render_index(journal, sessions, read_watch())
         # live 更新一律走 fetch 局部替換(index 表身/統計卡、ticket main),
         # 不再整頁 meta refresh(W4.1)
-        page = (f"<!doctype html><html><head><meta charset='utf-8'>"
+        page = (f"<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><meta name='theme-color' content='#F1EEE6' media='(prefers-color-scheme:light)'><meta name='theme-color' content='#1E1C19' media='(prefers-color-scheme:dark)'>"
                 f"<title>ARCP Detail</title><style>{CSS}</style></head>"
                 f"<body>{body}</body></html>")
         self.send_response(200)
