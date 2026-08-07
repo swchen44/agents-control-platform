@@ -437,7 +437,19 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vis-panel,.vis-grid.vis-vertical,.vis-time-axis .vis-grid.vis-minor{border-color:var(--line)!important}
 .vis-grid.vis-minor{border-color:var(--line)!important}
 .vis-current-time{background:var(--s-failure)}
-.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.vis-item.l3-user{background:var(--s-running);color:#fff}
+.vis-item.l3-agent{background:var(--s-success);color:#fff}
+/* W9.2 時間軸浮動鈕 + 抽屜(仿 transcript;右下角開/關) */
+#tlfab{position:fixed;right:18px;bottom:18px;z-index:30;background:var(--accent);
+  color:#fff;border:none;border-radius:24px;padding:11px 18px;cursor:pointer;
+  box-shadow:var(--shadow);font-family:var(--font-body);font-size:13px;font-weight:500}
+#tlfab:hover{filter:brightness(1.08)}
+#tlwrap{display:none;position:fixed;left:16px;right:16px;bottom:68px;z-index:29;
+  max-height:72vh;overflow:auto;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow);padding:14px 18px}
+#tlwrap.on{display:block}
+#tlwrap #evtl,#tlwrap #l3tl{background:var(--bg);border:1px solid var(--line);
+  border-radius:8px}
 /* W8.2 狀態機 SVG(用 CSS 上色,隨明暗主題;--nc=節點色) */
 #smsvg .sm-box{fill:var(--panel);stroke:var(--nc,var(--line-2));stroke-width:1.6}
 #smsvg .sm-lbl{fill:var(--nc,var(--ink));font-weight:600}
@@ -1696,35 +1708,85 @@ def timeline_data(evs: list[dict]) -> dict:
     return {"groups": _TL_GROUPS, "items": items}
 
 
-def render_timeline_section(evs: list[dict]) -> str:
-    """W6.7:事件時間軸區塊。**刻意放 <main id='main' tabindex='-1'> 之外**——ticket 頁每 5s 會整段
-    替換 <main id='main' tabindex='-1'>.innerHTML,widget 若在其中會被反覆摧毀且永遠 diff 不符→閃爍。
-    放外面則 widget 只初始化一次;刷新只抽 #evtl-data 資料島更新 DataSet。"""
-    data = json.dumps(timeline_data(evs), ensure_ascii=False)
+def l3_timeline_data(iid: int) -> dict:
+    """W9.2:agent 對話(L3)→ vis-timeline;group=attempt(a1/a2…),item=每則訊息
+    (start=timestamp,content=source+摘要,className 依 user/agent 上色)。"""
+    ad = attempt_dir(iid)
+    groups, items = [], []
+    if os.path.isdir(ad):
+        for fn in sorted(f for f in os.listdir(ad)
+                         if f.endswith(".events.jsonl")):
+            n = fn.split(".")[0]
+            groups.append({"id": n, "content": n})
+            try:
+                with open(os.path.join(ad, fn)) as f:
+                    for j, line in enumerate(f):
+                        if not line.strip():
+                            continue
+                        e = json.loads(line)
+                        ms = _iso_to_ms(e.get("timestamp"))
+                        if not ms:
+                            continue
+                        src = e.get("source", "")
+                        txt = " ".join(_text_of(
+                            (e.get("llm_message") or {}).get("content")).split())
+                        items.append({
+                            "id": f"{n}-{j}", "group": n, "start": ms,
+                            "content": ("🧑 " if src == "user" else "🤖 ")
+                            + (txt[:24] or src),
+                            "className": "l3-" + ("user" if src == "user"
+                                                  else "agent"),
+                            "title": f"{src}: {txt}"[:400]})
+            except (OSError, ValueError):
+                pass
+    return {"groups": groups, "items": items}
+
+
+def render_timeline_section(evs: list[dict], iid: int) -> str:
+    """W6.7/W9.2:兩條時間軸(agent 對話 L3 + Jira 生命週期),收在**右下浮動鈕**
+    切換的抽屜裡(仿 transcript)。**刻意放 <main> 之外**——ticket 頁每 5s 整段換
+    main.innerHTML,widget 在裡面會被反覆摧毀;放外面只初始化一次,刷新只抽資料島更新。"""
+    life = json.dumps(timeline_data(evs), ensure_ascii=False)
+    l3 = json.dumps(l3_timeline_data(iid), ensure_ascii=False)
     return (
-        "<section class='tlsec'>"
-        "<h2>📅 事件時間軸(harness / Jira 生命週期)</h2>"
-        "<p class='sys' style='margin:0 0 8px'>只含 harness↔Jira 生命週期事件"
-        "(agent 對話請看上方 Conversation / transcript)。滾輪縮放需按住 Ctrl。</p>"
+        "<button type='button' id='tlfab' aria-expanded='false' "
+        "aria-controls='tlwrap'>🕑 時間軸</button>"
+        "<section id='tlwrap' aria-hidden='true'>"
+        "<h2 style='margin:4px 0 6px'>💬 agent 對話時間軸(L3)</h2>"
+        "<p class='sys' style='margin:0 0 6px;text-align:left'>每則訊息隨時間"
+        "(🧑=user/harness prompt、🤖=agent 回覆);滾輪縮放按 Ctrl。</p>"
+        "<div id='l3tl'></div>"
+        f"<script id='l3tl-data' type='application/json'>{l3}</script>"
+        "<h2 style='margin:16px 0 6px'>📅 Jira 生命週期時間軸</h2>"
+        "<p class='sys' style='margin:0 0 6px;text-align:left'>harness↔Jira "
+        "生命週期事件(留言/派工/結案…)。</p>"
         "<div id='evtl'></div>"
-        f"<script id='evtl-data' type='application/json'>{data}</script>"
+        f"<script id='evtl-data' type='application/json'>{life}</script>"
+        "</section>"
         "<link rel='stylesheet' href='/tvendor/vis-timeline.min.css'>"
         "<script src='/tvendor/vis-timeline.min.js'></script>"
         "<script>(function(){"
-        "function rd(){try{return JSON.parse("
-        "document.getElementById('evtl-data').textContent)}"
-        "catch(e){return{groups:[],items:[]}}}"
-        "function build(d){var el=document.getElementById('evtl');"
-        "if(!el||!window.vis)return null;"
+        "function rd(id){try{return JSON.parse("
+        "document.getElementById(id).textContent)}catch(e){return{groups:[],items:[]}}}"
+        "function build(el,d){if(!el||!window.vis)return null;"
         "var items=new vis.DataSet(d.items),groups=new vis.DataSet(d.groups);"
-        "var tl=new vis.Timeline(el,items,groups,{stack:true,"
-        "orientation:'top',zoomKey:'ctrlKey',margin:{item:6},"
-        "tooltip:{followMouse:true},maxHeight:420});"
+        "var tl=new vis.Timeline(el,items,groups,{stack:true,orientation:'top',"
+        "zoomKey:'ctrlKey',margin:{item:6},tooltip:{followMouse:true},maxHeight:340});"
         "return{tl:tl,items:items};}"
-        "var T=build(rd());"
-        "window.__evtlUpdate=function(nd){if(!T){T=build(nd);return;}"
-        "T.items.clear();T.items.add(nd.items);};"
-        "})();</script></section>")
+        "var L3=build(document.getElementById('l3tl'),rd('l3tl-data'));"
+        "var LF=build(document.getElementById('evtl'),rd('evtl-data'));"
+        "window.__evtlUpdate=function(nd){if(LF){LF.items.clear();LF.items.add(nd.items);}};"
+        "var fab=document.getElementById('tlfab'),wrap=document.getElementById('tlwrap');"
+        "function setOpen(o){wrap.classList.toggle('on',o);"
+        "fab.setAttribute('aria-expanded',o);wrap.setAttribute('aria-hidden',!o);"
+        "fab.textContent=o?'✕ 收起時間軸':'🕑 時間軸';"
+        "try{localStorage.setItem('arcp-tl',o?'1':'0')}catch(e){}"
+        "if(o){setTimeout(function(){if(L3)L3.tl.redraw();if(LF)LF.tl.redraw();},30);}}"
+        "fab.addEventListener('click',function(){"
+        "setOpen(!wrap.classList.contains('on'));});"
+        "var s;try{s=localStorage.getItem('arcp-tl')}catch(e){}"
+        "if(s==='1')setOpen(true);"
+        "})();</script>")
 
 
 def _ts_ms_span(ms: int) -> str:
@@ -1854,7 +1916,7 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<div class='pane' id='pane-trace'>{trace_view}</div>"
             f"{tabs_js}</main>"
             # W6.7:時間軸刻意在 </main> 之外(5s 刷新只換 main,widget 存活)
-            f"{render_timeline_section(evs)}")
+            f"{render_timeline_section(evs, iid)}")
 
 
 # ── W6.5:REST API 文件(vendored Swagger UI,離線可用)────────────────────── #

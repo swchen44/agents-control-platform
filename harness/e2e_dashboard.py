@@ -263,16 +263,23 @@ try:
     # W6.4:被動產生按鈕(有 session_id 才有;打 control /gen_transcript)
     check("transcript 卡:被動產生按鈕",
           "/gen_transcript/1" in t1 and "重新產生" in t1)
-    # W6.7:事件時間軸(vis-timeline,只 harness/Jira 生命週期,放 </main> 外)
-    check("時間軸:區塊 + vendored vis 資產(離線)",
-          "事件時間軸" in t1
+    # W6.7/W9.2:兩條時間軸(生命週期 + L3 對話)收在右下浮動鈕抽屜(vis 離線)
+    check("時間軸:浮動鈕 + 抽屜 + vendored vis 資產(離線)",
+          "id='tlfab'" in t1 and "id='tlwrap'" in t1
+          and "生命週期時間軸" in t1 and "agent 對話時間軸" in t1
           and "/tvendor/vis-timeline.min.js" in t1
           and "/tvendor/vis-timeline.min.css" in t1
-          and "id='evtl'" in t1)
-    check("時間軸:section 在 </main> 之外(刷新不摧毀 widget)",
+          and "id='evtl'" in t1 and "id='l3tl'" in t1)
+    check("時間軸:浮動鈕/抽屜在 </main> 之外(刷新不摧毀 widget)",
           "</main>" in t1
-          and t1.index("class='tlsec'") > t1.index("</main>"))
+          and t1.index("id='tlwrap'") > t1.index("</main>"))
     import re as _re2
+    # L3 對話時間軸資料島(來自 attempt 的 aN.events.jsonl)
+    ml3 = _re2.search(
+        r"<script id='l3tl-data' type='application/json'>(.*?)</script>",
+        t1, _re2.S)
+    check("時間軸:L3 對話資料島可解析",
+          bool(ml3) and isinstance(json.loads(ml3.group(1)).get("items"), list))
     mtl = _re2.search(
         r"<script id='evtl-data' type='application/json'>(.*?)</script>",
         t1, _re2.S)
