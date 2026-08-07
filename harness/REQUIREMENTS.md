@@ -199,3 +199,92 @@ dashboard/control 記錄連線 client IP + 時間;Server 頁顯示目前連線 +
 - openhands-acp/server backend 若確定不用可整個移除(六格對照已存證)。
 - 異步架構(assignee 自動即時 kill + rehydrate)為大工程,未排。
 - 量產 python 標準結構另開 repo(需定 repo 名/公開與否)。
+
+## 12. W7 新需求(2026-08-07 口述 brainstorming 對齊,R1–R9)
+
+> 來源:使用者口述 brainstorming,經一次一題決策樹對齊(11 題)。**盡量不動 Jira
+> 原生(workflow/權限/jql/關票流程)**,新增欄位皆 additive。實作見 `PLAN_wave7.md`。
+
+### 12.1 人類完成度評分(R1 / R2)
+AI 做完(SUCCESS **或** FAILURE 終態)交人時,人給 **0–10** 分(內部 ×10 = %),
+評「對照這個 agent 的目標,完成度多少」。分數填在 description 的 **human 段
+`score`**;harness 每輪讀,填了 `journal("human_score")`,沒填週期提醒。
+- **關票權責**:**維持人類關票**;harness **軟性把關**(不硬鎖、不改 Jira 權限)。
+  成功/失敗終態 → 交人 + 票保持開(本來就沒關)→ 人填分後自己關;沒填就關 =
+  dashboard 標「未評分」(可接受的漏接)。
+- **捕捉時機**:**關票前**讀 human 段(∵ jql `statusCategory != Done`,票一 Done
+  就從搜尋消失、harness 看不到——所以只能在還開著時抓)。
+- **agent 目標來源**:新增 `Profile.goal`(人可讀),交人時寫進 **`agent:<profile>`
+  段**(每次交人必寫、不漏);human 段 score 旁放小註解「0–10:對照上方目標的完成度」。
+  未設 goal → fallback route/profile 名。
+- **Why**:要一個「AI 到底幫了多少」的客觀數據,才能算每張 Jira 的效益;放 human 段
+  沿用既有 section 機制(如 human_email)、不動架構;軟性把關是使用者在「硬鎖 vs
+  最小改動」間選了最小改動(硬鎖需 Jira 管理員設 workflow 權限,可能無權)。
+- **決策脈絡**:曾考慮「只有 agent 能 close」+「Jira 權限硬鎖」→ 因需動 Jira 設定/
+  可能無權,改為「人關票 + harness 軟性把關」。尺度曾在 0-100 / 0-5 間,最後定 **0-10**。
+
+### 12.2 效益計算(R3)
+dashboard 呈現每張 Jira 效益 = **(score/10) × 省下工時 × 時薪 − AI 花費**;
+未評分不計入平均。省下工時用既有 `Profile.human_minutes_est`,**未設預設 240 分(4h)**。
+- **不用 Python 讀 log 預測工時**(現況也沒這樣做):準確度存疑;先用 Profile 靜態值。
+  Python 讀 session/sub/transcript 動態預測列為**未來選項**。
+- **Why**:效益 = 省的人力價值扣掉 AI 成本,再乘人主觀有用度;score 低=還有 gap。
+
+### 12.3 per-profile 比較 + 狀態分類(R4)
+- dashboard 第一頁**已有 profile 欄**;filter **加 profile 關鍵字**(目前缺)。
+- 三張 per-profile 圖:①縱 profile×橫 Jira 數(依狀態堆疊上色)②縱 profile×橫花費
+  (AI 花費 / 人力$ / 差值=效益)③縱 profile×橫平均完成度%。
+- **狀態分類(8 態,依我們 DB 真實狀態,非 Jira 原生)**:待處理 / 進行中 / 排隊 /
+  等待人類(pending) / 交人(inactive) / 成功 / 失敗 / 撤銷。**同時是 R6 狀態機節點**。
+- **Why**:要能比較不同 profile 的量、成本、有用度;精細狀態才看得出票卡在哪(診斷)。
+
+### 12.4 Agent Detail tab(R5)
+新開 tab,顯示 **harness 設定**(routes.yaml:jql/並發/control/retry…)+ **每個
+Profile 全參數**(backend/engine/skills/verify/budgets/approver/goal/human_minutes_est/
+retention…)。與現有 **Server tab**(機器/系統/程序,W6.1)分工:Server=機器現況,
+Agent Detail=設定檔內容。
+- **Why**:設定目前只在 routes.yaml,網頁看不到;人要在網頁就能查 agent 怎麼配的。
+
+### 12.5 概念 / 生命週期 / 狀態機頁(R6)
+新「概念/說明」tab:Jira 生命週期 + **8 態狀態機圖(純 SVG,零依賴)** + 「狀態存哪」
+說明;同內容寫進 **README**。
+- **狀態存哪(釐清)**:Jira `status` 存 Jira、鏡射到 DB `ticket_watch.last_state`;
+  我們的**內部判定** `outcome`(SUCCESS/FAILURE/ABORTED)+ `pending_reason` 只存
+  DB `ticket_session`、**不寫回 Jira**;harness **不主動 transition Jira 狀態**(只留言)。
+- **Why**:搞定系統先搞定資料流生命週期;新人/使用者要有一頁看懂設計。
+
+### 12.6 預算:單次 + 月上限 + spawn 前預檢(R7)
+- 既有:`Profile.max_budget_usd`(單次/累計,達標→pending:budget,**attempt 後**檢查)。
+- 新增:`Profile.max_budget_monthly_usd`(**日曆月**、跨票、per-profile)。
+- **spawn 前預檢**:每次要 spawn claude/codex 前,檢查 (a) 此票累計 vs 單次上限
+  (或 `budget_override`)、(b) 此 profile 當月累計 vs 月上限;任一達標→不 spawn、
+  pending:budget、交人。
+- **單次放寬**:human 段填 `budget_override`(USD),per-ticket、下次 dispatch 吃、
+  不改 Profile、不影響月上限。**月上限只能改 Profile 設定**(hot reload)才續跑。
+- 月彙總資料源:`attempt_finished` journal 補 `cost`+`profile`(現在只有時間戳、無 cost)。
+- **Why**:怕燒錢失控;「跑前檢查」才不會多燒一個 attempt(現況是跑完才擋)。
+
+### 12.7 給 LLM 監控用的 REST API(R8)
+人用 Claude Code/codex 當監控 LLM,需要**完整唯讀查詢 API**:給 ticket 就能拿狀態 +
+log。**擴充** W6.5 既有 API(非從零):
+- **`/api/v1/`** 版本化命名空間(唯讀;沿用 dashboard 0.0.0.0 無認證)。
+- **三合一解析器**:`{ref}` 接受 Jira key(SCRUM-42)/ 內部 id / **ClearQuest CR id**
+  → 同一張票。
+- **結構化 JSON 為主 + 原始檔可取**:單票狀態 JSON(profile/8態/attempts/cost/pending/
+  score/budget/時間軸摘要)、L3 事件(`aN.events.jsonl`→JSON)、原始 session/sub-session
+  jsonl 可 raw 下載(`?tail=N`)。納入現有 OpenAPI/Swagger。
+- DB **加 `clearquest_id` 欄(nullable)**。
+- **Why**:監控者本身也是 LLM,要能程式化讀狀態/log 才能協助監控回報;結構化省 token、
+  原始檔留給深挖;CR id 之後要能查(見 R9)。
+- **決策脈絡**:曾想把「查 key」設計成通用 `{source,key}` 多票源抽象 → 使用者澄清
+  **ClearQuest 不取代 Jira**,CR 只是 Jira 票上的一欄 → 改為單票源 + `clearquest_id` 欄
+  + 三合一解析器。
+
+### 12.8 ClearQuest 監控整合(R9,**未來 To-Do,現在只記不做**)
+使用者描述的流程:**監控 ClearQuest**,當 CR 的 **title / 人名 / keyword 命中** →
+**建資料夾 + 複製 template 到新資料夾 + 開一張(Jira)追蹤票**,並在 DB 記該 **CR id**。
+ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + 記在票上的 id)。
+- ⚠️ **待使用者確認**:「目前系統行為會監控 CQ」是指**現有流程**(別的工具/人工,ARCP
+  未來接手)還是 **ARCP 預計要做**?(2026-08-07 未答,先標待確認)
+- **W7 只先備資料**:`clearquest_id` 欄(見 R8);CQ 監控/建資料夾/套模板/開票**不實作**。
+- **Why**:先把資料模型留好,CQ 整合日後只加來源解析器,不動已公開的 API。
