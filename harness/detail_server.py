@@ -162,6 +162,7 @@ def build_data(journal, sessions, watch) -> dict:
             "human_min": hm.get(iid, 0),
             # W7(R1):人類完成度評分 0-10(None=未評分);pct=score×10
             "score": s.get("human_score"),
+            "state": canonical_state(s or None),   # W7(R4):8 態 key(per-profile 圖)
             # W5.2 停留時間基準:最近一次 state/assignee 變動(無變動=created)
             "last_change": last_change.get(iid)
                            or w.get("first_seen_ts")
@@ -385,6 +386,29 @@ def session_status(s: dict, qpos: dict[int, int]) -> tuple[str, str]:
     if s.get("inactive"):
         return "INACTIVE", "inactive"
     return "active", "running"
+
+
+def canonical_state(s: dict | None) -> str:
+    """W7(R4/R6):把 (outcome, pending_reason, queued, inactive, 有無 session)
+    收斂成單一 8 態 key(dashboard per-profile 圖 + R6 狀態機共用)。
+    優先序:終態(成功/失敗/撤銷)> UNKNOWN/pending(等待人類)> 排隊 > 交人 > 進行中。
+    無 session = 待處理。"""
+    if not s:
+        return "todo"
+    oc = s.get("outcome")
+    if oc == "SUCCESS":
+        return "success"
+    if oc == "FAILURE":
+        return "failure"
+    if oc == "ABORTED":
+        return "aborted"
+    if oc == "UNKNOWN" or s.get("pending_reason"):
+        return "pending"                 # 等待人類
+    if s.get("queued"):
+        return "queued"
+    if s.get("inactive"):
+        return "inactive"                # 交人
+    return "running"                     # 進行中
 
 
 def saved_minutes(journal: list[dict]) -> float:
@@ -663,7 +687,7 @@ _APP_JS = """
 <script>
 const LS='arcp-v2';
 let D={rows:[],rate_default:null};
-let S=Object.assign({qr:'all',from:'',to:'',st:'',ksum:'',kdesc:'',
+let S=Object.assign({qr:'all',from:'',to:'',st:'',ksum:'',kdesc:'',kprofile:'',
   size:20,page:0,sort:'created',dir:-1,wk1:false,wk2:false,rate:null},
   (()=>{try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}})());
 function save(){localStorage.setItem(LS,JSON.stringify(S));}
@@ -678,9 +702,11 @@ function filtered(){
   if(S.to){hi=new Date(S.to+'T23:59:59').getTime()/1000;}
   if(!S.from&&!S.to&&S.qr!=='all'){lo=now-(+S.qr)*86400;}
   const ks=S.ksum.toLowerCase(),kd=S.kdesc.toLowerCase();
+  const kp=(S.kprofile||'').toLowerCase();
   return D.rows.filter(r=>
     r.created>=lo&&r.created<=hi&&
     (!S.st||r.status===S.st)&&
+    (!kp||(r.profile||'').toLowerCase().includes(kp))&&
     (!ks||(r.key+' '+r.summary).toLowerCase().includes(ks))&&
     (!kd||r.desc.toLowerCase().includes(kd)));
 }
@@ -782,10 +808,75 @@ function renderMoney(rows){
   legend($('lg-money'),[[C.ai,'AI 花費'],[C.human,'人類預估(時薪$'+(rate||'?')+')'],
     [C.waste,'失敗浪費(累積)',1],['#c9d1d9','(條=單期,線=累積)',1]]);
 }
+// ---- W7.4 per-profile 圖(縱=profile,橫=數量/花費/完成度)----
+// 8 態(依 canonical_state):key→[中文, 顏色]
+const STATE8=[['todo',['待處理','#8b949e']],['running',['進行中','#58a6ff']],
+  ['queued',['排隊','#a371f7']],['pending',['等待人類','#d29922']],
+  ['inactive',['交人','#6e7681']],['success',['成功','#3fb950']],
+  ['failure',['失敗','#f85149']],['aborted',['撤銷','#484f58']]];
+function byProfile(rows){const m={};rows.forEach(r=>{
+  (m[r.profile||'-']=m[r.profile||'-']||[]).push(r);});
+  return Object.keys(m).sort().map(p=>[p,m[p]]);}
+// 水平條(每列一 profile;segs=[{c,v,label}] 堆疊或並列)。fmt 標總量。
+function drawHBar(el,groups,segsOf,fmt,{stacked=true,minTick=0,labelOf=null}={}){
+  if(!groups.length){el.innerHTML='<div class="sys">(無資料)</div>';return;}
+  const rowH=26,gap=10,padL=110,padR=54,W=760,padT=6;
+  const H=padT+groups.length*(rowH+gap);
+  const totals=groups.map(([,rs])=>segsOf(rs).reduce((a,s)=>a+s.v,0));
+  const max=Math.max(minTick,...totals)||1;
+  const bw=W-padL-padR;let y=padT;const parts=[];
+  groups.forEach(([name,rs],gi)=>{
+    const segs=segsOf(rs);let x=padL;const tot=totals[gi];
+    parts.push(`<text x='${padL-8}' y='${y+rowH/2+4}' text-anchor='end' `+
+      `fill='#8b949e' font-size='11'>${esc(name).slice(0,15)}</text>`);
+    if(stacked){segs.forEach(s=>{if(s.v<=0)return;const w=s.v/max*bw;
+      parts.push(`<rect x='${x.toFixed(1)}' y='${y}' width='${w.toFixed(1)}' `+
+        `height='${rowH}' fill='${s.c}'><title>${esc(name)} · ${esc(s.label)}: `+
+        `${s.v}</title></rect>`);x+=w;});
+    }else{const n=segs.length,sh=rowH/n;let yy=y;segs.forEach(s=>{
+      const w=Math.max(0,s.v)/max*bw;
+      parts.push(`<rect x='${padL}' y='${yy}' width='${w.toFixed(1)}' `+
+        `height='${sh-1}' fill='${s.c}'><title>${esc(name)} · ${esc(s.label)}: `+
+        `${fmt(s.v)}</title></rect>`);yy+=sh;});}
+    const lbl=labelOf?labelOf(segs,tot):fmt(tot);
+    parts.push(`<text x='${padL+bw+6}' y='${y+rowH/2+4}' fill='#c9d1d9' `+
+      `font-size='11'>${esc(lbl)}</text>`);
+    y+=rowH+gap;});
+  el.innerHTML=`<svg viewBox='0 0 ${W} ${H}' width='100%' `+
+    `preserveAspectRatio='xMinYMin meet' style='max-height:${H}px'>`+
+    parts.join('')+`</svg>`;
+}
+function renderPState(rows){
+  drawHBar($('chart-pstate'),byProfile(rows),
+    rs=>STATE8.map(([k,[lb,c]])=>({c,label:lb,
+      v:rs.filter(r=>r.state===k).length})),v=>Math.round(v),{minTick:1});
+  legend($('lg-pstate'),STATE8.map(([,[lb,c]])=>[c,lb]));
+}
+function renderPCost(rows){
+  const rate=S.rate||0;
+  drawHBar($('chart-pcost'),byProfile(rows),rs=>{
+    const ai=rs.reduce((a,r)=>a+r.cost,0);
+    const hu=rs.reduce((a,r)=>a+r.human_min/60*rate,0);
+    return [{c:C.ai,label:'AI 花費',v:ai},{c:C.human,label:'人力$',v:hu}];
+  },v=>'$'+v.toFixed(2),{stacked:false,labelOf:segs=>{
+    const ai=segs[0].v,hu=segs[1].v;   // 右標=效益(人力−AI)
+    return '效益 $'+(hu-ai).toFixed(2);
+  }});
+  legend($('lg-pcost'),[[C.ai,'AI 花費'],[C.human,'人力$(時薪$'+(rate||'?')+')'],
+    ['#c9d1d9','右側=效益(人力−AI)',1]]);
+}
+function renderPScore(rows){
+  drawHBar($('chart-pscore'),byProfile(rows),rs=>{
+    const sc=rs.filter(r=>r.score!=null);
+    const avg=sc.length?sc.reduce((a,r)=>a+r.score,0)/sc.length*10:0;
+    return [{c:C.human,label:'平均完成度',v:avg}];
+  },v=>Math.round(v)+'%',{stacked:false,minTick:100});
+  legend($('lg-pscore'),[[C.human,'平均完成度%(僅計已評分)']]);
+}
 // ---- 表格(排序 + 分頁) ----
 const COLS=[['key','ticket'],['summary','summary'],['profile','profile'],
-  ['status','status'],['assignee','assignee'],['created','created'],
-  ['finished','finished'],['handoff','換手起點'],
+  ['status','status'],['score','完成度'],['assignee','assignee'],
+  ['created','created'],['finished','finished'],['handoff','換手起點'],
   ['dwell','停留時間'],['lifetime','lifetime'],['human_cost','人力$'],
   ['attempts','attempts'],['cost','cost']];
 // W5.2 計算欄:停留時間(state/assignee 最後變動起算,close 凍結)、
@@ -819,6 +910,7 @@ function renderTable(rows){
     `<td title='${esc(r.summary)}'>${esc(r.summary.slice(0,28))}</td>`+
     `<td>${esc(r.profile)}</td>`+
     `<td><span class='badge ${badgeCls(r.status)}'>${esc(r.status)}</span></td>`+
+    `<td>${r.score!=null?r.score+'/10':'<span style="color:#6e7681">未評</span>'}</td>`+
     `<td>${esc(r.assignee||'-')}</td><td>${fmt(r.created)}</td>`+
     `<td>${fmt(r.finished)}</td><td>${fmt(r.handoff)}</td>`+
     `<td>${r.created?fdays(r.dwell):'-'}</td>`+
@@ -829,11 +921,14 @@ function renderTable(rows){
   resizable($('tix'),'tix');          // W5.7 欄寬可拖曳
 }
 function render(){prep();const rows=filtered();renderStats(rows);
-  renderTime(rows);renderMoney(rows);renderTable(rows);save();}
+  renderTime(rows);renderMoney(rows);
+  renderPState(rows);renderPCost(rows);renderPScore(rows);   // W7.4 per-profile
+  renderTable(rows);save();}
 function pg(d){S.page=Math.max(0,S.page+d);render();}
 // ---- W5.6 匯出經 filter+sort 的資料(CSV / JSON)----
 const EXCOLS=[['key','ticket'],['summary','summary'],['profile','profile'],
-  ['status','status'],['assignee','assignee'],['created','created'],
+  ['status','status'],['score','completion_0_10'],['assignee','assignee'],
+  ['created','created'],
   ['finished','finished'],['handoff','handoff'],['dwell','dwell_days'],
   ['lifetime','lifetime_days'],['human_cost','human_cost_usd'],
   ['attempts','attempts'],['cost','cost_usd']];
@@ -871,6 +966,7 @@ function expo(fmt){
 function bind(){
   $('qr').value=S.qr;$('from').value=S.from;$('to').value=S.to;
   $('ksum').value=S.ksum;$('kdesc').value=S.kdesc;$('psize').value=S.size;
+  $('kprofile').value=S.kprofile||'';
   $('wk1').checked=S.wk1;$('wk2').checked=S.wk2;
   if(S.rate!=null)$('rate').value=S.rate;
   $('qr').onchange=e=>{S.qr=e.target.value;S.page=0;render();};
@@ -879,6 +975,7 @@ function bind(){
   $('st').onchange=e=>{S.st=e.target.value;S.page=0;render();};
   $('ksum').oninput=e=>{S.ksum=e.target.value;S.page=0;render();};
   $('kdesc').oninput=e=>{S.kdesc=e.target.value;S.page=0;render();};
+  $('kprofile').oninput=e=>{S.kprofile=e.target.value;S.page=0;render();};
   $('psize').onchange=e=>{S.size=+e.target.value;S.page=0;render();};
   $('wk1').onchange=e=>{S.wk1=e.target.checked;render();};
   $('wk2').onchange=e=>{S.wk2=e.target.checked;render();};
@@ -1102,6 +1199,7 @@ def render_index(journal, sessions, watch=None) -> str:
                  f"<td>{esc(r['summary'][:28])}</td>"
                  f"<td>{esc(r['profile'])}</td>"
                  f"<td><span class='badge'>{esc(r['status'])}</span></td>"
+                 f"<td>{(str(r['score']) + '/10') if r['score'] is not None else '未評'}</td>"
                  f"<td>{esc(r['assignee'] or '-')}</td>"
                  f"<td>{esc(fmt_ts(r['created']))}</td>"
                  f"<td>{esc(fmt_ts(r['finished']))}</td>"
@@ -1121,6 +1219,7 @@ def render_index(journal, sessions, watch=None) -> str:
         f"<input type='date' id='from' {_INPUT}>~"
         f"<input type='date' id='to' {_INPUT}>"
         f"<select id='st' {_INPUT}><option value=''>全部狀態</option></select>"
+        f"<input id='kprofile' placeholder='profile keyword…' {_INPUT}>"
         f"<input id='ksum' placeholder='summary keyword…' {_INPUT}>"
         f"<input id='kdesc' placeholder='description keyword…' {_INPUT}>"
         "<span style='color:#6e7681;font-size:11px'>↓ 底下統計/圖表/表格"
@@ -1137,7 +1236,14 @@ def render_index(journal, sessions, watch=None) -> str:
         f"<input type='number' id='rate' min='0' step='1' {_INPUT} "
         "style='width:70px;background:#0d1117;color:#c9d1d9;"
         "border:1px solid #30363d;border-radius:6px;padding:2px 6px'>"
-        "</label><svg id='chart-money'></svg><div id='lg-money'></div></div>")
+        "</label><svg id='chart-money'></svg><div id='lg-money'></div></div>"
+        # W7.4 per-profile 三圖(縱=profile)
+        "<h2>各 Profile · 票數(依狀態堆疊)</h2><div class='card'>"
+        "<div id='chart-pstate'></div><div id='lg-pstate'></div></div>"
+        "<h2>各 Profile · 花費 vs 人力$ vs 效益</h2><div class='card'>"
+        "<div id='chart-pcost'></div><div id='lg-pcost'></div></div>"
+        "<h2>各 Profile · 平均完成度</h2><div class='card'>"
+        "<div id='chart-pscore'></div><div id='lg-pscore'></div></div>")
     toolbar = (
         "<div class='ctl card'>"
         f"<select id='psize' {_INPUT}>"
@@ -1161,6 +1267,7 @@ def render_index(journal, sessions, watch=None) -> str:
             f"<table id='tix'><thead><tr id='thead-row'>"
             f"<td><b>ticket</b></td><td><b>summary</b></td>"
             f"<td><b>profile</b></td><td><b>status</b></td>"
+            f"<td><b>完成度</b></td>"
             f"<td><b>assignee</b></td><td><b>created</b></td>"
             f"<td><b>finished</b></td><td><b>換手起點</b></td>"
             f"<td><b>停留時間</b></td><td><b>lifetime</b></td>"

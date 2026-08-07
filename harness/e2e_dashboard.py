@@ -62,7 +62,7 @@ open(os.path.join(root, "tickets", "1", "transcript", "meta.json"),
                             "reason": "close:SUCCESS", "session_id": "s1",
                             "subs": ["agent-x"], "files": ["final.html"]}))
 store.upsert_session(sess(1, session_id="s1", attempts=2, workspace=ws1,
-                          outcome="SUCCESS", cost_usd=1.25))
+                          outcome="SUCCESS", cost_usd=1.25, human_score=8))
 store.upsert_session(sess(2, outcome="FAILURE",
                           pending_reason="max-attempts", cost_usd=0.5))
 store.upsert_session(sess(3, session_id="s3", attempts=1))       # in-flight
@@ -209,6 +209,21 @@ try:
     check("/data:summary/desc 可過濾來源", by[3]["summary"] == "任務摘要 3"
           and by[3]["desc"] == "細節描述 3")
     check("/data:rate_default 欄位存在", "rate_default" in dat)
+    # W7.4:8 態 canonical state + 完成度 score 進 /data
+    check("/data:canonical state(8 態)",
+          by[1]["state"] == "success" and by[3]["state"] == "running"
+          and by[7]["state"] == "pending")
+    check("/data:完成度 score", by[1]["score"] == 8 and by[3]["score"] is None)
+    # 首頁:profile filter + 三張 per-profile 圖容器 + 完成度欄
+    idx = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/", timeout=5).read().decode()
+    check("首頁:profile filter 輸入",
+          "id='kprofile'" in idx and "profile keyword" in idx)
+    check("首頁:三張 per-profile 圖容器",
+          "id='chart-pstate'" in idx and "id='chart-pcost'" in idx
+          and "id='chart-pscore'" in idx)
+    check("首頁:完成度欄 + 已評分顯示",
+          "完成度" in idx and "8/10" in idx)
 
     # 審批門 ticket 卡
     t7 = urllib.request.urlopen(
