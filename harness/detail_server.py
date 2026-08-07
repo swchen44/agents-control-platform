@@ -302,10 +302,18 @@ body{font:14px/1.55 var(--font-body);margin:0;background:var(--bg);color:var(--i
 a{color:var(--accent-ink);text-decoration:none}a:hover{text-decoration:underline}
 main{padding:0 26px 56px;max-width:1160px;margin:0 auto}
 header{padding:22px 26px 4px;max-width:1160px;margin:0 auto}
-h1{margin:0;font-family:var(--font-display);font-size:23px;font-weight:600;letter-spacing:-.01em}
+h1{margin:0;font-family:var(--font-display);font-size:23px;font-weight:600;
+  letter-spacing:-.01em;text-wrap:balance}
 h1 a{color:var(--muted)}
 h2{color:var(--ink);font-family:var(--font-display);font-size:18px;font-weight:600;
-  margin:32px 0 12px;letter-spacing:-.01em}
+  margin:32px 0 12px;letter-spacing:-.01em;text-wrap:balance}
+/* W8.5 觸控:去點兩下縮放延遲 + 自訂點按高亮 */
+button,a,.sortable,input,select{touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent}
+/* W8.4 skip link(平時隱藏,聚焦才現) */
+.skip{position:absolute;left:-9999px;top:8px;z-index:20;background:var(--accent);
+  color:#fff;padding:8px 14px;border-radius:7px;text-decoration:none}
+.skip:focus{left:8px}
 .sys{color:var(--muted);font-size:11.5px;text-align:center;margin:8px 0}
 code{font-family:var(--font-mono);font-size:.92em;background:var(--panel-2);
   border:1px solid var(--line);border-radius:5px;padding:1px 5px}
@@ -610,15 +618,15 @@ def render_control_page() -> str:
     """W5.8 Control 獨立頁:poller 全域控制(Pause/Resume/Reload/Shutdown)+
     即時狀態。作用於正在跑的 poller 進程(REST /8787,W2.6/W4.5)。"""
     return (f"{_nav('control')}"
-            "<header><h1>Control · poller</h1></header><main>"
-            "<div class='stats' id='cstatus'>載入中…</div>"
+            "<header><h1>Control · poller</h1></header><main id='main' tabindex='-1'>"
+            "<div class='stats' id='cstatus' aria-live='polite'>載入中…</div>"
             "<div class='ctl card' style='margin-top:12px'>"
             "<button type='button' class='btn' onclick=\"cc('pause')\">⏸ Pause</button>"
             "<button type='button' class='btn' onclick=\"cc('resume')\">▶ Resume</button>"
             "<button type='button' class='btn' onclick=\"cc('reload')\">🔄 Reload</button>"
             "<button type='button' class='btn' id='sd' style='color:var(--s-failure)' "
             "onclick=\"cc('shutdown')\">⏻ Graceful Shutdown</div>"
-            "<span id='cmsg' style='color:var(--muted);font-size:12px'></span>"
+            "<span id='cmsg' aria-live='polite' style='color:var(--muted);font-size:12px'></span>"
             "</div>"
             "<p style='color:var(--muted);font-size:12px'>"
             "Pause=只 watch 不派新工(正在跑的不中斷);Reload=熱載 routes.yaml"
@@ -794,7 +802,7 @@ _SERVER_JS = ("<script>"
 def render_server_page() -> str:
     """W6.1 Server 頁:系統/版本/登入狀態/資源(+ W6.2 程序、W6.6 連線)。"""
     return (f"{_nav('server')}"
-            "<header><h1>Server · 系統與程序</h1></header><main>"
+            "<header><h1>Server · 系統與程序</h1></header><main id='main' tabindex='-1'>"
             "<p style='color:var(--muted);font-size:12px'>dashboard 綁 "
             f"{esc(HOST)}(內網開放,唯讀);登入/金鑰只顯示狀態,不顯示值。"
             " <a href='/docs' style='color:var(--accent-ink)'>REST API 文件</a></p>"
@@ -809,7 +817,18 @@ let D={rows:[],rate_default:null};
 let S=Object.assign({qr:'all',from:'',to:'',st:'',ksum:'',kdesc:'',kprofile:'',
   size:20,page:0,sort:'created',dir:-1,wk1:false,wk2:false,rate:null},
   (()=>{try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}})());
-function save(){localStorage.setItem(LS,JSON.stringify(S));}
+// W8.5:URL query 反映過濾/排序/分頁狀態(可深連/分享);載入時 URL 優先於 localStorage。
+const _URLK=['qr','from','to','st','kprofile','ksum','kdesc','sort','dir',
+  'page','size'];
+(function(){const q=new URLSearchParams(location.search);
+  _URLK.forEach(k=>{if(q.has(k)){const v=q.get(k);
+    S[k]=(k==='dir'||k==='page'||k==='size')?(+v):v;}});})();
+function save(){localStorage.setItem(LS,JSON.stringify(S));
+  const q=new URLSearchParams();
+  _URLK.forEach(k=>{const d={qr:'all',sort:'created',dir:-1,page:0,size:20};
+    if(S[k]!==''&&S[k]!=null&&S[k]!==d[k])q.set(k,S[k]);});
+  const u=location.pathname+(q.toString()?'?'+q:'');
+  history.replaceState(null,'',u);}
 const $=id=>document.getElementById(id);
 // W8.1:圖表色改讀 CSS 變數(隨明暗主題切換);render() 開頭 syncPalette()。
 const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -849,7 +868,7 @@ function renderStats(rows){
   const st=p=>rows.filter(r=>r.status.startsWith(p)).length;
   const succ=oc('SUCCESS'),fail=oc('FAILURE'),done=succ+fail;
   const mins=rows.reduce((a,r)=>a+r.human_min,0);
-  const t=[["$"+cost.toFixed(4),'總 cost'],[st('active'),'in-flight'],
+  const t=[[money(cost),'總 cost'],[st('active'),'in-flight'],
     [st('QUEUED'),'queued'],[st('INACTIVE'),'inactive'],
     [st('pending'),'pending'],[succ,'SUCCESS'],[fail,'FAILURE'],
     [done?Math.round(fail/done*100)+'%':'–','失敗率']];
@@ -1016,9 +1035,15 @@ function prep(){const now=Date.now()/1000;D.rows.forEach(r=>{
   r.dwell=lc?Math.max(0,(end-lc)/86400):0;
   r.human_cost=r.human_min/60*(S.rate||0);});}
 function fdays(d){return d>=1?d.toFixed(1)+'d':Math.round(d*24)+'h';}
-function fmt(ts){if(!ts)return '-';const d=new Date(ts*1000);
-  return (d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0')
-  +' '+(d.getHours()+'').padStart(2,'0')+':'+(d.getMinutes()+'').padStart(2,'0');}
+// W8.4:locale-aware 日期/金額(Intl.*,不硬編格式)
+const _DT=new Intl.DateTimeFormat(undefined,{month:'2-digit',day:'2-digit',
+  hour:'2-digit',minute:'2-digit',hour12:false});
+const _TM=new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',
+  second:'2-digit',hour12:false});
+const _MONEY=new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',
+  currencyDisplay:'narrowSymbol',minimumFractionDigits:2,maximumFractionDigits:4});
+function fmt(ts){return ts?_DT.format(new Date(ts*1000)):'-';}
+function money(v){return _MONEY.format(v||0);}
 function badgeCls(st){if(st==='SUCCESS'||st==='FAILURE'||st==='UNKNOWN'||st==='ABORTED')return st;
   if(st.startsWith('pending'))return 'pending';if(st.startsWith('QUEUED'))return 'queued';
   if(st==='INACTIVE')return 'inactive';return st==='active'?'running':'';}
@@ -1030,11 +1055,14 @@ function renderTable(rows){
   const pages=Math.max(1,Math.ceil(rows.length/S.size));
   if(S.page>=pages)S.page=pages-1;
   const pg=rows.slice(S.page*S.size,(S.page+1)*S.size);
-  $('thead-row').innerHTML=COLS.map(([c,l])=>
-    `<td class='sortable' data-col='${c}' style='cursor:pointer'><b>${l}${
-      S.sort===c?(S.dir>0?' ▲':' ▼'):''}</b></td>`).join('');
+  $('thead-row').innerHTML=COLS.map(([c,l])=>{
+    const so=S.sort===c?(S.dir>0?'ascending':'descending'):'none';
+    return `<td class='sortable' data-col='${c}' tabindex='0' `+
+      `role='columnheader' aria-sort='${so}' style='cursor:pointer' `+
+      `title='點擊或按 Enter 排序'><b>${l}${
+      S.sort===c?(S.dir>0?' ▲':' ▼'):''}</b></td>`;}).join('');
   document.querySelector('#tix tbody').innerHTML=pg.map(r=>
-    `<tr><td><a href='/ticket/${r.iid}'>${esc(r.key)}</a></td>`+
+    `<tr><td><a href='/ticket/${r.iid}' translate='no'>${esc(r.key)}</a></td>`+
     `<td title='${esc(r.summary)}'>${esc(r.summary.slice(0,28))}</td>`+
     `<td>${esc(r.profile)}</td>`+
     `<td><span class='badge ${badgeCls(r.status)}'>${esc(r.status)}</span></td>`+
@@ -1044,11 +1072,11 @@ function renderTable(rows){
     `<td>${r.created?fdays(r.dwell):'-'}</td>`+
     `<td>${r.created?fdays(r.lifetime):'-'}</td>`+
     `<td>${r.human_min?'$'+r.human_cost.toFixed(2):'-'}</td>`+
-    `<td>${r.attempts}</td><td>$${r.cost.toFixed(4)}</td></tr>`).join('');
+    `<td>${r.attempts}</td><td>${money(r.cost)}</td></tr>`).join('');
   $('pginfo').textContent=rows.length+' 筆 · 第 '+(S.page+1)+'/'+pages+' 頁';
   resizable($('tix'),'tix');          // W5.7 欄寬可拖曳
 }
-function render(){syncPalette();prep();const rows=filtered();renderStats(rows);
+function render(){syncPalette();prep();const rows=filtered();renderStats(rows);var _u=$('upd');if(_u)_u.textContent='更新於 '+_TM.format(new Date());
   renderTime(rows);renderMoney(rows);
   renderPState(rows);renderPCost(rows);renderPScore(rows);   // W7.4 per-profile
   renderTable(rows);save();}
@@ -1108,11 +1136,14 @@ function bind(){
   $('wk1').onchange=e=>{S.wk1=e.target.checked;render();};
   $('wk2').onchange=e=>{S.wk2=e.target.checked;render();};
   $('rate').oninput=e=>{S.rate=+e.target.value||0;render();};
-  document.querySelector('#tix thead').addEventListener('click',e=>{
+  const th=document.querySelector('#tix thead');
+  const doSort=td=>{if(!td)return;const c=td.dataset.col;
+    if(S.sort===c)S.dir=-S.dir;else{S.sort=c;S.dir=1;}render();};
+  th.addEventListener('click',e=>doSort(e.target.closest('.sortable')));
+  th.addEventListener('keydown',e=>{           // 鍵盤排序(Enter/Space)
+    if(e.key!=='Enter'&&e.key!==' ')return;
     const td=e.target.closest('.sortable');if(!td)return;
-    const c=td.dataset.col;
-    if(S.sort===c)S.dir=-S.dir;else{S.sort=c;S.dir=1;}
-    render();});
+    e.preventDefault();doSort(td);});
 }
 async function tick(){
   try{
@@ -1202,9 +1233,11 @@ def _nav(active: str) -> str:
             + tab("agent", "/agent", "Agent Detail")
             + tab("server", "/server", "Server")
             + tab("concepts", "/concepts", "概念"))
-    return ("<div class='cmdbar'>"
-            "<span class='brand'>ARCP<span class='sub'>Control&nbsp;Plane</span>"
-            "</span><span class='live'><i></i>Live</span>"
+    return ("<a class='skip' href='#main'>跳到主要內容</a>"
+            "<div class='cmdbar'>"
+            "<span class='brand' translate='no'>ARCP"
+            "<span class='sub'>Control&nbsp;Plane</span>"
+            "</span><span class='live'><i aria-hidden='true'></i>Live</span>"
             f"<nav class='navtabs'>{tabs}</nav>"
             "<button class='tgl' id='arcp-tgl' type='button' aria-label='切換明暗主題'>"
             "<span id='arcp-tgi'>☾</span><span id='arcp-tgn'>深色</span>"
@@ -1298,7 +1331,7 @@ def render_db_page() -> str:
     return (f"{_nav('db')}"
             f"<header><h1>DB Browser · harness.db "
             f"<span style='color:var(--muted);font-size:13px'>(唯讀)</span>"
-            f"</h1></header><main>"
+            f"</h1></header><main id='main' tabindex='-1'>"
             "<div style='display:flex;gap:16px;align-items:flex-start'>"
             "<div class='card' style='min-width:200px'>"
             "<b style='color:var(--muted)'>Tables</b><div id='tlist'></div></div>"
@@ -1316,7 +1349,7 @@ def render_db_page() -> str:
             "</button></div>"
             "<div class='card'>"
             "<div style='display:flex;align-items:center'>"
-            "<h2 id='dbtitle' style='margin:0;flex:1'>← 點左側表格</h2>"
+            "<h2 id='dbtitle' aria-live='polite' style='margin:0;flex:1'>← 點左側表格</h2>"
             "<button type='button' class='btn' onclick='dbExport(\"csv\")'>⬇ CSV</button>"
             "<button type='button' class='btn' onclick='dbExport(\"json\")'>⬇ JSON</button></div>"
             "<div id='dbpg' class='ctl' style='display:none;margin:8px 0'>"
@@ -1410,13 +1443,13 @@ def render_index(journal, sessions, watch=None) -> str:
         "<option>50</option><option>100</option></select>"
         "<button type='button' class='btn' onclick='pg(-1)'>‹ 上頁</button>"
         "<button type='button' class='btn' onclick='pg(1)'>下頁 ›</button>"
-        "<span id='pginfo' style='color:var(--muted);font-size:12px'></span>"
+        "<span id='pginfo' aria-live='polite' style='color:var(--muted);font-size:12px'></span><span id='upd' class='sys' aria-live='polite' style='margin:0 0 0 8px'></span>"
         "<span style='margin-left:auto'></span>"
         "<button type='button' class='btn' onclick='expo(\"csv\")'>⬇ CSV</button>"
         "<button type='button' class='btn' onclick='expo(\"json\")'>⬇ JSON</button></div>")
     return (f"{_nav('dash')}"
             f"<header><h1>ARCP Dashboard · {esc(ROOT.split('/')[-1])}"
-            f"</h1></header><main>"
+            f"</h1></header><main id='main' tabindex='-1'>"
             f"{filterbar}"
             f"<div class='stats' id='stats'>"
             f"{overview_cards(sessions, journal)}</div>"
@@ -1617,8 +1650,8 @@ def timeline_data(evs: list[dict]) -> dict:
 
 
 def render_timeline_section(evs: list[dict]) -> str:
-    """W6.7:事件時間軸區塊。**刻意放 <main> 之外**——ticket 頁每 5s 會整段
-    替換 <main>.innerHTML,widget 若在其中會被反覆摧毀且永遠 diff 不符→閃爍。
+    """W6.7:事件時間軸區塊。**刻意放 <main id='main' tabindex='-1'> 之外**——ticket 頁每 5s 會整段
+    替換 <main id='main' tabindex='-1'>.innerHTML,widget 若在其中會被反覆摧毀且永遠 diff 不符→閃爍。
     放外面則 widget 只初始化一次;刷新只抽 #evtl-data 資料島更新 DataSet。"""
     data = json.dumps(timeline_data(evs), ensure_ascii=False)
     return (
@@ -1714,7 +1747,7 @@ def render_ticket(iid, journal, sessions) -> str:
                "tab((location.hash||'#convo').slice(1));</script>")
     return (f"<header><h1><a href='/'>← </a>{esc(key)} · "
             f"<span class='badge {esc(s.get('outcome') or '')}'>"
-            f"{esc(s.get('outcome') or '-')}</span></h1></header><main>"
+            f"{esc(s.get('outcome') or '-')}</span></h1></header><main id='main' tabindex='-1'>"
             f"<div class='card'><div class='row'>"
             f"<span class='kv'><b>profile</b> {esc(s.get('profile','-'))}</span>"
             f"<span class='kv'><b>attempts</b> {esc(s.get('attempts',0))}</span>"
@@ -1980,7 +2013,7 @@ def render_agent_page() -> str:
         src, routes, profiles, err = {}, [], {}, str(e)
 
     head = (f"{_nav('agent')}<header><h1>Agent Detail · 設定與 Profile</h1>"
-            f"</header><main><p class='sys' style='text-align:left'>"
+            f"</header><main id='main' tabindex='-1'><p class='sys' style='text-align:left'>"
             f"來源 <code>{esc(_CONFIG_PATH)}</code>(唯讀;憑證在 ~/.env,不顯示)。"
             f"</p>")
     if err:
@@ -2137,7 +2170,7 @@ def render_concepts_page() -> str:
         for k, v in _STATE_DOC)
     return (
         f"{_nav('concepts')}<header><h1>概念 · 資料流生命週期 · 狀態機</h1>"
-        f"</header><main>"
+        f"</header><main id='main' tabindex='-1'>"
         "<h2>一句話</h2><div class='card'><p>ARCP 讓 <code>claude -p</code> / "
         "<code>codex exec</code> 由 <b>Jira 事件驅動</b>、可觀測、可控制。搞定系統"
         "先搞定<b>資料流的生命週期</b>——下面是一張票從進來到離開的狀態流動。</p></div>"
