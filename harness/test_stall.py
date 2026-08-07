@@ -40,6 +40,12 @@ p1 = subprocess.Popen(["sleep", "60"], start_new_session=True)
 t0 = time.time()
 a1._stall_watchdog(p1)          # blocks until it kills the hung child
 dur = round(time.time() - t0, 1)
+# watchdog 只送 SIGKILL 不回收(production 由主迴圈 proc.wait() 收屍);
+# 單元測直呼 watchdog 故自行 reap,否則 poll() 會撞 kill→reap 的 race。
+try:
+    p1.wait(timeout=2)
+except subprocess.TimeoutExpired:
+    pass
 check(f"W1 無進展→stall 偵測+killpg (dur={dur}s)",
       a1._stalled and p1.poll() is not None and 2.5 <= dur <= 6)
 

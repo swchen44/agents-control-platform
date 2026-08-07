@@ -24,7 +24,6 @@ from arcp_harness.jira_source import JiraCloudSource
 from arcp_harness.poller import OuterLoop
 from arcp_harness.profiles import load_profiles
 from arcp_harness.routing import load_config, match
-from arcp_harness.snapshotter import Snapshotter
 from arcp_harness.store import Store, TicketSession, TicketWatch
 from arcp_harness.triggers import load_triggers
 
@@ -125,13 +124,12 @@ def main() -> int:
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,
                      host=ctl.get("host", "127.0.0.1"),
-                     port=int(ctl.get("port", 8787)))
+                     port=int(ctl.get("port", 8787)),
+                     profiles_fn=lambda: disp.profiles)  # W6.4 被動 transcript
     api.start()
-    # W4.3 快照器:active session 每 N 秒重產 transcript HTML(肉眼監控)
-    snap = Snapshotter(store, lambda: disp.profiles,
-                       interval_sec=float(
-                           source_cfg.get("snapshot_interval_sec", 60)))
-    snap.start()
+    # W6.4:移除定時快照器(耗資源)。transcript 改純事件觸發(換手/交人/
+    # evict/close 由 dispatcher·commands 呼 finalize)+ 被動按鈕(control
+    # POST /gen_transcript/<id>)。決策見 REQUIREMENTS.md §10.3。
     print(f"[poller] control API on http://{ctl.get('host', '127.0.0.1')}:"
           f"{api.port} (/status /health /pause /resume /reload)", flush=True)
 
@@ -159,7 +157,6 @@ def main() -> int:
                   f"retry next cycle", flush=True)
         time.sleep(interval)
     print("[poller] timebox ended", flush=True)
-    snap.stop()
     api.stop()
     store.close()
     return 0

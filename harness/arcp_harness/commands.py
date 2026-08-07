@@ -37,11 +37,13 @@ from .transcript import finalize as finalize_transcript
 log = get_logger("commands")
 
 
-def _finalize_leaving(sess, profiles: dict | None) -> None:
+def _finalize_leaving(sess, profiles: dict | None, reason: str) -> None:
     """W4.3 離手定格:session 交出去(換手/交人)前產 final HTML(不打包)。"""
     prof = (profiles or {}).get(sess.profile)
     engine = engine_of_agent(prof.agent) if prof is not None else "claude"
-    finalize_transcript(sess.session_id, engine, sess.workspace, pack=False)
+    finalize_transcript(sess.session_id, engine, sess.workspace,
+                        pack=False, reason=reason)
+
 
 _COMMANDS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)^@agent\s+run\b"), "run"),
@@ -112,7 +114,7 @@ class CommandHandler:
                     t.id, f"[agent] next 目標 profile 無效:'{target}'。{avail}")
                 return [self.store.journal("command_rejected", t.id, t.key,
                                            command="next", target=target)]
-            _finalize_leaving(sess, self.profiles)   # W4.3 換手前定格
+            _finalize_leaving(sess, self.profiles, "handoff-cmd")  # W4.3/W6.4
             # 重置 session、pin 新 profile;下輪 poll 經 gate 重新排隊,目標
             # require_approval 則重走審批門;workspace 哨值→下輪重 provision
             sess.profile = target
@@ -201,7 +203,7 @@ class ExternalChangePolicy:
             return []                       # 已 inactive(人→人)不重複
         sess.inactive = True
         self.store.upsert_session(sess)
-        _finalize_leaving(sess, self.profiles)   # W4.3 交人前定格
+        _finalize_leaving(sess, self.profiles, "assignee-inactive")  # W6.4
         if not quiet:
             self.source.add_comment(
                 t.id, "[agent] assignee 交給人類 → inactive:不再派工、讓出並發"

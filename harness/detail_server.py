@@ -1176,27 +1176,81 @@ def transcript_dir_of(workspace: str) -> str:
     return os.path.join(base, "transcript")
 
 
+# W6.4:reason 代碼 → 人類可讀(meta.json 的產生原因)
+_TRANSCRIPT_REASON = {
+    "close:SUCCESS": "結案(成功)", "close:FAILURE": "結案(失敗)",
+    "close:ABORTED": "結案(撤銷)", "evict": "強制驅逐(killpg)",
+    "handoff-human": "轉交人類", "handoff-agent": "換手其他 agent",
+    "handoff-cmd": "指令換手(@agent next)", "assignee-inactive": "指派給人類(暫停)",
+    "pending:budget": "等待人類(預算耗盡)", "manual": "手動產生(按鈕)",
+    "unknown": "未知",
+}
+
+
+def _read_transcript_meta(d: str) -> dict | None:
+    """W6.4:讀 transcript/meta.json(產生時間/原因/sub-session)。"""
+    p = os.path.join(d, "meta.json")
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 def render_transcript_card(iid: int, s: dict) -> str:
-    """W4.2:transcript 產物卡(HTML 檢視連結 + tgz 下載)。無產物不顯卡。"""
+    """W4.2/W6.4:transcript 卡。顯示是否已有 HTML、產生時間/原因(meta.json)、
+    檢視/下載連結,並提供「產生 transcript」被動按鈕(control /gen_transcript)。
+    workspace 為哨值/空 → 無 session 對象,不顯卡。"""
     ws = s.get("workspace") or ""
     if not ws or ws.startswith("("):
         return ""
     d = transcript_dir_of(ws)
-    if not os.path.isdir(d):
-        return ""
     names = sorted(f for f in os.listdir(d)
                    if os.path.isfile(os.path.join(d, f))
-                   and not f.startswith("."))
-    if not names:
-        return ""
+                   and not f.startswith(".") and f != "meta.json") \
+        if os.path.isdir(d) else []
+    meta = _read_transcript_meta(d)
+
+    # 產生資訊列:有 meta 顯示時間 + 原因 + sub-session 數;無產物則提示
+    if meta:
+        reason = _TRANSCRIPT_REASON.get(meta.get("reason", ""),
+                                        meta.get("reason") or "未知")
+        nsub = len(meta.get("subs") or [])
+        info = (f"<span class='kv'><b>產生於</b> {esc(meta.get('generated_at','?'))}"
+                f"</span><span class='kv'><b>原因</b> {esc(reason)}</span>"
+                + (f"<span class='kv'><b>sub-session</b> {nsub}</span>"
+                   if nsub else ""))
+    else:
+        info = "<span class='sys'>尚未產生 transcript(可按下方按鈕產生)</span>"
+
     links = "".join(
         f"<a class='btn' style='text-decoration:none' "
         f"href='/tfile/{iid}/{esc(n)}'"
         f"{' download' if n.endswith('.tgz') else ' target=_blank'}>"
         f"{'📦 ' if n.endswith('.tgz') else '📄 '}{esc(n)}</a>"
         for n in names)
+
+    # 被動產生按鈕:有 session_id 才有東西可渲染(哨值 workspace 已擋在上面)
+    gen_btn = ""
+    if s.get("session_id"):
+        label = "🔄 重新產生" if names else "📄 產生 transcript"
+        gen_btn = (
+            "<span class='btn' "
+            "title='對此票當前 session 立即產生 transcript HTML(定格)。"
+            "進行中/等待人類/已完成皆可;會覆蓋既有產物並更新產生時間與原因為"
+            "「手動」。' "
+            f"onclick=\"this.textContent='產生中…';"
+            f"fetch('{CONTROL}/gen_transcript/{iid}',{{method:'POST'}})"
+            ".then(r=>r.json()).then(j=>{this.textContent="
+            "j.generated?'已產生('+j.files+' 檔),重整中…':'失敗:'+(j.error||'?');"
+            "if(j.generated)setTimeout(()=>location.reload(),800);})"
+            f".catch(()=>this.textContent='control 離線')\">{label}</span>")
+
     return (f"<h2>Transcript(可視化 / 下載)</h2>"
-            f"<div class='card'><div class='ctl'>{links}</div></div>")
+            f"<div class='card'><div class='row'>{info}</div>"
+            f"<div class='ctl'>{links}{gen_btn}</div></div>")
 
 
 def render_ticket(iid, journal, sessions) -> str:

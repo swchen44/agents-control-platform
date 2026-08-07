@@ -12,6 +12,10 @@
   POST /shutdown→ poller.stopping=True(W4.5 graceful:當前 poll 輪——含正在跑
                   的 attempt / 壓縮打包——自然跑完後退出並清理;強制關閉語意
                   見 DESIGN_hotreload.md)
+  POST /evict/<id>       → 寫 EVICT 檔,agent 看門狗 killpg(W5.3 異常處置;
+                           active 才准,不耗 attempt,下輪 resume)
+  POST /gen_transcript/<id> → 被動產 transcript final HTML(W6.4;完成/等人/
+                           進行中皆可,reason=manual)
 
 安全:預設綁 127.0.0.1(本機控制),無認證——不可綁公網。
 """
@@ -30,10 +34,12 @@ log = get_logger("control")
 
 class ControlAPI:
     def __init__(self, poller, store, reload_fn=None,
-                 host: str = "127.0.0.1", port: int = 8787):
+                 host: str = "127.0.0.1", port: int = 8787,
+                 profiles_fn=None):
         self.poller = poller
         self.store = store
         self.reload_fn = reload_fn
+        self.profiles_fn = profiles_fn     # W6.4:被動產 transcript 查 engine
         api = self
 
         class _Handler(BaseHTTPRequestHandler):
@@ -89,6 +95,12 @@ class ControlAPI:
                         f.write("evict")
                     log.info("control: evict %s(%s)", iid, s.key)
                     return self._json(200, {"evicted": iid})
+                if self.path.startswith("/gen_transcript/"):  # W6.4 被動按鈕
+                    try:
+                        iid = int(self.path.rsplit("/", 1)[1])
+                    except ValueError:
+                        return self._json(400, {"error": "bad issue id"})
+                    return self._json(*api.gen_transcript(iid))
                 if self.path == "/reload":
                     if api.reload_fn is None:
                         return self._json(501, {"error": "reload 未接線"})
@@ -110,6 +122,32 @@ class ControlAPI:
     def port(self) -> int:
         """實際綁定 port(建構傳 0 = 系統配 ephemeral,測試用)。"""
         return self._server.server_address[1]
+
+    def gen_transcript(self, iid: int) -> tuple[int, dict]:
+        """W6.4 被動:人在 Jira ticket 頁按「產生 transcript」→ 對當前 session
+        定格 final HTML(不打包)。完成/等人/進行中皆可(只要 session_id 在且
+        workspace 非哨值)。reason=manual 記入 meta.json + journal。"""
+        from .transcript import engine_of_agent
+        from .transcript import finalize as _finalize
+        s = self.store.get_session(iid)
+        if s is None or not s.session_id or s.workspace.startswith("("):
+            return 404, {"error": "no transcript-able session"}
+        profiles = self.profiles_fn() if self.profiles_fn else {}
+        prof = (profiles or {}).get(s.profile)
+        engine = engine_of_agent(prof.agent) if prof is not None else "claude"
+        try:
+            outs = _finalize(s.session_id, engine, s.workspace,
+                             pack=False, reason="manual")
+        except Exception as e:  # noqa: BLE001 — 渲染壞不弄死 API
+            log.warning("control: gen_transcript %s 失敗:%s", iid, e)
+            return 500, {"error": str(e)}
+        if not outs:
+            return 500, {"error": "render 無產出(renderer 缺席或 session 檔已清)"}
+        self.store.journal("transcript_packed", iid, s.key,
+                           reason="manual", files=[os.path.basename(a)
+                                                   for a in outs])
+        log.info("control: gen_transcript %s(%s)→ %d 檔", iid, s.key, len(outs))
+        return 200, {"generated": iid, "files": len(outs)}
 
     def status(self) -> dict:
         sessions = self.store.all_sessions()

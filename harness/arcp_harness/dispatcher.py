@@ -76,7 +76,8 @@ class Dispatcher:
         """W4.2(B2):close(成敗都)定格 final HTML + tgz 打包;失敗不擋流程。"""
         arts = finalize_transcript(sess.session_id,
                                    engine_of_agent(profile.agent),
-                                   sess.workspace, pack=True)
+                                   sess.workspace, pack=True,
+                                   reason=f"close:{sess.outcome}")
         if arts:
             events.append(self.store.journal(
                 "transcript_packed", ticket.id, ticket.key,
@@ -253,6 +254,9 @@ class Dispatcher:
                 sess.attempts -= 1
                 sess.evict_count += 1           # W6.3:異常計數
                 self.store.upsert_session(sess)
+                finalize_transcript(sess.session_id,      # W6.4 evict 定格
+                                    engine_of_agent(profile.agent),
+                                    sess.workspace, pack=False, reason="evict")
                 self.source.add_comment(ticket.id, (
                     f"[agent] attempt 被強制驅逐(即時 killpg 釋放資源;"
                     f"第 {sess.evict_count} 次);session 保留,下輪 resume "
@@ -306,7 +310,8 @@ class Dispatcher:
                     # W4.3 離手定格:交人前 final HTML(不打包,close 才打包)
                     finalize_transcript(sess.session_id,
                                         engine_of_agent(profile.agent),
-                                        sess.workspace, pack=False)
+                                        sess.workspace, pack=False,
+                                        reason="handoff-human")
                     self.source.add_comment(ticket.id, (
                         f"[agent] handoff→human:{summarize(res.structured)}\n"
                         f"請人工接手;要 agent 繼續請留言 @agent run。"
@@ -329,7 +334,8 @@ class Dispatcher:
                     # 即將被 reset,先取)
                     finalize_transcript(sess.session_id,
                                         engine_of_agent(profile.agent),
-                                        sess.workspace, pack=False)
+                                        sess.workspace, pack=False,
+                                        reason="handoff-agent")
                     sess.profile = target
                     sess.session_id = None
                     sess.attempts = 0
@@ -387,6 +393,10 @@ class Dispatcher:
                 events.append(self.store.journal(
                     "pending", ticket.id, ticket.key, reason="budget",
                     cost_usd=sess.cost_usd))
+                finalize_transcript(sess.session_id,      # W6.4 等人類也產
+                                    engine_of_agent(profile.agent),
+                                    sess.workspace, pack=False,
+                                    reason="pending:budget")
                 return events
 
         sess.outcome, sess.pending_reason = "FAILURE", "max-attempts"

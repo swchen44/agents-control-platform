@@ -11,3 +11,6 @@ examples/openhands-acp-poc/runtime*/
 # B 期 harness
 harness/runtime*/
 harness/tools/cclog/.venv/
+
+# OpenHands/runtime conversation 狀態(非原始碼)
+harness/workspace/

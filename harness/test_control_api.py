@@ -139,6 +139,46 @@ def test_shutdown_sets_stopping():
         api.stop()
 
 
+def test_gen_transcript_manual():
+    """W6.4 被動按鈕:POST /gen_transcript/<id> → finalize(reason=manual)。
+    monkeypatch transcript.finalize 避免真渲染;驗查 engine、記 journal、404 分支。"""
+    from arcp_harness import transcript as tmod
+    root = tempfile.mkdtemp()
+    store = Store(os.path.join(root, "s"))
+    ws = os.path.join(root, "tickets", "1", "ws")
+    os.makedirs(ws, exist_ok=True)
+    store.upsert_session(_sess(1, session_id="sid-1", workspace=ws))
+    store.upsert_session(_sess(2, session_id=None, workspace=ws))   # 無 sid
+    store.upsert_session(_sess(3, session_id="s3", workspace="(handoff)"))
+
+    class _Prof:
+        agent = {"backend": "rawcli", "engine": "codex"}
+    seen = {}
+    _orig = tmod.finalize
+
+    def _fake_finalize(sid, engine, workspace, pack=False, reason=""):
+        seen.update(sid=sid, engine=engine, reason=reason, pack=pack)
+        return ["final.html"]
+    tmod.finalize = _fake_finalize
+    api = _api(store=store)
+    api.profiles_fn = lambda: {"p": _Prof()}
+    try:
+        code, body = _post(api, "/gen_transcript/1")
+        assert code == 200 and body["generated"] == 1 and body["files"] == 1
+        assert seen == {"sid": "sid-1", "engine": "codex",
+                        "reason": "manual", "pack": False}
+        jrn = [json.loads(x) for x in open(store.journal_path) if x.strip()]
+        assert any(e["type"] == "transcript_packed" and e["reason"] == "manual"
+                   for e in jrn)
+        assert _post(api, "/gen_transcript/2")[0] == 404   # 無 session_id
+        assert _post(api, "/gen_transcript/3")[0] == 404   # 哨值 workspace
+        assert _post(api, "/gen_transcript/999")[0] == 404  # 無此票
+        assert _post(api, "/gen_transcript/abc")[0] == 400  # 非數字
+    finally:
+        tmod.finalize = _orig
+        api.stop()
+
+
 def test_unknown_paths_404():
     api = _api()
     try:

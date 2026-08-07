@@ -101,10 +101,49 @@ def snapshot(session_id: str | None, engine: str, workspace: str) -> list[str]:
         return []
 
 
+def _write_meta(out_dir: str, session_id: str, reason: str,
+                files: list[str]) -> None:
+    """W6.4:sidecar 記產生時間 + 原因 + session + sub-session(dashboard 顯示)。"""
+    import datetime
+    import glob as _glob
+    import json as _json
+    subs = [os.path.basename(f).removesuffix(".jsonl")
+            for f in _glob.glob(os.path.expanduser(
+                f"~/.claude/projects/*/{session_id}/subagents/agent-*.jsonl"))]
+    meta = {
+        "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "reason": reason, "session_id": session_id, "subs": subs,
+        "files": [os.path.basename(f) for f in files],
+    }
+    try:
+        with open(os.path.join(out_dir, "meta.json"), "w",
+                  encoding="utf-8") as f:
+            _json.dump(meta, f, ensure_ascii=False)
+    except OSError as e:
+        log.warning("transcript meta 寫入失敗:%s", e)
+
+
+def read_meta(workspace: str) -> dict | None:
+    """W6.4:dashboard 讀 transcript 產生 metadata(時間/原因)。"""
+    import json as _json
+    p = os.path.join(transcript_dir(workspace), "meta.json")
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            return _json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 def finalize(session_id: str | None, engine: str, workspace: str,
-             pack: bool = False) -> list[str]:
-    """離手/close 定格 → final*.html;pack=True(close)再打 transcript.tgz
-    (gzip -9:session jsonl 原檔 + final HTML)。回產物清單。"""
+             pack: bool = False, reason: str = "") -> list[str]:
+    """定格 → final*.html + meta.json(W6.4 記時間/原因);pack=True(close)
+    再打 transcript.tgz(gzip -9:session jsonl 原檔 + final HTML)。回產物清單。
+
+    W6.4:統一入口——事件觸發(state/assignee/evict/close)與手動按鈕都走它,
+    reason 記入 meta(state-change/assignee-change/evict/close/manual/pending)。
+    """
     if not session_id:
         return []
     out_dir = transcript_dir(workspace)
@@ -113,6 +152,8 @@ def finalize(session_id: str | None, engine: str, workspace: str,
     except Exception as e:  # noqa: BLE001
         log.warning("finalize 渲染失敗(%s):%s", session_id, e)
         outs = []
+    if outs:                                # 有產出才記 metadata
+        _write_meta(out_dir, session_id, reason or "unknown", outs)
     if not pack:
         return outs
     try:
@@ -146,8 +187,9 @@ def finalize(session_id: str | None, engine: str, workspace: str,
 
 
 def list_artifacts(workspace: str) -> list[str]:
-    """dashboard 用:instance 的 transcript 產物(檔名清單,依名排序)。"""
+    """dashboard 用:instance 的 transcript 產物(檔名清單,依名排序)。
+    meta.json 是 sidecar 中繼資料(W6.4 產生時間/原因),不列為產物。"""
     d = transcript_dir(workspace)
     return sorted(os.path.basename(p)
                   for p in glob.glob(os.path.join(d, "*"))
-                  if os.path.isfile(p))
+                  if os.path.isfile(p) and os.path.basename(p) != "meta.json")

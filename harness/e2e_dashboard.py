@@ -56,6 +56,11 @@ open(os.path.join(root, "tickets", "1", "transcript", "final.html"),
      "w").write("<html>FINAL-TRANSCRIPT</html>")
 open(os.path.join(root, "tickets", "1", "transcript", "transcript.tgz"),
      "wb").write(b"\x1f\x8b_fake")
+# W6.4:meta.json sidecar(產生時間/原因/sub-session)——卡片要顯示
+open(os.path.join(root, "tickets", "1", "transcript", "meta.json"),
+     "w").write(json.dumps({"generated_at": "2026-08-07T09:00:00",
+                            "reason": "close:SUCCESS", "session_id": "s1",
+                            "subs": ["agent-x"], "files": ["final.html"]}))
 store.upsert_session(sess(1, session_id="s1", attempts=2, workspace=ws1,
                           outcome="SUCCESS", cost_usd=1.25))
 store.upsert_session(sess(2, outcome="FAILURE",
@@ -223,6 +228,13 @@ try:
     # W4.2:transcript 卡 + /tfile 服務
     check("transcript 卡:HTML/tgz 連結",
           "/tfile/1/final.html" in t1 and "/tfile/1/transcript.tgz" in t1)
+    # W6.4:卡片顯示 meta(產生時間/原因中文化)+ meta.json 不當產物連結
+    check("transcript 卡:meta 產生時間/原因",
+          "2026-08-07T09:00:00" in t1 and "結案(成功)" in t1
+          and "/tfile/1/meta.json" not in t1)
+    # W6.4:被動產生按鈕(有 session_id 才有;打 control /gen_transcript)
+    check("transcript 卡:被動產生按鈕",
+          "/gen_transcript/1" in t1 and "重新產生" in t1)
     fh = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/tfile/1/final.html", timeout=5)
     check("tfile:HTML 內容可讀",
