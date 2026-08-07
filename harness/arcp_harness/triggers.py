@@ -307,11 +307,10 @@ def run_trigger(trigger: Trigger, profiles: dict[str, Profile], store,
         if verdict.passed and res.raw_outcome == "completed":
             sess.outcome = "SUCCESS"
             store.upsert_session(sess)
-            kpi = ({"human_minutes_saved": profile.human_minutes_est}
-                   if profile.human_minutes_est else {})    # W3.5 C3
-            events.append(store.journal(
+            events.append(store.journal(       # W3.5 C3 / W7 R3:預設 240 分
                 "trigger_finished", ts, trigger.run_name, outcome="SUCCESS",
-                attempts=sess.attempts, cost_usd=sess.cost_usd, **kpi))
+                attempts=sess.attempts, cost_usd=sess.cost_usd,
+                human_minutes_saved=profile.est_minutes()))
             log.info("trigger %s SUCCESS(%d attempt, $%.4f)",
                      trigger.name, sess.attempts, sess.cost_usd)
             return events

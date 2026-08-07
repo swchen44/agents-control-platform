@@ -17,6 +17,10 @@ from .routing import ConfigError
 
 _HARNESS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# W7(R3):未設 human_minutes_est 時的預設「人做同任務估時」(分鐘)。
+# 使用者 2026-08-07:預設 4 小時,好讓效益一律算得出來。
+DEFAULT_HUMAN_MINUTES_EST = 240.0
+
 
 @dataclass
 class VerifyStep:
@@ -41,6 +45,16 @@ class Profile:
     max_revisions: int = 3            # 退回重填上限
     retention_days: int = 270         # W3.3:終態後保留天數(0=不回收;DESIGN §3)
     human_minutes_est: float | None = None  # W3.5 C3:人做同任務估時(分),KPI 用
+    # W7(R1):人可讀的 agent 目標,交人評分時寫進 description 的 agent:<profile> 段,
+    # 讓人對照判斷完成度。None → 用 route/profile 名 fallback。
+    goal: str | None = None
+    # W7(R7):月預算上限(日曆月、跨票、per-profile;None=不限)。超過只能改此設定。
+    max_budget_monthly_usd: float | None = None
+
+    def est_minutes(self) -> float:
+        """W7(R3):有效估時——未設回預設 240 分(4h),讓效益一律算得出來。"""
+        return (self.human_minutes_est if self.human_minutes_est is not None
+                else DEFAULT_HUMAN_MINUTES_EST)
 
 
 def load_profiles(path: str) -> dict[str, Profile]:
@@ -107,5 +121,9 @@ def load_profiles(path: str) -> dict[str, Profile]:
             retention_days=int(p.get("retention_days", 270)),
             human_minutes_est=(float(p["human_minutes_est"])
                                if p.get("human_minutes_est") is not None
-                               else None))
+                               else None),
+            goal=(str(p["goal"]) if p.get("goal") is not None else None),
+            max_budget_monthly_usd=(
+                float(loop["max_budget_monthly_usd"])
+                if loop.get("max_budget_monthly_usd") is not None else None))
     return profiles

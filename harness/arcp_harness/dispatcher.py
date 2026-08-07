@@ -364,12 +364,12 @@ class Dispatcher:
                     f"[agent] outcome=SUCCESS(attempt {sess.attempts},"
                     f" 累計 ${sess.cost_usd:.4f})\n驗證結果:\n{checks}{self_eval}\n"
                     f"{_resume_hint(sess)}"))
-                # W3.5 C3:公式 v1 = est 平計(attempts>1 不折減——人也會重試)
-                kpi = ({"human_minutes_saved": profile.human_minutes_est}
-                       if profile.human_minutes_est else {})
+                # W3.5 C3:公式 v1 = est 平計(attempts>1 不折減——人也會重試)。
+                # W7(R3):未設估時→預設 240 分,效益一律算得出。
                 events.append(self.store.journal(
                     "resolved", ticket.id, ticket.key,
-                    attempts=sess.attempts, cost_usd=sess.cost_usd, **kpi))
+                    attempts=sess.attempts, cost_usd=sess.cost_usd,
+                    human_minutes_saved=profile.est_minutes()))
                 log.info("%s SUCCESS attempt=%d cost=$%.4f",
                          ticket.key, sess.attempts, sess.cost_usd)
                 self._pack_transcript(sess, profile, ticket, events)  # W4.2

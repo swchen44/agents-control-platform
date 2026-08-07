@@ -57,14 +57,15 @@ def test_dispatcher_success_records_kpi():
     assert resolved and resolved[0]["human_minutes_saved"] == 30
 
 
-def test_dispatcher_no_est_no_kpi_key():
+def test_dispatcher_no_est_uses_default_240():
+    # W7(R3):未設 est → 預設 240 分(效益一律算得出),不再省略 key
     dmod.run_attempt = _fork_ok
     root = tempfile.mkdtemp()
     d = Dispatcher(MockSource(), Store(os.path.join(root, "s")),
                    {"p": _profile(est=None)}, root=root)
     ev = d.handle(_ticket(), "p")
     resolved = [e for e in ev if e["type"] == "resolved"]
-    assert resolved and "human_minutes_saved" not in resolved[0]
+    assert resolved and resolved[0]["human_minutes_saved"] == 240.0
 
 
 def test_trigger_success_records_kpi():
