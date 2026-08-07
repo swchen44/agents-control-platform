@@ -87,6 +87,38 @@ Jira issue ─▶ rule engine(assignee/keyword JSON)─▶ workspace + skills �
                      watchdog(stall)· control(pause/kill/resume)· crash→resume
 ```
 
+## 資料流生命週期 / 狀態機(W7）
+
+搞定系統先搞定**資料流的生命週期**。一張 Jira 票在 harness 內部走 8 個 canonical 狀態:
+
+```
+待處理 ──路由命中·派工──▶ 進行中 ──verify 過──▶ 成功 ┐
+  (todo)                (running) ──max-attempts──▶ 失敗 ┼─▶ 人評分(0–10)→人關 Done →離開
+                          │  ▲                    (failure)┘
+              額滿 │  │ 有額度        └──cancel/外部關 Done──▶ 撤銷(aborted)
+                    ▼  │
+                  排隊(queued)
+                          │  ▲
+   UNKNOWN/預算/交人決定/審批 │  │ @agent run·retry / budget_override
+                    ▼  │
+                等待人類(pending)          進行中 ⇄ 交人(inactive):assignee 換人/換回機器人
+```
+
+（互動版:dashboard「📖 概念」tab 有純 SVG 狀態機圖 + 8 態說明。）
+
+**8 態**:待處理 / 進行中 / 排隊 / 等待人類 / 交人(inactive) / 成功 / 失敗 / 撤銷。
+
+**狀態存在哪(重要)**:
+- **Jira 這邊**:真正的 `status`(To Do/進行中/Done)存 Jira,harness 只讀進來鏡射到
+  DB `ticket_watch.last_state`。
+- **我們系統這邊**:內部判定 `outcome`(SUCCESS/FAILURE/ABORTED/UNKNOWN)+
+  `pending_reason` 只存 DB `ticket_session`,**不寫回 Jira**;上面 8 態即由這些欄位
+  (加 queued/inactive/有無 session)推導的單一 canonical 狀態。
+- **harness 不主動 transition Jira 狀態**(只留言);關票=人做。W7 起成功/失敗後交人
+  評分(人在 description 的 `human` 段填 `score: 0–10`),人填完再自己關票。
+- **生命週期事件**都記在 journal `events.jsonl`(new_issue/attempt_*/resolved/pending/
+  handoff/jira_write/human_score…);ticket 詳情頁的**事件時間軸**由它繪製。
+
 ## 現況與路線圖
 
 研究階段(pre-alpha),介面會變。已完成:統一 event schema、雙 CLI driver、

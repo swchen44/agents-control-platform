@@ -1058,7 +1058,8 @@ def _nav(active: str) -> str:
             + tab("db", "/db", "🗃 DB Browser")
             + tab("control", "/control", "🎛 Control")
             + tab("agent", "/agent", "🧩 Agent Detail")
-            + tab("server", "/server", "🖥 Server") + "</div>")
+            + tab("server", "/server", "🖥 Server")
+            + tab("concepts", "/concepts", "📖 概念") + "</div>")
 
 
 _DB_JS = """
@@ -1837,6 +1838,131 @@ def render_agent_page() -> str:
     return head + cfg_card + routes_card + pcards + "</main>"
 
 
+# ── W7.6:概念/生命週期/狀態機頁(純 SVG,零依賴)────────────────────────── #
+# 8 態節點:key → (cx, cy, 中文, 色)。座標經手調,盡量少交叉。
+_SM_NODES = {
+    "todo": (95, 250, "待處理", "#8b949e"),
+    "running": (300, 250, "進行中", "#58a6ff"),
+    "queued": (300, 370, "排隊", "#a371f7"),
+    "pending": (510, 130, "等待人類", "#d29922"),
+    "inactive": (510, 370, "交人(inactive)", "#6e7681"),
+    "success": (720, 95, "成功", "#3fb950"),
+    "failure": (720, 205, "失敗", "#f85149"),
+    "aborted": (720, 370, "撤銷", "#484f58"),
+    "exit": (880, 150, "人評分→關票→離開", "#238636"),
+}
+# 轉移:(from, to, 標籤)
+_SM_EDGES = [
+    ("todo", "running", "路由命中·派工"),
+    ("running", "queued", "額滿"),
+    ("queued", "running", "有額度"),
+    ("running", "pending", "UNKNOWN/預算/交人決定/審批"),
+    ("pending", "running", "@agent run·retry / budget_override"),
+    ("running", "inactive", "assignee→人"),
+    ("inactive", "running", "assignee→機器人"),
+    ("running", "success", "verify 過"),
+    ("running", "failure", "max-attempts"),
+    ("running", "aborted", "cancel / 外部關 Done"),
+    ("success", "exit", "人評分(0–10)→關 Done"),
+    ("failure", "exit", ""),
+]
+
+
+def _sm_svg() -> str:
+    """8 態狀態機 SVG:中心→中心連線裁切到矩形邊界 + 箭頭 + 雙向邊垂直偏移。"""
+    hw, hh = 62, 22           # 節點半寬/半高
+    W, H = 980, 440
+    out = ["<svg viewBox='0 0 %d %d' width='100%%' "
+           "preserveAspectRatio='xMinYMin meet' "
+           "style='max-height:%dpx;font-size:11px'>" % (W, H, H),
+           "<defs><marker id='ah' viewBox='0 0 10 10' refX='9' refY='5' "
+           "markerWidth='7' markerHeight='7' orient='auto-start-reverse'>"
+           "<path d='M0,0 L10,5 L0,10 z' fill='#7d8590'/></marker></defs>"]
+
+    def trim(cx, cy, tx, ty):
+        """從 (cx,cy) 往 (tx,ty),回落在來源節點矩形邊界的點。"""
+        dx, dy = tx - cx, ty - cy
+        if dx == 0 and dy == 0:
+            return cx, cy
+        sx = hw / abs(dx) if dx else 9e9
+        sy = hh / abs(dy) if dy else 9e9
+        t = min(sx, sy)
+        return cx + dx * t, cy + dy * t
+
+    for a, b, label in _SM_EDGES:
+        ax, ay = _SM_NODES[a][:2]
+        bx, by = _SM_NODES[b][:2]
+        dx, dy = bx - ax, by - ay
+        ln = (dx * dx + dy * dy) ** 0.5 or 1
+        # 垂直於行進方向偏移 7px(讓雙向邊分開、不重疊)
+        ox, oy = -dy / ln * 7, dx / ln * 7
+        x1, y1 = trim(ax + ox, ay + oy, bx + ox, by + oy)
+        x2, y2 = trim(bx + ox, by + oy, ax + ox, ay + oy)
+        out.append(
+            f"<line x1='{x1:.0f}' y1='{y1:.0f}' x2='{x2:.0f}' y2='{y2:.0f}' "
+            f"stroke='#7d8590' stroke-width='1.3' marker-end='url(#ah)'/>")
+        if label:
+            mx, my = (x1 + x2) / 2 + ox, (y1 + y2) / 2 + oy
+            out.append(
+                f"<text x='{mx:.0f}' y='{my:.0f}' fill='#8b949e' "
+                f"text-anchor='middle'>{esc(label)}</text>")
+
+    for _k, (cx, cy, lb, col) in _SM_NODES.items():
+        out.append(
+            f"<rect x='{cx - hw}' y='{cy - hh}' width='{hw * 2}' "
+            f"height='{hh * 2}' rx='8' fill='#161b22' stroke='{col}' "
+            f"stroke-width='1.6'/>"
+            f"<text x='{cx}' y='{cy + 4}' text-anchor='middle' fill='{col}' "
+            f"font-weight='600'>{esc(lb)}</text>")
+    out.append("</svg>")
+    return "".join(out)
+
+
+_STATE_DOC = [
+    ("待處理 todo", "被 watch 到、尚無 session(還沒派工或不歸任何 route)。"),
+    ("進行中 running", "有 active session 正在跑 attempt(占機器額度)。"),
+    ("排隊 queued", "本輪並發額滿,下輪重評(F1 分層閘門)。"),
+    ("等待人類 pending", "需要人:UNKNOWN、預算上限、交人決定、審批門、max-attempts。"),
+    ("交人 inactive", "assignee 在人類手上→不派工、讓出額度(改回機器人即 resume)。"),
+    ("成功 success", "verify(grader)通過=SUCCESS(證據型停止,非 agent 自稱)。"),
+    ("失敗 failure", "max_attempts 用盡仍未過驗證。"),
+    ("撤銷 aborted", "人在看板關成 Done/Cancelled,或 @agent cancel。"),
+]
+
+
+def render_concepts_page() -> str:
+    """W7.6:系統概念/資料流生命週期/狀態機(純 SVG)——使用說明書。"""
+    doc_rows = "".join(
+        f"<tr><td style='white-space:nowrap;color:#c9d1d9'>{esc(k)}</td>"
+        f"<td class='sys' style='text-align:left'>{esc(v)}</td></tr>"
+        for k, v in _STATE_DOC)
+    return (
+        f"{_nav('concepts')}<header><h1>概念 · 資料流生命週期 · 狀態機</h1>"
+        f"</header><main>"
+        "<h2>一句話</h2><div class='card'><p>ARCP 讓 <code>claude -p</code> / "
+        "<code>codex exec</code> 由 <b>Jira 事件驅動</b>、可觀測、可控制。搞定系統"
+        "先搞定<b>資料流的生命週期</b>——下面是一張票從進來到離開的狀態流動。</p></div>"
+        "<h2>Jira ticket 狀態機(harness 內部 8 態)</h2>"
+        f"<div class='card'>{_sm_svg()}</div>"
+        "<h2>8 態說明</h2><div class='card'><table>" + doc_rows + "</table></div>"
+        "<h2>狀態存在哪(重要)</h2><div class='card'>"
+        "<ul style='line-height:1.8'>"
+        "<li><b>Jira 這邊</b>:真正的 <code>status</code>(To Do/進行中/Done)存 "
+        "Jira,harness 只讀進來鏡射到 DB <code>ticket_watch.last_state</code>。</li>"
+        "<li><b>我們系統這邊</b>:內部判定 <code>outcome</code>"
+        "(SUCCESS/FAILURE/ABORTED/UNKNOWN)+ <code>pending_reason</code> 只存 DB "
+        "<code>ticket_session</code>,<b>不寫回 Jira</b>。上面 8 態就是由這些欄位"
+        "(加 queued/inactive/有無 session)推導的單一 canonical 狀態。</li>"
+        "<li><b>harness 不主動 transition Jira 狀態</b>(只留言);關票=人做"
+        "(W7:成功/失敗後交人評分,人填 <code>score</code> 再關)。</li>"
+        "<li><b>生命週期事件</b>都記在 journal <code>events.jsonl</code>"
+        "(new_issue/attempt_*/resolved/pending/handoff/jira_write/human_score…),"
+        "ticket 詳情頁的<b>事件時間軸</b>即由它繪製。</li>"
+        "</ul></div>"
+        "<p class='sys' style='text-align:left'>同內容見 repo 根 "
+        "<code>README.md</code>「資料流生命週期 / 狀態機」段。</p></main>")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -1924,10 +2050,12 @@ class Handler(BaseHTTPRequestHandler):
                 name, int((q.get("limit") or ["100"])[0]),
                 int((q.get("offset") or ["0"])[0])))
             return
-        if self.path in ("/db", "/control", "/server", "/agent"):  # 獨立頁
+        if self.path in ("/db", "/control", "/server", "/agent",
+                         "/concepts"):  # 獨立頁
             body = (render_db_page() if self.path == "/db"
                     else render_control_page() if self.path == "/control"
                     else render_agent_page() if self.path == "/agent"
+                    else render_concepts_page() if self.path == "/concepts"
                     else render_server_page())
             page = (f"<!doctype html><html><head><meta charset='utf-8'>"
                     f"<title>ARCP</title><style>{CSS}</style></head>"

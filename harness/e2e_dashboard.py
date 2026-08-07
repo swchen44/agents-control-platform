@@ -379,6 +379,16 @@ try:
           "JIRA_API_TOKEN" not in apage and "api_token" not in apage)
     check("Server 頁導覽含 Agent Detail tab", "🧩 Agent Detail" in spage)
 
+    # W7.6:概念/狀態機頁(純 SVG,零依賴)
+    cpage = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/concepts", timeout=5).read().decode()
+    check("概念頁:狀態機 SVG + 8 態 + 儲存說明",
+          "📖 概念" in cpage and "<svg " in cpage
+          and "marker id='ah'" in cpage
+          and all(s in cpage for s in ("待處理", "進行中", "等待人類",
+                                       "成功", "失敗", "撤銷"))
+          and "狀態存在哪" in cpage)
+
     # 按鈕背後的端點契約(JS fetch 打的就是這些)
     req = urllib.request.Request(f"{ctl_url}/pause", method="POST")
     body = json.loads(urllib.request.urlopen(req, timeout=5).read())
