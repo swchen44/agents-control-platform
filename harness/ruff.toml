@@ -3,11 +3,28 @@
 line-length = 88
 target-version = "py311"
 
+# W6.8:絕不碰 vendored 第三方碼(zero-diff vendor,見各自 NOTICE)。
+# 沒這行的話,`ruff check --fix` 會把 cclog 上游套件的 import 重排,破壞 zero-diff。
+# 實測:用 `**/…/**` glob 才可靠剪枝(父目錄字串 ruff 不剪);render_transcript.py
+# 是我們自寫的 wrapper(不在 claude_code_log/ 內),仍受檢。
+extend-exclude = [
+    "**/claude_code_log/**",   # cclog 上游套件(MIT,zero-diff vendor)
+    "**/tools/vendor/**",      # swagger-ui / vis-timeline(zero-diff vendor)
+]
+
 [lint]
 select = ["E", "F", "W", "I"]   # pycodestyle(E/W)+ pyflakes(F)+ isort(I)
 ignore = [
     "E402",  # module-import-not-at-top:sys.path.insert 後才 import 是有意的
 ]
+
+[lint.isort]
+# W6.8:明確宣告 harness 自己的本地套件,讓 import 分類不依賴 ruff 執行時的
+# cwd/src 自動偵測。根因:W5.5 把 arcp_rawcli 從 module 改成套件後,自動偵測才把
+# 它歸 first-party、觸發一次重排(那批 dirty 檔的由來)。寫死 → 之後升 ruff/換機器
+# 都排一致。arcp_poc 住 examples/(不在 harness/ 下)不列——ruff 恆判它第三方,
+# 已穩定,列進來反而讓已定案的 e2e import 再洗一次牌。
+known-first-party = ["arcp_harness", "arcp_rawcli"]
 
 [lint.per-file-ignores]
 # 核心套件 arcp_harness/ 維持嚴格;測試/e2e/舊頂層腳本 print-heavy,放寬行長/分號/

@@ -14,3 +14,6 @@ harness/tools/cclog/.venv/
 
 # OpenHands/runtime conversation 狀態(非原始碼)
 harness/workspace/
+
+# ruff 快取(執行 ruff 時產生,非原始碼)
+.ruff_cache/
