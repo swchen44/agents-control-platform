@@ -140,8 +140,9 @@ try:
           all(x in cpage for x in ("Pause", "Resume", "Reload",
                                    "Shutdown", "cstatus")))
     check("Control 頁:指向 control API", json.dumps(ctl_url) in cpage)
-    check("導覽:三 tab(Dashboard/DB/Control)",
-          "🎛 Control" in cpage and "DB Browser" in cpage)
+    check("導覽:命令列 tab(DB/Control)",
+          "href='/control'" in cpage and "DB Browser" in cpage
+          and "class='cmdbar'" in cpage)
 
     # W4.1/W4.7:新欄位 + 過濾器置頂 + 圖表 + 排序
     check("欄位:summary/assignee/created/finished/換手起點",
@@ -316,8 +317,9 @@ try:
     # W6.1:Server 頁 + 系統資料源 + 金鑰不外洩
     spage = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/server", timeout=5).read().decode()
-    check("Server 頁 + 4 tab 導覽",
-          "id='sroot'" in spage and "🖥 Server" in spage)
+    check("Server 頁 + 命令列導覽",
+          "id='sroot'" in spage and "class='cmdbar'" in spage
+          and "href='/server'" in spage)
     sd = json.loads(urllib.request.urlopen(
         f"http://127.0.0.1:{port}/server/data", timeout=5).read())
     check("/server/data:sys 版本/資源/登入狀態齊",
@@ -377,7 +379,7 @@ try:
     apage = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/agent", timeout=5).read().decode()
     check("Agent Detail:頁 + tab + 設定/路由/Profile 區塊",
-          "🧩 Agent Detail" in apage
+          "href='/agent'" in apage and "class='cmdbar'" in apage
           and "harness 設定(routes.yaml)" in apage
           and "路由(route" in apage and "Profile · " in apage)
     check("Agent Detail:W7 新欄位可見",
@@ -385,13 +387,13 @@ try:
           and "est_minutes(有效" in apage and "goal" in apage)
     check("Agent Detail:不外洩憑證",
           "JIRA_API_TOKEN" not in apage and "api_token" not in apage)
-    check("Server 頁導覽含 Agent Detail tab", "🧩 Agent Detail" in spage)
+    check("Server 頁導覽含 Agent Detail tab", "href='/agent'" in spage)
 
     # W7.6:概念/狀態機頁(純 SVG,零依賴)
     cpage = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/concepts", timeout=5).read().decode()
     check("概念頁:狀態機 SVG + 8 態 + 儲存說明",
-          "📖 概念" in cpage and "<svg " in cpage
+          "href='/concepts'" in cpage and "<svg " in cpage
           and "marker id='ah'" in cpage
           and all(s in cpage for s in ("待處理", "進行中", "等待人類",
                                        "成功", "失敗", "撤銷"))
