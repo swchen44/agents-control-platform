@@ -61,8 +61,16 @@ open(os.path.join(root, "tickets", "1", "transcript", "meta.json"),
      "w").write(json.dumps({"generated_at": "2026-08-07T09:00:00",
                             "reason": "close:SUCCESS", "session_id": "s1",
                             "subs": ["agent-x"], "files": ["final.html"]}))
+# W7.7:attempt dir 的 L3 事件(給 /api/v1 events/logs 驗證)
+_ad1 = os.path.join(root, "tickets", "1", "attempts")
+os.makedirs(_ad1, exist_ok=True)
+open(os.path.join(_ad1, "a1.envelope.json"), "w").write('{"completed":true}')
+with open(os.path.join(_ad1, "a1.events.jsonl"), "w") as _f:
+    _f.write(json.dumps({"kind": "MessageEvent", "source": "user"}) + "\n")
+    _f.write(json.dumps({"kind": "MessageEvent", "source": "agent"}) + "\n")
 store.upsert_session(sess(1, session_id="s1", attempts=2, workspace=ws1,
-                          outcome="SUCCESS", cost_usd=1.25, human_score=8))
+                          outcome="SUCCESS", cost_usd=1.25, human_score=8,
+                          clearquest_id="CR-1001"))
 store.upsert_session(sess(2, outcome="FAILURE",
                           pending_reason="max-attempts", cost_usd=0.5))
 store.upsert_session(sess(3, session_id="s3", attempts=1))       # in-flight
@@ -388,6 +396,45 @@ try:
           and all(s in cpage for s in ("待處理", "進行中", "等待人類",
                                        "成功", "失敗", "撤銷"))
           and "狀態存在哪" in cpage)
+
+    # W7.7:REST /api/v1(給 LLM 監控;三合一 ref 解析 + 狀態/事件/log)
+    def _api(path):
+        return json.loads(urllib.request.urlopen(
+            f"http://127.0.0.1:{port}{path}", timeout=5).read())
+    lst = _api("/api/v1/tickets")
+    check("/api/v1/tickets:列表", lst["count"] >= 1
+          and any(t["key"] == "P-1" and t["state"] == "success"
+                  for t in lst["tickets"]))
+    st1 = _api("/api/v1/tickets/P-1")           # 用 Jira key
+    check("/api/v1/tickets/{key}:單票狀態",
+          st1["iid"] == 1 and st1["state"] == "success"
+          and st1["score"] == 8 and st1["completion_pct"] == 80
+          and st1["clearquest_id"] == "CR-1001" and st1["timeline"])
+    check("/api/v1:三合一 ref(CR id / 內部 id 都解析同票)",
+          _api("/api/v1/tickets/CR-1001")["iid"] == 1
+          and _api("/api/v1/tickets/1")["iid"] == 1)
+    ev1 = _api("/api/v1/tickets/1/events")
+    check("/api/v1/{ref}/events:L3 事件",
+          ev1["attempts"] and ev1["attempts"][0]["count"] == 2)
+    lg1 = _api("/api/v1/tickets/1/logs")
+    names = [x["name"] for x in lg1["logs"]]
+    check("/api/v1/{ref}/logs:清單含 attempt/transcript",
+          "attempt/a1.events.jsonl" in names
+          and "transcript/final.html" in names)
+    raw = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/api/v1/tickets/1/logs/"
+        f"attempt/a1.events.jsonl?tail=1", timeout=5).read().decode()
+    check("/api/v1/{ref}/logs/{name}:raw + tail", raw.strip().startswith("{")
+          and raw.count("\n") <= 1 and "agent" in raw)
+    try:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/v1/tickets/NOPE-9", timeout=5)
+        check("/api/v1:未知票 404", False)
+    except urllib.error.HTTPError as e:
+        check("/api/v1:未知票 404", e.code == 404)
+    check("/openapi.json:含 /api/v1 端點",
+          "/api/v1/tickets/{ref}" in oa["paths"]
+          and "/api/v1/tickets/{ref}/logs/{name}" in oa["paths"])
 
     # 按鈕背後的端點契約(JS fetch 打的就是這些)
     req = urllib.request.Request(f"{ctl_url}/pause", method="POST")

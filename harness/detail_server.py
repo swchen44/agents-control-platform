@@ -1640,6 +1640,9 @@ def openapi_spec() -> dict:
             {"name": "observability(唯讀)", "description": "儀表板/Server 頁資料源"},
             {"name": "db(唯讀)", "description": "SQLite 瀏覽器(僅 SELECT)"},
             {"name": "artifacts", "description": "transcript 產物與規格"},
+            {"name": "llm-api(唯讀)",
+             "description": "給 LLM 監控:ticket-keyed 狀態 + L3 事件 + 原始 log"
+                            "(三合一 ref:Jira key/id/CR id)"},
             {"name": "control-plane ⚠️(寫入)",
              "description": "poller 控制面(pause/resume/reload/shutdown/evict/"
                             "gen_transcript);打到 control API host。"},
@@ -1692,6 +1695,47 @@ def openapi_spec() -> dict:
                 "tags": ["artifacts"], "summary": "本 OpenAPI 規格(JSON)",
                 "responses": {"200": {"description": "spec",
                                       "content": {"application/json": {}}}}}},
+            "/api/v1/tickets": {"get": {
+                "tags": ["llm-api(唯讀)"],
+                "summary": "票列表(精簡:key/profile/8態/outcome/cost/score)",
+                "responses": {"200": {"description": "tickets[]",
+                                      "content": {"application/json": {}}}}}},
+            "/api/v1/tickets/{ref}": {"get": {
+                "tags": ["llm-api(唯讀)"],
+                "summary": "單票完整狀態 JSON(含時間軸摘要 + 可取 log 清單)",
+                "description": "ref = Jira key(SCRUM-42)/ 內部 id / ClearQuest CR id。",
+                "parameters": [{"name": "ref", "in": "path", "required": True,
+                                "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "狀態",
+                                      "content": {"application/json": {}}},
+                              "404": {"description": "查無此票"}}}},
+            "/api/v1/tickets/{ref}/events": {"get": {
+                "tags": ["llm-api(唯讀)"],
+                "summary": "L3 conversation 事件(各 attempt aN.events.jsonl → JSON)",
+                "parameters": [{"name": "ref", "in": "path", "required": True,
+                                "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "attempts[]",
+                                      "content": {"application/json": {}}}}}},
+            "/api/v1/tickets/{ref}/logs": {"get": {
+                "tags": ["llm-api(唯讀)"],
+                "summary": "可取原始 log 清單(attempt/ transcript/ source/)",
+                "parameters": [{"name": "ref", "in": "path", "required": True,
+                                "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "logs[]",
+                                      "content": {"application/json": {}}}}}},
+            "/api/v1/tickets/{ref}/logs/{name}": {"get": {
+                "tags": ["llm-api(唯讀)"],
+                "summary": "原始 log 內容(text/plain;?tail=N 只取末 N 行)",
+                "parameters": [
+                    {"name": "ref", "in": "path", "required": True,
+                     "schema": {"type": "string"}},
+                    {"name": "name", "in": "path", "required": True,
+                     "schema": {"type": "string"},
+                     "description": "logs 清單裡的 name(如 attempt/a1.events.jsonl)"},
+                    {"name": "tail", "in": "query",
+                     "schema": {"type": "integer"}}],
+                "responses": {"200": {"description": "raw 檔內容"},
+                              "404": {"description": "查無此 log"}}}},
             "/health": {"get": {
                 "tags": ["control-plane ⚠️(寫入)"], "servers": ctl,
                 "summary": "control API 健康檢查", "responses": {"200": {
@@ -1963,18 +2007,218 @@ def render_concepts_page() -> str:
         "<code>README.md</code>「資料流生命週期 / 狀態機」段。</p></main>")
 
 
+# ── W7.7:REST /api/v1(唯讀,給 LLM 監控)────────────────────────────────── #
+def _resolve_ref(ref: str, sessions: dict, watch: dict) -> int | None:
+    """三合一解析器:Jira key(SCRUM-42)/ 內部 id / ClearQuest CR id → issue_id。"""
+    if ref.isdigit() and (int(ref) in sessions or int(ref) in watch):
+        return int(ref)
+    for iid, s in sessions.items():
+        if s.get("key") == ref or (s.get("clearquest_id") or "") == ref:
+            return iid
+    for iid, w in watch.items():
+        if w.get("key") == ref:
+            return iid
+    return None
+
+
+def _profile_engine(profile_name: str | None) -> str:
+    """profile → engine(claude/codex);查不到→claude。給原始 source 檔解析。"""
+    if not profile_name:
+        return "claude"
+    try:
+        from arcp_harness.profiles import load_profiles
+        p = load_profiles(_CONFIG_PATH).get(profile_name)
+        return (p.agent.get("engine", "claude") if p else "claude")
+    except Exception:  # noqa: BLE001
+        return "claude"
+
+
+def _api_logs_index(iid: int, s: dict) -> list[dict]:
+    """此票可取的原始 log 清單:attempt(L2/L3)+ transcript 產物 + 原始 session jsonl。
+    name 帶前綴命名空間(attempt/ transcript/ source/),供 /logs/{name} 取回。"""
+    out: list[dict] = []
+
+    def _add(prefix, path):
+        try:
+            out.append({"name": f"{prefix}/{os.path.basename(path)}",
+                        "bytes": os.path.getsize(path)})
+        except OSError:
+            pass
+    ad = attempt_dir(iid)
+    if os.path.isdir(ad):
+        for n in sorted(os.listdir(ad)):
+            if os.path.isfile(os.path.join(ad, n)):
+                _add("attempt", os.path.join(ad, n))
+    ws = s.get("workspace") or ""
+    if ws and not ws.startswith("("):
+        td = transcript_dir_of(ws)
+        if os.path.isdir(td):
+            for n in sorted(os.listdir(td)):
+                if os.path.isfile(os.path.join(td, n)) and n != "meta.json":
+                    _add("transcript", os.path.join(td, n))
+    try:
+        from arcp_harness.transcript import source_files
+        for p in source_files(s.get("session_id"),
+                              _profile_engine(s.get("profile"))):
+            _add("source", p)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _log_path(iid: int, s: dict, name: str) -> str | None:
+    """name(attempt/…|transcript/…|source/…)→ 實際檔路徑(防 traversal)。"""
+    if "/" not in name:
+        return None
+    kind, base = name.split("/", 1)
+    base = os.path.basename(base)          # 防 traversal
+    if kind == "attempt":
+        p = os.path.join(attempt_dir(iid), base)
+    elif kind == "transcript":
+        ws = s.get("workspace") or ""
+        if not ws or ws.startswith("("):
+            return None
+        p = os.path.join(transcript_dir_of(ws), base)
+    elif kind == "source":
+        try:
+            from arcp_harness.transcript import source_files
+            srcs = source_files(s.get("session_id"),
+                                _profile_engine(s.get("profile")))
+        except Exception:  # noqa: BLE001
+            srcs = []
+        p = next((x for x in srcs if os.path.basename(x) == base), None)
+    else:
+        return None
+    return p if p and os.path.isfile(p) else None
+
+
+def api_ticket_status(iid: int, journal: list, sessions: dict,
+                      watch: dict) -> dict:
+    """單票完整狀態 JSON(結構化;含時間軸摘要 + 可取 log 清單)。"""
+    s = sessions.get(iid, {})
+    w = watch.get(iid, {})
+    score = s.get("human_score")
+    tl = [{"ts": e.get("ts"), "type": e.get("type"),
+           **{k: v for k, v in e.items()
+              if k not in ("ts", "type", "issue_id", "key")}}
+          for e in journal if e.get("issue_id") == iid]
+    return {
+        "iid": iid, "key": s.get("key") or w.get("key") or f"#{iid}",
+        "clearquest_id": s.get("clearquest_id"),
+        "profile": s.get("profile"), "state": canonical_state(s or None),
+        "outcome": s.get("outcome"), "pending_reason": s.get("pending_reason"),
+        "attempts": s.get("attempts") or 0,
+        "cost_usd": s.get("cost_usd") or 0,
+        "score": score,
+        "completion_pct": (score * 10 if score is not None else None),
+        "session_id": s.get("session_id"),
+        "inactive": bool(s.get("inactive")), "queued": bool(s.get("queued")),
+        "evict_count": s.get("evict_count") or 0,
+        "assignee": w.get("last_assignee") or "",
+        "summary": w.get("summary") or "",
+        "workspace": s.get("workspace") or "",
+        "finished_at": s.get("finished_at") or 0,
+        "timeline": tl,
+        "logs": _api_logs_index(iid, s),
+    }
+
+
+def api_list_tickets(journal: list, sessions: dict, watch: dict) -> dict:
+    """精簡票列表(給 LLM 先掃全景)。"""
+    ids = sorted(set(sessions) | set(watch))
+    items = []
+    for iid in ids:
+        s = sessions.get(iid, {})
+        w = watch.get(iid, {})
+        items.append({
+            "iid": iid, "key": s.get("key") or w.get("key") or f"#{iid}",
+            "clearquest_id": s.get("clearquest_id"),
+            "profile": s.get("profile"), "state": canonical_state(s or None),
+            "outcome": s.get("outcome"), "cost_usd": s.get("cost_usd") or 0,
+            "score": s.get("human_score")})
+    return {"count": len(items), "tickets": items}
+
+
+def api_events(iid: int) -> dict:
+    """此票各 attempt 的 L3 conversation 事件(aN.events.jsonl → JSON)。"""
+    ad = attempt_dir(iid)
+    attempts = []
+    if os.path.isdir(ad):
+        for fn in sorted(f for f in os.listdir(ad) if f.endswith(".events.jsonl")):
+            evs = []
+            try:
+                with open(os.path.join(ad, fn)) as f:
+                    for line in f:
+                        if line.strip():
+                            evs.append(json.loads(line))
+            except (OSError, ValueError):
+                pass
+            attempts.append({"attempt": fn.split(".")[0], "count": len(evs),
+                             "events": evs})
+    return {"iid": iid, "attempts": attempts}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _send_json(self, obj) -> None:
+    def _send_json(self, obj, code: int = 200) -> None:
         payload = json.dumps(obj, ensure_ascii=False,
                              default=str).encode("utf-8")
-        self.send_response(200)
+        self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Access-Control-Allow-Origin", "*")   # W7.7 給 LLM 用
         self.end_headers()
         self.wfile.write(payload)
+
+    def _serve_raw(self, path: str, tail: int = 0) -> None:
+        """W7.7:原始 log 檔以 text/plain 回;tail>0 只回最後 N 行。"""
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+        except OSError:
+            return self._send_json({"error": "not readable"}, 404)
+        if tail > 0:
+            data = b"".join(data.splitlines(keepends=True)[-tail:])
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _api_v1(self, journal, sessions) -> None:
+        """W7.7 /api/v1/tickets[/{ref}[/events|/logs[/{name}]]](唯讀)。"""
+        from urllib.parse import parse_qs, urlparse
+        u = urlparse(self.path)
+        parts = [p for p in u.path.split("/") if p]   # api v1 tickets [ref] [sub]
+        watch = read_watch()
+        if len(parts) == 3:                            # /api/v1/tickets
+            return self._send_json(api_list_tickets(journal, sessions, watch))
+        ref = parts[3]
+        iid = _resolve_ref(ref, sessions, watch)
+        if iid is None:
+            return self._send_json({"error": "ticket not found", "ref": ref},
+                                   404)
+        if len(parts) == 4:                            # /api/v1/tickets/{ref}
+            return self._send_json(
+                api_ticket_status(iid, journal, sessions, watch))
+        if len(parts) == 5 and parts[4] == "events":
+            return self._send_json(api_events(iid))
+        if len(parts) == 5 and parts[4] == "logs":
+            return self._send_json(
+                {"iid": iid, "logs": _api_logs_index(iid, sessions.get(iid, {}))})
+        if len(parts) >= 6 and parts[4] == "logs":     # /logs/{name…}
+            name = "/".join(parts[5:])
+            p = _log_path(iid, sessions.get(iid, {}), name)
+            if not p:
+                return self._send_json({"error": "log not found",
+                                        "name": name}, 404)
+            tail = parse_qs(u.query).get("tail")
+            return self._serve_raw(p, int(tail[0]) if (tail and tail[0].isdigit())
+                                   else 0)
+        return self._send_json({"error": "bad api path"}, 404)
 
     def do_POST(self):
         if self.path == "/db/query":               # W5.6 唯讀查詢
@@ -2005,6 +2249,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/server/data":            # W6.1 Server 頁資料源
             self._send_json(build_server_data())
+            return
+        if self.path.startswith("/api/v1/tickets"):  # W7.7 LLM 監控 API
+            self._api_v1(journal, sessions)
             return
         if self.path == "/openapi.json":           # W6.5 REST API 規格
             self._send_json(openapi_spec())

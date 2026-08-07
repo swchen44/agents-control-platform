@@ -186,6 +186,27 @@ def finalize(session_id: str | None, engine: str, workspace: str,
     return outs
 
 
+def source_files(session_id: str | None, engine: str) -> list[str]:
+    """W7.7:session id → 原始對話 jsonl 路徑(claude:主 + sub-session;codex:rollout)。
+    給 REST /api/v1 讓 LLM 深挖用;renderer(cclog finders)缺席 → []。"""
+    if not session_id or not _load_renderer():
+        return []
+    out: list[str] = []
+    try:
+        if engine == "claude":
+            j = _find_claude(session_id)
+            if j:
+                out.append(j)
+                out += _find_subs(j)
+        else:
+            j = _find_codex(session_id)
+            if j:
+                out.append(j)
+    except Exception as e:  # noqa: BLE001
+        log.warning("source_files 解析失敗(%s):%s", session_id, e)
+    return [p for p in out if p and os.path.isfile(p)]
+
+
 def list_artifacts(workspace: str) -> list[str]:
     """dashboard 用:instance 的 transcript 產物(檔名清單,依名排序)。
     meta.json 是 sidecar 中繼資料(W6.4 產生時間/原因),不列為產物。"""
