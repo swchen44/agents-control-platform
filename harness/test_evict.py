@@ -121,7 +121,8 @@ def test_dispatcher_evicted_refunds_and_resumes():
     assert s.outcome is None and s.pending_reason is None   # 留 active
     assert s.session_id == "sid-1"             # 下輪 resume 憑它
     assert calls == ["sid-1"]                  # 本輪就是 resume 跑的
-    assert any("evict" in c for _, c in src.comments)
+    assert any("驅逐" in c for _, c in src.comments)   # W6.3 正名中文
+    assert store.get_session(1).evict_count == 1        # W6.3 計數
 
 
 def test_evict_file_passed_and_cleaned():

@@ -209,12 +209,13 @@ try:
     t1 = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/ticket/1", timeout=5).read().decode()
     check("非審批票:無審批卡", "審批門" not in t1)
-    # W5.3:Evict 按鈕只在 active session 顯示
+    # W5.3/W6.3:強制驅逐按鈕只在 active session 顯示 + 正名 + hover 說明
     t3 = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/ticket/3", timeout=5).read().decode()
-    check("Evict 按鈕:active 票有", "Evict(killpg)" in t3
-          and "/evict/3" in t3)
-    check("Evict 按鈕:終態票無", "Evict(killpg)" not in t1)
+    check("強制驅逐按鈕:active 票有 + 正名 + 說明",
+          "強制驅逐(killpg)" in t3 and "/evict/3" in t3
+          and "title='強制驅逐" in t3)
+    check("強制驅逐按鈕:終態票無", "強制驅逐(killpg)" not in t1)
     # W4.1:detail 頁修 auto-collapse(無 meta refresh、fetch 局部更新保展開)
     check("detail 無整頁 meta refresh", "http-equiv" not in t1)
     check("detail 有展開保留更新 JS",

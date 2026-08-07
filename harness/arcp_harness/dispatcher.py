@@ -251,13 +251,15 @@ class Dispatcher:
             # (若 evict 是配合交人,下輪 external policy 會標 inactive 擋住)
             if res.error_kind == "evicted":
                 sess.attempts -= 1
+                sess.evict_count += 1           # W6.3:異常計數
                 self.store.upsert_session(sess)
                 self.source.add_comment(ticket.id, (
-                    f"[agent] attempt 被 evict(即時 killpg 釋放資源);"
-                    f"session 保留,下輪 resume 續跑。\n{_resume_hint(sess)}"))
+                    f"[agent] attempt 被強制驅逐(即時 killpg 釋放資源;"
+                    f"第 {sess.evict_count} 次);session 保留,下輪 resume "
+                    f"續跑不重花錢。\n{_resume_hint(sess)}"))
                 events.append(self.store.journal(
                     "evicted", ticket.id, ticket.key,
-                    session=sess.session_id))
+                    session=sess.session_id, count=sess.evict_count))
                 log.info("%s attempt evicted(resume=%s)",
                          ticket.key, sess.session_id)
                 return events

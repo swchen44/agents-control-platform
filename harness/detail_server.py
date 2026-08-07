@@ -532,6 +532,11 @@ def build_server_data() -> dict:
                 break
     data["processes"] = procs
     data["workspaces"] = workspaces
+    # W6.3:強制驅逐統計(異常處理健康指標)
+    evicts = [(s.get("key"), s.get("evict_count") or 0)
+              for s in sessions.values() if s.get("evict_count")]
+    data["evict"] = {"total": sum(c for _, c in evicts),
+                     "by_ticket": sorted(evicts, key=lambda x: -x[1])}
     return data
 
 
@@ -553,7 +558,13 @@ _SERVER_JS = ("<script>"
     "const badge=b=>b?\"<span style='color:#7ee2a8'>✓</span>\":"
     "\"<span style='color:#f2a8a8'>✗</span>\";"
     "let h='';"
-    # 異常
+    # 強制驅逐統計(W6.3)
+    "const ev=d.evict||{total:0,by_ticket:[]};"
+    "if(ev.total)h+=\"<div class='card' style='border-color:#4d3d1a'>\"+"
+    "`<b style='color:#e2d07e'>⚠ 強制驅逐(異常處理)</b> 總計 ${ev.total} 次`+"
+    "ev.by_ticket.map(t=>`<div>• ${esc(t[0])}: ${t[1]} 次</div>`).join('')"
+    "+'</div>';"
+    # 系統異常
     "if((sy.anomalies||[]).length)h+=\"<div class='card' style='border-color:"
     "#4d1a1a'><b style='color:#f2a8a8'>⚠ 異常</b>\"+sy.anomalies.map("
     "x=>`<div>• ${esc(x)}</div>`).join('')+'</div>';"
@@ -1261,11 +1272,21 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<span class='kv'><b>attempts</b> {esc(s.get('attempts',0))}</span>"
             f"<span class='kv'><b>cost</b> ${s.get('cost_usd',0):.4f}</span>"
             f"<span class='kv'><b>workspace</b> {esc(s.get('workspace','-'))}</span>"
-            + (("<span class='btn' style='margin-left:auto' "
-                f"onclick=\"fetch('{CONTROL}/evict/{iid}',"
-                "{method:'POST'}).then(r=>r.json()).then(j=>this.textContent="
-                "JSON.stringify(j)).catch(()=>this.textContent='control 離線')\""
-                ">⏻ Evict(killpg)</span>")
+            + (f"<span class='kv'><b>驅逐次數</b> {s.get('evict_count', 0)}</span>"
+               if s.get("evict_count") else "")
+            + (("<span class='btn' style='margin-left:auto;color:#f2a8a8' "
+                "title='強制驅逐:agent 卡住不動或要立即讓出 CPU/記憶體時按。"
+                "會 killpg 殺掉此票的 agent 進程組;session 保留,下一輪 poll "
+                "自動 native resume 續跑、不重花錢。屬異常處理,發生次數會記錄。' "
+                f"onclick=\"if(this.dataset.a!=='1'){{this.dataset.a='1';"
+                "this.textContent='⚠ 再按一次確認驅逐';"
+                "setTimeout(()=>{this.dataset.a='0';"
+                "this.textContent='⏻ 強制驅逐(killpg)';},3000);return;}}"
+                f"fetch('{CONTROL}/evict/{iid}',{{method:'POST'}})"
+                ".then(r=>r.json()).then(j=>this.textContent="
+                "'已驅逐:'+JSON.stringify(j)).catch(()=>this.textContent="
+                "'control 離線')\""
+                ">⏻ 強制驅逐(killpg)</span>")
                if s and not s.get("outcome")
                and not str(s.get("workspace", "")).startswith("(") else "")
             + f"</div></div>"
