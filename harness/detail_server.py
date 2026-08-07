@@ -402,6 +402,17 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vis-grid.vis-minor{border-color:var(--line)!important}
 .vis-current-time{background:var(--s-failure)}
 .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+/* W8.2 狀態機 SVG(用 CSS 上色,隨明暗主題;--nc=節點色) */
+#smsvg .sm-box{fill:var(--panel);stroke:var(--nc,var(--line-2));stroke-width:1.6}
+#smsvg .sm-lbl{fill:var(--nc,var(--ink));font-weight:600}
+#smsvg .sm-edge{stroke:var(--muted)}
+#smsvg .sm-elabel{fill:var(--muted)}
+#smsvg .sm-arrow{fill:var(--muted)}
+#smsvg .st-todo{--nc:var(--s-todo)}#smsvg .st-running{--nc:var(--s-running)}
+#smsvg .st-queued{--nc:var(--s-queued)}#smsvg .st-pending{--nc:var(--s-pending)}
+#smsvg .st-inactive{--nc:var(--s-inactive)}#smsvg .st-success{--nc:var(--s-success)}
+#smsvg .st-failure{--nc:var(--s-failure)}#smsvg .st-aborted{--nc:var(--s-aborted)}
+#smsvg .st-exit{--nc:var(--accent)}
 """
 
 
@@ -428,7 +439,7 @@ def render_conversation(items: list[dict]) -> str:
             if txt.startswith("🔧"):
                 out += f"<div class='tool'><span class='ti'>{esc(txt)}</span></div>"
             elif txt.startswith("📋"):
-                out += (f"<div class='tool' style='border-color:#3fb950'>"
+                out += (f"<div class='tool' style='border-color:var(--s-success)'>"
                         f"<span class='io'>{esc(txt)}</span></div>")
             elif txt.startswith("💭"):
                 out += f"<div class='think'>{esc(txt)}</div>"
@@ -454,7 +465,7 @@ def render_conversation(items: list[dict]) -> str:
             err = " ⚠️" if e.get("is_error") else ""
             out += (f"<div class='tool'><span class='st'>{esc(status)}{err}"
                     f"</span><span class='ti'>🔧 {esc(title)}</span>"
-                    f"<span style='color:#6e7681'> · {esc(e.get('tool_kind',''))}"
+                    f"<span style='color:var(--faint)'> · {esc(e.get('tool_kind',''))}"
                     f"</span>{io}</div>")
     return out or "<div class='sys'>(no conversation events)</div>"
 
@@ -576,7 +587,7 @@ _CONTROL_JS = ("<script>"
     "['$'+(j.cost_usd||0).toFixed(4),'總 cost'],[j.sessions,'sessions']];"
     "$c('cstatus').innerHTML=t.map(x=>`<div class='stat'><div class='n'>`+"
     "`${x[0]}</div><div class='l'>${x[1]}</div></div>`).join('');"
-    "}catch(e){$c('cstatus').innerHTML=\"<span style='color:#f85149'>"
+    "}catch(e){$c('cstatus').innerHTML=\"<span style='color:var(--s-failure)'>"
     "control API 離線(\"+CTL+\")——poller 未啟動?</span>\";}}"
     "poll();setInterval(poll,3000);"
     "</script>")
@@ -592,11 +603,11 @@ def render_control_page() -> str:
             "<div class='btn' onclick=\"cc('pause')\">⏸ Pause</div>"
             "<div class='btn' onclick=\"cc('resume')\">▶ Resume</div>"
             "<div class='btn' onclick=\"cc('reload')\">🔄 Reload</div>"
-            "<div class='btn' id='sd' style='color:#f2a8a8' "
+            "<div class='btn' id='sd' style='color:var(--s-failure)' "
             "onclick=\"cc('shutdown')\">⏻ Graceful Shutdown</div>"
-            "<span id='cmsg' style='color:#8b949e;font-size:12px'></span>"
+            "<span id='cmsg' style='color:var(--muted);font-size:12px'></span>"
             "</div>"
-            "<p style='color:#8b949e;font-size:12px'>"
+            "<p style='color:var(--muted);font-size:12px'>"
             "Pause=只 watch 不派新工(正在跑的不中斷);Reload=熱載 routes.yaml"
             "(壞 config 不生效、舊設定續用);Graceful Shutdown=當前輪(含壓縮"
             "打包)跑完後 poller 退出。詳見 DESIGN_hotreload.md。即時 kill 單張"
@@ -696,22 +707,22 @@ _SERVER_JS = ("<script>"
     "function kv(k,v){return `<div class='kv'><b>${k}</b> ${esc(v)}</div>`;}"
     "async function load(){"
     "let d;try{d=await (await fetch('/server/data')).json();}"
-    "catch(e){$s('sroot').innerHTML=\"<p style='color:#f85149'>載入失敗</p>\";"
+    "catch(e){$s('sroot').innerHTML=\"<p style='color:var(--s-failure)'>載入失敗</p>\";"
     "return;}"
     "const sy=d.sys||{};const v=sy.versions||{},a=sy.auth||{},"
     "r=sy.resources||{},m=r.mem||{},dk=r.disk||{};"
-    "const badge=b=>b?\"<span style='color:#7ee2a8'>✓</span>\":"
-    "\"<span style='color:#f2a8a8'>✗</span>\";"
+    "const badge=b=>b?\"<span style='color:var(--s-success)'>✓</span>\":"
+    "\"<span style='color:var(--s-failure)'>✗</span>\";"
     "let h='';"
     # 強制驅逐統計(W6.3)
     "const ev=d.evict||{total:0,by_ticket:[]};"
-    "if(ev.total)h+=\"<div class='card' style='border-color:#4d3d1a'>\"+"
-    "`<b style='color:#e2d07e'>⚠ 強制驅逐(異常處理)</b> 總計 ${ev.total} 次`+"
+    "if(ev.total)h+=\"<div class='card' style='border-color:var(--s-pending)'>\"+"
+    "`<b style='color:var(--s-pending)'>⚠ 強制驅逐(異常處理)</b> 總計 ${ev.total} 次`+"
     "ev.by_ticket.map(t=>`<div>• ${esc(t[0])}: ${t[1]} 次</div>`).join('')"
     "+'</div>';"
     # 系統異常
     "if((sy.anomalies||[]).length)h+=\"<div class='card' style='border-color:"
-    "#4d1a1a'><b style='color:#f2a8a8'>⚠ 異常</b>\"+sy.anomalies.map("
+    "var(--s-failure)'><b style='color:var(--s-failure)'>⚠ 異常</b>\"+sy.anomalies.map("
     "x=>`<div>• ${esc(x)}</div>`).join('')+'</div>';"
     # 資源 tiles
     "h+=\"<h2>資源</h2><div class='stats'>\"+"
@@ -740,7 +751,7 @@ _SERVER_JS = ("<script>"
     "`${esc(p.engine)}</td><td>${esc(p.ticket||'-')}</td><td>${esc(p.pid)}`+"
     "`</td><td>${p.cpu}</td><td>${p.rss_mb}MB</td><td>${esc(p.cwd||'-')}`+"
     "`</td></tr>`).join('')+'</tbody></table>':"
-    "\"<span style='color:#8b949e'>(目前無 claude/codex 進程在跑)</span>\")"
+    "\"<span style='color:var(--muted)'>(目前無 claude/codex 進程在跑)</span>\")"
     "+'</div>';"
     # per-workspace(W6.2)
     "const ws=d.workspaces||[];"
@@ -753,7 +764,7 @@ _SERVER_JS = ("<script>"
     "`<td>${esc((w.session_id||'').slice(0,8)||'-')}</td>`+"
     "`<td>${(w.subs||[]).length}</td><td>${w.disk_mb}MB</td>`+"
     "`<td>${esc(w.workspace)}</td></tr>`).join('')+'</tbody></table>':"
-    "\"<span style='color:#8b949e'>(目前無進行中 workspace)</span>\")+'</div>';"
+    "\"<span style='color:var(--muted)'>(目前無進行中 workspace)</span>\")+'</div>';"
     # 連線(W6.6)
     "const cs=d.conns||[];"
     "h+=\"<h2>連線(近期)</h2><div class='card'>\"+(cs.length?"
@@ -761,7 +772,7 @@ _SERVER_JS = ("<script>"
     "\"<td><b>path</b></td></tr></thead><tbody>\"+cs.map(c=>`<tr><td>`+"
     "`${esc(c.t)}</td><td>${esc(c.ip)}</td><td>${esc(c.path)}</td></tr>`)"
     ".join('')+'</tbody></table>':"
-    "\"<span style='color:#8b949e'>(尚無記錄)</span>\")+'</div>';"
+    "\"<span style='color:var(--muted)'>(尚無記錄)</span>\")+'</div>';"
     "$s('sroot').innerHTML=h;}"
     "load();setInterval(load,4000);"
     "</script>")
@@ -771,9 +782,9 @@ def render_server_page() -> str:
     """W6.1 Server 頁:系統/版本/登入狀態/資源(+ W6.2 程序、W6.6 連線)。"""
     return (f"{_nav('server')}"
             "<header><h1>Server · 系統與程序</h1></header><main>"
-            "<p style='color:#8b949e;font-size:12px'>dashboard 綁 "
+            "<p style='color:var(--muted);font-size:12px'>dashboard 綁 "
             f"{esc(HOST)}(內網開放,唯讀);登入/金鑰只顯示狀態,不顯示值。"
-            " <a href='/docs' style='color:#58a6ff'>REST API 文件</a></p>"
+            " <a href='/docs' style='color:var(--accent-ink)'>REST API 文件</a></p>"
             "<div id='sroot'>載入中…</div></main>"
             f"{_SERVER_JS}")
 
@@ -1014,7 +1025,7 @@ function renderTable(rows){
     `<td title='${esc(r.summary)}'>${esc(r.summary.slice(0,28))}</td>`+
     `<td>${esc(r.profile)}</td>`+
     `<td><span class='badge ${badgeCls(r.status)}'>${esc(r.status)}</span></td>`+
-    `<td>${r.score!=null?r.score+'/10':'<span style="color:#6e7681">未評</span>'}</td>`+
+    `<td>${r.score!=null?r.score+'/10':'<span style="color:var(--faint)">未評</span>'}</td>`+
     `<td>${esc(r.assignee||'-')}</td><td>${fmt(r.created)}</td>`+
     `<td>${fmt(r.finished)}</td><td>${fmt(r.handoff)}</td>`+
     `<td>${r.created?fdays(r.dwell):'-'}</td>`+
@@ -1217,14 +1228,14 @@ async function dbExport(fmt){
   }
 }
 function tbl(cols,rows,total){
-  if(!rows.length)return "<p style='color:#8b949e'>(無資料)</p>";
+  if(!rows.length)return "<p style='color:var(--muted)'>(無資料)</p>";
   const h='<tr>'+cols.map(c=>`<td><b>${esc(c)}</b></td>`).join('')+'</tr>';
   const b=rows.map(r=>'<tr>'+r.map(v=>`<td>${v==null?
-    "<span style='color:#6e7681'>null</span>":esc((''+v).slice(0,200))}`+
+    "<span style='color:var(--faint)'>null</span>":esc((''+v).slice(0,200))}`+
     '</td>').join('')+'</tr>').join('');
   return `<div style='overflow:auto;max-height:60vh'><table id='tix'>`+
     `<thead>${h}</thead><tbody>${b}</tbody></table></div>`+
-    (total!=null?`<div style='color:#8b949e;font-size:12px;margin-top:6px'>`+
+    (total!=null?`<div style='color:var(--muted);font-size:12px;margin-top:6px'>`+
     `${total} 筆;顯示 ${OFF+1}-${OFF+rows.length}</div>`:'');
 }
 async function loadTables(){
@@ -1232,13 +1243,13 @@ async function loadTables(){
   $('tlist').innerHTML=t.map(x=>
     `<div class='btn' style='display:block;margin:4px 0;text-align:left' `+
     `onclick="openT('${x.name}')">${esc(x.name)} `+
-    `<span style='color:#8b949e;float:right'>${x.rows}</span></div>`).join('');
+    `<span style='color:var(--muted);float:right'>${x.rows}</span></div>`).join('');
 }
 async function openT(name){CUR=name;OFF=0;$('qbox').value='';showTable();}
 async function showTable(){
   const d=await (await fetch(`/db/table/${CUR}?limit=${LIM}&offset=${OFF}`))
     .json();
-  if(d.error){$('dbout').innerHTML="<p style='color:#f85149'>"+esc(d.error)+
+  if(d.error){$('dbout').innerHTML="<p style='color:var(--s-failure)'>"+esc(d.error)+
     "</p>";return;}
   DBMODE='table';
   $('dbtitle').textContent='📋 '+CUR;
@@ -1254,11 +1265,11 @@ async function runQ(){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({sql})})).json();
   if(d.error){$('dbtitle').textContent='⚠ 查詢錯誤';
-    $('dbout').innerHTML="<p style='color:#f85149'>"+esc(d.error)+"</p>";return;}
+    $('dbout').innerHTML="<p style='color:var(--s-failure)'>"+esc(d.error)+"</p>";return;}
   DBMODE='query';LASTQ={cols:d.columns,rows:d.rows};
   $('dbtitle').textContent='🔎 查詢結果';
   $('dbout').innerHTML=tbl(d.columns,d.rows,null)+
-    (d.rows.length>=500?"<p style='color:#d29922;font-size:12px'>"+
+    (d.rows.length>=500?"<p style='color:var(--s-pending);font-size:12px'>"+
     "(上限 500 列)</p>":'');
   resizable(document.querySelector('#dbout table'),'db:query');  // W5.7
 }
@@ -1272,19 +1283,19 @@ def render_db_page() -> str:
     """W5.6 SQLite 瀏覽器 tab(唯讀,debug 用)。"""
     return (f"{_nav('db')}"
             f"<header><h1>DB Browser · harness.db "
-            f"<span style='color:#8b949e;font-size:13px'>(唯讀)</span>"
+            f"<span style='color:var(--muted);font-size:13px'>(唯讀)</span>"
             f"</h1></header><main>"
             "<div style='display:flex;gap:16px;align-items:flex-start'>"
             "<div class='card' style='min-width:200px'>"
-            "<b style='color:#8b949e'>Tables</b><div id='tlist'></div></div>"
+            "<b style='color:var(--muted)'>Tables</b><div id='tlist'></div></div>"
             "<div style='flex:1'>"
             "<div class='card'>"
-            "<b style='color:#8b949e'>唯讀查詢</b>"
-            "<span style='color:#6e7681;font-size:11px'> "
+            "<b style='color:var(--muted)'>唯讀查詢</b>"
+            "<span style='color:var(--faint);font-size:11px'> "
             "SELECT / WITH / PRAGMA;⌘/Ctrl+Enter 執行</span>"
             "<textarea id='qbox' placeholder='SELECT * FROM ticket_session "
             "WHERE outcome IS NULL' style='width:100%;height:64px;margin-top:"
-            "6px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;"
+            "6px;background:var(--raise);color:var(--ink);border:1px solid var(--line-2);"
             "border-radius:6px;padding:8px;font-family:ui-monospace,monospace;"
             "box-sizing:border-box'></textarea>"
             "<div class='btn' style='margin-top:6px' onclick='runQ()'>▶ 執行"
@@ -1338,7 +1349,7 @@ def render_index(journal, sessions, watch=None) -> str:
                  f"<td>${r['cost']:.4f}</td></tr>")
     filterbar = (
         "<div class='ctl card' style='flex-wrap:wrap'>"
-        "<b style='color:#8b949e'>過濾</b>"
+        "<b style='color:var(--muted)'>過濾</b>"
         f"<select id='qr' {_INPUT}>"
         "<option value='all'>全部時間</option>"
         "<option value='7'>過去 7 天</option>"
@@ -1351,17 +1362,17 @@ def render_index(journal, sessions, watch=None) -> str:
         f"<input id='kprofile' placeholder='profile keyword…' {_INPUT}>"
         f"<input id='ksum' placeholder='summary keyword…' {_INPUT}>"
         f"<input id='kdesc' placeholder='description keyword…' {_INPUT}>"
-        "<span style='color:#6e7681;font-size:11px'>↓ 底下統計/圖表/表格"
+        "<span style='color:var(--faint);font-size:11px'>↓ 底下統計/圖表/表格"
         "皆只含過濾後的 Jira</span></div>")
     charts = (
         "<h2>時間圖(Create/Close/成功/失敗)</h2><div class='card'>"
-        "<label style='color:#8b949e;font-size:12px'>"
+        "<label style='color:var(--muted);font-size:12px'>"
         "<input type='checkbox' id='wk1'> 以每週呈現</label>"
         "<svg id='chart-time'></svg><div id='lg-time'></div></div>"
         "<h2>金錢圖(AI vs 人類)</h2><div class='card'>"
-        "<label style='color:#8b949e;font-size:12px'>"
+        "<label style='color:var(--muted);font-size:12px'>"
         "<input type='checkbox' id='wk2'> 以每週呈現</label>"
-        " <label style='color:#8b949e;font-size:12px'>人類時薪 USD $"
+        " <label style='color:var(--muted);font-size:12px'>人類時薪 USD $"
         f"<input type='number' id='rate' min='0' step='1' {_INPUT} "
         "style='width:70px;background:var(--raise);color:var(--ink);"
         "border:1px solid var(--line-2);border-radius:7px;padding:4px 8px'>"
@@ -1380,7 +1391,7 @@ def render_index(journal, sessions, watch=None) -> str:
         "<option>50</option><option>100</option></select>"
         "<div class='btn' onclick='pg(-1)'>‹ 上頁</div>"
         "<div class='btn' onclick='pg(1)'>下頁 ›</div>"
-        "<span id='pginfo' style='color:#8b949e;font-size:12px'></span>"
+        "<span id='pginfo' style='color:var(--muted);font-size:12px'></span>"
         "<span style='margin-left:auto'></span>"
         "<div class='btn' onclick='expo(\"csv\")'>⬇ CSV</div>"
         "<div class='btn' onclick='expo(\"json\")'>⬇ JSON</div></div>")
@@ -1403,7 +1414,7 @@ def render_index(journal, sessions, watch=None) -> str:
             f"<td><b>人力$</b></td>"
             f"<td><b>attempts</b></td><td><b>cost</b></td></tr></thead>"
             f"<tbody>{rows}</tbody></table></div>"
-            f"<p style='color:#8b949e'>四層 trace:L0 ticket · L1 attempt · "
+            f"<p style='color:var(--muted)'>四層 trace:L0 ticket · L1 attempt · "
             f"L2 envelope · L3 conversation events。點 ticket 展開。</p>"
             f"{_RESIZE_JS}{_APP_JS}</main>")
 
@@ -1426,7 +1437,7 @@ def render_approval(s: dict, evs: list[dict]) -> str:
             f"{esc(state)}</span></span>"
             f"<span class='kv'><b>退回次數</b> "
             f"{esc(s.get('approval_revisions', 0))}</span>"
-            f"<span class='kv' style='color:#8b949e'>填表區段在 Jira "
+            f"<span class='kv' style='color:var(--muted)'>填表區段在 Jira "
             f"description(human 段),assignee 交回機器人即放行</span>"
             f"</div>{rows}</div>")
 
@@ -1692,7 +1703,7 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<span class='kv'><b>workspace</b> {esc(s.get('workspace','-'))}</span>"
             + (f"<span class='kv'><b>驅逐次數</b> {s.get('evict_count', 0)}</span>"
                if s.get("evict_count") else "")
-            + (("<span class='btn' style='margin-left:auto;color:#f2a8a8' "
+            + (("<span class='btn' style='margin-left:auto;color:var(--s-failure)' "
                 "title='強制驅逐:agent 卡住不動或要立即讓出 CPU/記憶體時按。"
                 "會 killpg 殺掉此票的 agent 進程組;session 保留,下一輪 poll "
                 "自動 native resume 續跑、不重花錢。屬異常處理,發生次數會記錄。' "
@@ -1927,7 +1938,7 @@ def _kv_table(pairs) -> str:
     for k, v in pairs:
         if isinstance(v, (dict, list)):
             v = json.dumps(v, ensure_ascii=False, default=str)
-        rows += (f"<tr><td style='color:#8b949e;padding:2px 12px 2px 0;"
+        rows += (f"<tr><td style='color:var(--muted);padding:2px 12px 2px 0;"
                  f"white-space:nowrap;vertical-align:top'>{esc(k)}</td>"
                  f"<td style='font-family:ui-monospace,monospace;font-size:12px'>"
                  f"{esc('' if v is None else v)}</td></tr>")
@@ -1954,7 +1965,7 @@ def render_agent_page() -> str:
             f"來源 <code>{esc(_CONFIG_PATH)}</code>(唯讀;憑證在 ~/.env,不顯示)。"
             f"</p>")
     if err:
-        return (head + f"<div class='card'><b style='color:#f85149'>"
+        return (head + f"<div class='card'><b style='color:var(--s-failure)'>"
                 f"讀取設定失敗</b><div class='sys' style='text-align:left'>"
                 f"{esc(err)}</div></div></main>")
 
@@ -2007,17 +2018,18 @@ def render_agent_page() -> str:
 
 
 # ── W7.6:概念/生命週期/狀態機頁(純 SVG,零依賴)────────────────────────── #
-# 8 態節點:key → (cx, cy, 中文, 色)。座標經手調,盡量少交叉。
+# 8 態節點:key → (cx, cy, 中文)。座標經手調,盡量少交叉。
+# 顏色改由 CSS class st-<key>(見 CSS #smsvg 區)驅動,隨明暗主題變。
 _SM_NODES = {
-    "todo": (95, 250, "待處理", "#8b949e"),
-    "running": (300, 250, "進行中", "#58a6ff"),
-    "queued": (300, 370, "排隊", "#a371f7"),
-    "pending": (510, 130, "等待人類", "#d29922"),
-    "inactive": (510, 370, "交人(inactive)", "#6e7681"),
-    "success": (720, 95, "成功", "#3fb950"),
-    "failure": (720, 205, "失敗", "#f85149"),
-    "aborted": (720, 370, "撤銷", "#484f58"),
-    "exit": (880, 150, "人評分→關票→離開", "#238636"),
+    "todo": (95, 250, "待處理"),
+    "running": (300, 250, "進行中"),
+    "queued": (300, 370, "排隊"),
+    "pending": (510, 130, "等待人類"),
+    "inactive": (510, 370, "交人(inactive)"),
+    "success": (720, 95, "成功"),
+    "failure": (720, 205, "失敗"),
+    "aborted": (720, 370, "撤銷"),
+    "exit": (880, 150, "人評分→關票→離開"),
 }
 # 轉移:(from, to, 標籤)
 _SM_EDGES = [
@@ -2040,12 +2052,12 @@ def _sm_svg() -> str:
     """8 態狀態機 SVG:中心→中心連線裁切到矩形邊界 + 箭頭 + 雙向邊垂直偏移。"""
     hw, hh = 62, 22           # 節點半寬/半高
     W, H = 980, 440
-    out = ["<svg viewBox='0 0 %d %d' width='100%%' "
+    out = ["<svg id='smsvg' viewBox='0 0 %d %d' width='100%%' "
            "preserveAspectRatio='xMinYMin meet' "
            "style='max-height:%dpx;font-size:11px'>" % (W, H, H),
            "<defs><marker id='ah' viewBox='0 0 10 10' refX='9' refY='5' "
            "markerWidth='7' markerHeight='7' orient='auto-start-reverse'>"
-           "<path d='M0,0 L10,5 L0,10 z' fill='#7d8590'/></marker></defs>"]
+           "<path class='sm-arrow' d='M0,0 L10,5 L0,10 z'/></marker></defs>"]
 
     def trim(cx, cy, tx, ty):
         """從 (cx,cy) 往 (tx,ty),回落在來源節點矩形邊界的點。"""
@@ -2067,21 +2079,21 @@ def _sm_svg() -> str:
         x1, y1 = trim(ax + ox, ay + oy, bx + ox, by + oy)
         x2, y2 = trim(bx + ox, by + oy, ax + ox, ay + oy)
         out.append(
-            f"<line x1='{x1:.0f}' y1='{y1:.0f}' x2='{x2:.0f}' y2='{y2:.0f}' "
-            f"stroke='#7d8590' stroke-width='1.3' marker-end='url(#ah)'/>")
+            f"<line class='sm-edge' x1='{x1:.0f}' y1='{y1:.0f}' "
+            f"x2='{x2:.0f}' y2='{y2:.0f}' stroke-width='1.3' "
+            f"marker-end='url(#ah)'/>")
         if label:
             mx, my = (x1 + x2) / 2 + ox, (y1 + y2) / 2 + oy
             out.append(
-                f"<text x='{mx:.0f}' y='{my:.0f}' fill='#8b949e' "
+                f"<text class='sm-elabel' x='{mx:.0f}' y='{my:.0f}' "
                 f"text-anchor='middle'>{esc(label)}</text>")
 
-    for _k, (cx, cy, lb, col) in _SM_NODES.items():
+    for _k, (cx, cy, lb) in _SM_NODES.items():
         out.append(
-            f"<rect x='{cx - hw}' y='{cy - hh}' width='{hw * 2}' "
-            f"height='{hh * 2}' rx='8' fill='#161b22' stroke='{col}' "
-            f"stroke-width='1.6'/>"
-            f"<text x='{cx}' y='{cy + 4}' text-anchor='middle' fill='{col}' "
-            f"font-weight='600'>{esc(lb)}</text>")
+            f"<rect class='sm-box st-{_k}' x='{cx - hw}' y='{cy - hh}' "
+            f"width='{hw * 2}' height='{hh * 2}' rx='8' stroke-width='1.6'/>"
+            f"<text class='sm-lbl st-{_k}' x='{cx}' y='{cy + 4}' "
+            f"text-anchor='middle'>{esc(lb)}</text>")
     out.append("</svg>")
     return "".join(out)
 
@@ -2101,7 +2113,7 @@ _STATE_DOC = [
 def render_concepts_page() -> str:
     """W7.6:系統概念/資料流生命週期/狀態機(純 SVG)——使用說明書。"""
     doc_rows = "".join(
-        f"<tr><td style='white-space:nowrap;color:#c9d1d9'>{esc(k)}</td>"
+        f"<tr><td style='white-space:nowrap;color:var(--ink)'>{esc(k)}</td>"
         f"<td class='sys' style='text-align:left'>{esc(v)}</td></tr>"
         for k, v in _STATE_DOC)
     return (
