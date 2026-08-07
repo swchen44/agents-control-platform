@@ -24,6 +24,7 @@ from arcp_harness.jira_source import JiraCloudSource
 from arcp_harness.poller import OuterLoop
 from arcp_harness.profiles import load_profiles
 from arcp_harness.routing import load_config, match
+from arcp_harness.scoring import ScoreGate
 from arcp_harness.store import Store, TicketSession, TicketWatch
 from arcp_harness.triggers import load_triggers
 
@@ -129,7 +130,8 @@ def main() -> int:
         dispatcher=disp, commands=cmds, external=ext,
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
-        triggers=load_triggers("routes.yaml", profiles))   # W3.4 scheduled
+        triggers=load_triggers("routes.yaml", profiles),   # W3.4 scheduled
+        scoregate=ScoreGate(src, store))                    # W7.2 人類評分
 
     _reload = make_reload(loop, disp, cmds, ext)       # W13/W4.5 hot reload
 

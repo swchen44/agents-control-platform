@@ -204,7 +204,9 @@ def test_dispatcher_resume_skips_gate():
     d = Dispatcher(src, store, {"p": _profile()}, root=root,
                    approval=ApprovalGate(src, store, BOT))
     d.handle(_ticket(), "p")
-    assert 1 not in src.desc                       # 沒走審批門(沒寫 plan)
+    # 沒走審批門(W7.2 起 SUCCESS/FAILURE 會寫 goal/score 段到 desc,故不再用
+    # 「desc 未被寫」當代理判準;直接看 pending_reason 不是 approval)
+    assert store.get_session(1).pending_reason != "approval"
     assert calls != []                             # 直接 resume/fork
 
 

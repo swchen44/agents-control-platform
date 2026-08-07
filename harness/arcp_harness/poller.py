@@ -30,7 +30,8 @@ class OuterLoop:
     def __init__(self, source: JiraCloudSource, store: Store,
                  routes: list[Route], jql: str, dispatcher=None,
                  commands=None, external=None, max_running: int = 1,
-                 concurrency: dict | None = None, triggers=None):
+                 concurrency: dict | None = None, triggers=None,
+                 scoregate=None):
         self.source = source
         self.store = store
         self.routes = routes
@@ -38,6 +39,7 @@ class OuterLoop:
         self.dispatcher = dispatcher   # None = pure grey mode (Phase 1)
         self.commands = commands       # CommandHandler (Phase 3)
         self.external = external       # ExternalChangePolicy (Phase 3)
+        self.scoregate = scoregate     # W7.2 ScoreGate(終態抓評分/催評)
         self.triggers = triggers or []  # W3.4 內部觸發源(scheduled)
         self.max_running = max(1, max_running)  # v5 D10 (conc.1)
         self.paused = False            # W13 graceful:只 watch 不派新工
@@ -117,6 +119,12 @@ class OuterLoop:
                 last_assignee=t.assignee or "",        # W4.1 dashboard 顯示
                 summary=t.summary or "",               # W4.7 過濾用
                 description=t.description or ""))
+
+            # W7.2:終態(SUCCESS/FAILURE)未評分的票——抓 human 段 score 或催評。
+            # 對所有票呼叫(內部早退非終態);終態票仍在 jql(未 Done)故看得到。
+            if self.scoregate is not None:
+                events.extend(self.scoregate.on_poll(
+                    t, self.store.get_session(t.id)))
 
             # collect dispatch AFTER watch state is persisted (idempotency
             # first: a crash mid-dispatch must not replay watch events)

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 import uuid
 
 _A_ROUTE = os.path.join(os.path.dirname(os.path.dirname(
@@ -30,6 +31,7 @@ from .inner_runner import run_attempt  # noqa: E402
 from .jira_source import JiraCloudSource  # noqa: E402
 from .logutil import get_logger  # noqa: E402
 from .profiles import Profile  # noqa: E402
+from .scoring import write_handoff_sections  # noqa: E402
 from .sections import parse as parse_sections  # noqa: E402
 from .store import Store, TicketSession  # noqa: E402
 from .ticket import Ticket  # noqa: E402
@@ -82,6 +84,24 @@ class Dispatcher:
             events.append(self.store.journal(
                 "transcript_packed", ticket.id, ticket.key,
                 files=[os.path.basename(a) for a in arts]))
+
+    def _handoff_for_scoring(self, ticket: Ticket, profile: Profile,
+                             sess: TicketSession) -> None:
+        """W7.2:終態(SUCCESS/FAILURE)交人評分——把 goal 寫進 agent 段 + seed
+        human score placeholder;best-effort 交人 assignee;記首次「催評時間」為現在,
+        讓 ScoreGate 首次催評延後一輪(∵ 終態留言本身已提示評分),不立刻重催。"""
+        try:
+            write_handoff_sections(self.source, ticket, profile)
+        except Exception as e:  # noqa: BLE001 — 寫 section 壞不擋結案流程
+            log.warning("%s 交人評分 section 寫入失敗:%s", ticket.key, e)
+        assignee = self._human_assignee(ticket, profile)
+        if assignee and (ticket.assignee_id or "") != assignee:
+            try:
+                self.source.assign(ticket.id, assignee)
+            except Exception as e:  # noqa: BLE001
+                log.warning("%s 交人 assign 失敗:%s", ticket.key, e)
+        sess.score_reminded_at = time.time()
+        self.store.upsert_session(sess)
 
     def _human_assignee(self, ticket: Ticket, profile: Profile) -> str | None:
         """轉人類時的 assignee:description human 段 `human_email` →
@@ -363,6 +383,7 @@ class Dispatcher:
                 self.source.add_comment(ticket.id, (
                     f"[agent] outcome=SUCCESS(attempt {sess.attempts},"
                     f" 累計 ${sess.cost_usd:.4f})\n驗證結果:\n{checks}{self_eval}\n"
+                    f"請在 description 的 human 段填 `score: <0–10>` 給完成度評分。\n"
                     f"{_resume_hint(sess)}"))
                 # W3.5 C3:公式 v1 = est 平計(attempts>1 不折減——人也會重試)。
                 # W7(R3):未設估時→預設 240 分,效益一律算得出。
@@ -373,6 +394,7 @@ class Dispatcher:
                 log.info("%s SUCCESS attempt=%d cost=$%.4f",
                          ticket.key, sess.attempts, sess.cost_usd)
                 self._pack_transcript(sess, profile, ticket, events)  # W4.2
+                self._handoff_for_scoring(ticket, profile, sess)      # W7.2
                 return events
 
             feedback = verdict.summary()
@@ -405,10 +427,13 @@ class Dispatcher:
                      if res is not None and res.structured else "")
         self.source.add_comment(ticket.id, (
             f"[agent] outcome=FAILURE:{profile.max_attempts} 次嘗試未過驗證。"
-            f"最後失敗證據:\n{feedback}{self_eval}\n{_resume_hint(sess)}"))
+            f"最後失敗證據:\n{feedback}{self_eval}\n"
+            f"請在 description 的 human 段填 `score: <0–10>` 評 agent 幫了多少"
+            f"(反映還有多少 gap)。\n{_resume_hint(sess)}"))
         events.append(self.store.journal(
             "pending", ticket.id, ticket.key, reason="max-attempts"))
         log.info("%s FAILURE (max-attempts=%d, cost=$%.4f)",
                  ticket.key, profile.max_attempts, sess.cost_usd)
         self._pack_transcript(sess, profile, ticket, events)          # W4.2
+        self._handoff_for_scoring(ticket, profile, sess)              # W7.2
         return events

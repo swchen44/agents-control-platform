@@ -160,6 +160,8 @@ def build_data(journal, sessions, watch) -> dict:
             "attempts": s.get("attempts") or 0,
             "cost": s.get("cost_usd") or 0,
             "human_min": hm.get(iid, 0),
+            # W7(R1):人類完成度評分 0-10(None=未評分);pct=score×10
+            "score": s.get("human_score"),
             # W5.2 停留時間基準:最近一次 state/assignee 變動(無變動=created)
             "last_change": last_change.get(iid)
                            or w.get("first_seen_ts")

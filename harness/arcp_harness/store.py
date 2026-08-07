@@ -50,6 +50,8 @@ class TicketSession:
     finished_at: float = 0.0       # W3.3:進終態時間戳(retention 回收判定基準)
     evict_count: int = 0           # W6.3:強制驅逐次數(異常處理健康指標)
     clearquest_id: str | None = None  # W7(R8/R9):ClearQuest CR id(現預留,CQ 監控 To-Do)
+    human_score: int | None = None    # W7(R1):人類完成度評分 0-10(None=未評分)
+    score_reminded_at: float = 0.0    # W7(R1):上次催評分時間(每票每 ~1h 一次)
 
 
 class Store:
@@ -91,7 +93,9 @@ class Store:
                 inactive       INTEGER NOT NULL DEFAULT 0,
                 approval_revisions INTEGER NOT NULL DEFAULT 0,
                 finished_at    REAL NOT NULL DEFAULT 0,
-                clearquest_id  TEXT
+                clearquest_id  TEXT,
+                human_score    INTEGER,
+                score_reminded_at REAL NOT NULL DEFAULT 0
             )""")
         # W3.4:內部觸發源(scheduled)的 last_run 水位
         self._db.execute("""
@@ -114,7 +118,10 @@ class Store:
                            "INTEGER NOT NULL DEFAULT 0"),
                           ("finished_at", "REAL NOT NULL DEFAULT 0"),
                           ("evict_count", "INTEGER NOT NULL DEFAULT 0"),
-                          ("clearquest_id", "TEXT")):    # W7(R8/R9)
+                          ("clearquest_id", "TEXT"),      # W7(R8/R9)
+                          ("human_score", "INTEGER"),     # W7(R1)
+                          ("score_reminded_at",
+                           "REAL NOT NULL DEFAULT 0")):   # W7(R1)
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -170,7 +177,7 @@ class Store:
     _SESSION_COLS = ("issue_id, key, profile, workspace, session_id, attempts,"
                      " outcome, pending_reason, cost_usd, queued, queued_at,"
                      " inactive, approval_revisions, finished_at, evict_count,"
-                     " clearquest_id")
+                     " clearquest_id, human_score, score_reminded_at")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -180,7 +187,8 @@ class Store:
             pending_reason=row[7], cost_usd=row[8], queued=bool(row[9]),
             queued_at=row[10], inactive=bool(row[11]),
             approval_revisions=row[12], finished_at=row[13],
-            evict_count=row[14], clearquest_id=row[15])
+            evict_count=row[14], clearquest_id=row[15],
+            human_score=row[16], score_reminded_at=row[17] or 0.0)
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -223,8 +231,9 @@ class Store:
                     (issue_id, key, profile, workspace, session_id,
                      attempts, outcome, pending_reason, cost_usd,
                      queued, queued_at, inactive, approval_revisions,
-                     finished_at, evict_count, clearquest_id)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     finished_at, evict_count, clearquest_id,
+                     human_score, score_reminded_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
@@ -236,12 +245,14 @@ class Store:
                     approval_revisions=excluded.approval_revisions,
                     finished_at=excluded.finished_at,
                     evict_count=excluded.evict_count,
-                    clearquest_id=excluded.clearquest_id
+                    clearquest_id=excluded.clearquest_id,
+                    human_score=excluded.human_score,
+                    score_reminded_at=excluded.score_reminded_at
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
                   s.approval_revisions, s.finished_at, s.evict_count,
-                  s.clearquest_id))
+                  s.clearquest_id, s.human_score, s.score_reminded_at))
 
     # -- W3.4 trigger last_run 水位 ---------------------------------------- #
     def trigger_last_run(self, name: str) -> float:
