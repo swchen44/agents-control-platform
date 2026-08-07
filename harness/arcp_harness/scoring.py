@@ -61,20 +61,37 @@ def write_handoff_sections(source, ticket, profile) -> bool:
     return False
 
 
-def collect_score(description: str | None) -> int | None:
-    """讀 human 段 `score`,容錯轉整數並驗 0–10;無/非法 → None。"""
+def _human_value(description: str | None, key: str):
+    """讀 human 段某 key 的原始值(無 human 段/無 key → None)。"""
     _b, secs, _a = parse(description or "")
     for s in secs:
         if s.owner == "human":
-            v = s.data().get("score")
-            if v is None or (isinstance(v, str) and not v.strip()):
-                return None
-            try:
-                n = int(str(v).strip())
-            except (ValueError, TypeError):
-                return None
-            return n if SCORE_MIN <= n <= SCORE_MAX else None
+            return s.data().get(key)
     return None
+
+
+def collect_score(description: str | None) -> int | None:
+    """讀 human 段 `score`,容錯轉整數並驗 0–10;無/非法 → None。"""
+    v = _human_value(description, "score")
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    try:
+        n = int(str(v).strip())
+    except (ValueError, TypeError):
+        return None
+    return n if SCORE_MIN <= n <= SCORE_MAX else None
+
+
+def collect_budget_override(description: str | None) -> float | None:
+    """W7.3:讀 human 段 `budget_override`(USD,此票單次上限放寬);非法/<=0 → None。"""
+    v = _human_value(description, "budget_override")
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    try:
+        f = float(str(v).strip())
+    except (ValueError, TypeError):
+        return None
+    return f if f > 0 else None
 
 
 class ScoreGate:

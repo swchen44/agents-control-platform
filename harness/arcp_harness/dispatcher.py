@@ -31,7 +31,7 @@ from .inner_runner import run_attempt  # noqa: E402
 from .jira_source import JiraCloudSource  # noqa: E402
 from .logutil import get_logger  # noqa: E402
 from .profiles import Profile  # noqa: E402
-from .scoring import write_handoff_sections  # noqa: E402
+from .scoring import collect_budget_override, write_handoff_sections  # noqa: E402
 from .sections import parse as parse_sections  # noqa: E402
 from .store import Store, TicketSession  # noqa: E402
 from .ticket import Ticket  # noqa: E402
@@ -84,6 +84,45 @@ class Dispatcher:
             events.append(self.store.journal(
                 "transcript_packed", ticket.id, ticket.key,
                 files=[os.path.basename(a) for a in arts]))
+
+    def _budget_precheck(self, ticket: Ticket, profile: Profile,
+                         sess: TicketSession) -> list[dict]:
+        """W7.3 預算閘:此票單次(human `budget_override` 優先於 profile
+        max_budget_usd)或此 profile 當月累計達上限 → pending:budget、不 spawn。
+        回傳 pending 事件清單(空=可續跑)。"""
+        override = collect_budget_override(ticket.description or "")
+        single = override if override is not None else profile.max_budget_usd
+        if single is not None and sess.cost_usd >= single:
+            src = ("human budget_override" if override is not None
+                   else "profile 單次上限")
+            return self._budget_block(ticket, profile, sess, "single", (
+                f"[agent] pending:budget(單次)— 此票累計 ${sess.cost_usd:.4f} "
+                f"達{src} ${single:.4f}。放寬:在 human 段填 "
+                f"`budget_override: <USD>`(僅此票);或改 Profile。"
+                f"\n{_resume_hint(sess)}"))
+        cap = profile.max_budget_monthly_usd
+        if cap is not None:
+            spent = self.store.monthly_cost(profile.name)
+            if spent >= cap:
+                return self._budget_block(ticket, profile, sess, "monthly", (
+                    f"[agent] pending:budget(月上限)— profile «{profile.name}» "
+                    f"當月已花 ${spent:.4f} 達月上限 ${cap:.4f}。"
+                    f"需調整 Profile.max_budget_monthly_usd 才能續跑。"
+                    f"\n{_resume_hint(sess)}"))
+        return []
+
+    def _budget_block(self, ticket: Ticket, profile: Profile,
+                      sess: TicketSession, scope: str, msg: str) -> list[dict]:
+        sess.pending_reason = "budget"
+        self.store.upsert_session(sess)
+        self.source.add_comment(ticket.id, msg)
+        ev = [self.store.journal("pending", ticket.id, ticket.key,
+                                 reason="budget", scope=scope,
+                                 cost_usd=sess.cost_usd)]
+        finalize_transcript(sess.session_id,          # W6.4 等人類也產 transcript
+                            engine_of_agent(profile.agent),
+                            sess.workspace, pack=False, reason="pending:budget")
+        return ev
 
     def _handoff_for_scoring(self, ticket: Ticket, profile: Profile,
                              sess: TicketSession) -> None:
@@ -236,6 +275,12 @@ class Dispatcher:
                 return events
 
         while sess.attempts < profile.max_attempts:
+            # W7.3:spawn 前預算閘——此票單次(human budget_override 優先)或此
+            # profile 當月累計達上限 → pending:budget、不 spawn(跑前擋才不多燒)
+            blocked = self._budget_precheck(ticket, profile, sess)
+            if blocked:
+                events.extend(blocked)
+                return events
             sess.attempts += 1
             # W5.1 sid 預派(W29):rawcli+claude 首跑先派 uuid,attempt 狀態
             # 先持久化再 spawn——crash 後可 resume;快照器首 attempt 就有 sid
@@ -265,7 +310,9 @@ class Dispatcher:
                 error_kind=res.error_kind,
                 truly_resumed=res.truly_resumed,
                 structured=res.structured,               # G1:agent 自評(記錄)
-                envelope=res.envelope_path))
+                envelope=res.envelope_path,
+                cost=res.cost_usd or 0.0,                # W7.3 月預算彙總資料源
+                profile=profile.name))
 
             # E3(W5.3):被主動驅逐(control /evict → killpg)——非故障,
             # 不消耗 attempt;session 留 active,下輪 native resume 續跑
@@ -402,23 +449,13 @@ class Dispatcher:
                 feedback += f"\nrunner error: {res.error}"
             self.store.upsert_session(sess)
 
-            # A4:budget 上限 — 本次未過驗證,若累計花費達上限就別再燒錢,交
-            # 人工(pending:budget)。通過的 attempt 已在上面 return SUCCESS。
-            if (profile.max_budget_usd is not None
-                    and sess.cost_usd >= profile.max_budget_usd):
-                sess.pending_reason = "budget"
-                self.store.upsert_session(sess)
-                self.source.add_comment(ticket.id, (
-                    f"[agent] pending:budget — 累計 ${sess.cost_usd:.4f} 達上限 "
-                    f"${profile.max_budget_usd:.4f}(attempt {sess.attempts})。"
-                    f"不再自動重試,請人工檢查後解除。\n{_resume_hint(sess)}"))
-                events.append(self.store.journal(
-                    "pending", ticket.id, ticket.key, reason="budget",
-                    cost_usd=sess.cost_usd))
-                finalize_transcript(sess.session_id,      # W6.4 等人類也產
-                                    engine_of_agent(profile.agent),
-                                    sess.workspace, pack=False,
-                                    reason="pending:budget")
+            # A4/W7.3:budget 上限 — 本次未過驗證,若累計(單次/override)或當月
+            # 已達上限就別再燒錢,交人(pending:budget)。通過的 attempt 已上面 return。
+            # 用同一個預檢(涵蓋 單次 + human budget_override + 月上限);last attempt
+            # 剛好超支也會在此擋成 budget(而非落到下方 max-attempts FAILURE)。
+            blocked = self._budget_precheck(ticket, profile, sess)
+            if blocked:
+                events.extend(blocked)
                 return events
 
         sess.outcome, sess.pending_reason = "FAILURE", "max-attempts"

@@ -174,6 +174,32 @@ class Store:
                 f.write(json.dumps(event, ensure_ascii=False) + "\n")
         return event
 
+    def monthly_cost(self, profile: str, now: float | None = None) -> float:
+        """W7.3:profile 當日曆月(跨所有票)累計花費 = sum(attempt_finished.cost)。
+        資料源是 journal(帶 ts+cost+profile);簡單掃檔,量大再改月帳表。"""
+        import datetime
+        now = time.time() if now is None else now
+        ref = datetime.datetime.fromtimestamp(now)
+        total = 0.0
+        try:
+            with open(self.journal_path) as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    if (e.get("type") != "attempt_finished"
+                            or e.get("profile") != profile or not e.get("cost")):
+                        continue
+                    edt = datetime.datetime.fromtimestamp(e.get("ts") or 0)
+                    if edt.year == ref.year and edt.month == ref.month:
+                        total += float(e["cost"])
+        except OSError:
+            pass
+        return total
+
     _SESSION_COLS = ("issue_id, key, profile, workspace, session_id, attempts,"
                      " outcome, pending_reason, cost_usd, queued, queued_at,"
                      " inactive, approval_revisions, finished_at, evict_count,"

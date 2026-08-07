@@ -296,7 +296,8 @@ def run_trigger(trigger: Trigger, profiles: dict[str, Profile], store,
         sess.cost_usd += res.cost_usd or 0.0
         events.append(store.journal(
             "attempt_finished", ts, trigger.run_name, attempt=sess.attempts,
-            raw=res.raw_outcome, error_kind=res.error_kind))
+            raw=res.raw_outcome, error_kind=res.error_kind,
+            cost=res.cost_usd or 0.0, profile=profile.name))  # W7.3 月預算彙總
         if res.raw_outcome == "unknown":            # 同 v5 D3:不自動重試
             sess.outcome, sess.pending_reason = "UNKNOWN", "unknown"
             store.upsert_session(sess)
