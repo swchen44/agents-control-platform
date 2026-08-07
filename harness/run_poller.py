@@ -132,6 +132,7 @@ def main() -> int:
         concurrency=source_cfg.get("concurrency"),
         triggers=load_triggers("routes.yaml", profiles),   # W3.4 scheduled
         scoregate=ScoreGate(src, store))                    # W7.2 人類評分
+    loop.poll_interval = interval                            # W9.1 control 顯示
 
     _reload = make_reload(loop, disp, cmds, ext)       # W13/W4.5 hot reload
 

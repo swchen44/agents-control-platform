@@ -50,7 +50,39 @@ def _auth() -> dict:
         "codex_logged_in": os.path.exists(codex_auth),
         "claude_configured": claude_login,
         "anthropic_api_key_env": env_key,   # 只回布林
+        # W9.1:認證「方式」(帳號類別/是否用 key)——不回金鑰值、email、token
+        "claude_method": _claude_method(env_key, home),
+        "codex_method": _codex_method(codex_auth),
     }
+
+
+def _claude_method(env_key: bool, home: str) -> str:
+    """claude 認證方式:API key(env)/ OAuth 帳號(含方案類別,如 claude_max)。
+    只讀方案類別(organizationType),不讀 email/uuid/token。"""
+    if env_key:
+        return "API key(env)"
+    import json
+    try:
+        with open(os.path.join(home, ".claude.json"), encoding="utf-8") as f:
+            oa = (json.load(f) or {}).get("oauthAccount") or {}
+        if oa:
+            plan = oa.get("organizationType") or "帳號"
+            return f"OAuth · {plan}"     # 例:OAuth · claude_max
+    except (OSError, ValueError):
+        pass
+    return "未設定"
+
+
+def _codex_method(codex_auth: str) -> str:
+    """codex 認證方式:ChatGPT 帳號 / API key(讀 auth_mode,不讀 token)。"""
+    import json
+    try:
+        with open(codex_auth, encoding="utf-8") as f:
+            mode = (json.load(f) or {}).get("auth_mode") or ""
+        return {"chatgpt": "ChatGPT 帳號", "apikey": "API key"}.get(
+            mode, mode or "已登入")
+    except (OSError, ValueError):
+        return "未登入"
 
 
 def _uptime_sec() -> float:

@@ -325,8 +325,16 @@ try:
     check("/server/data:sys 版本/資源/登入狀態齊",
           all(k in (sd.get("sys") or {}) for k in
               ("versions", "auth", "resources", "anomalies")))
-    check("/server/data:auth 只布林(不外洩金鑰值)",
-          all(isinstance(v, bool) for v in sd["sys"]["auth"].values()))
+    _au = sd["sys"]["auth"]
+    check("/server/data:auth 狀態布林 + 方式字串(不外洩金鑰/email)",
+          all(isinstance(_au.get(k), bool) for k in
+              ("codex_logged_in", "claude_configured", "anthropic_api_key_env"))
+          and isinstance(_au.get("claude_method"), str)
+          and isinstance(_au.get("codex_method"), str)
+          # W9.1:方式只顯方案類別,不含金鑰/token/email/@
+          and not any(bad in (_au.get("claude_method", "")
+                              + _au.get("codex_method", ""))
+                      for bad in ("@", "sk-", "eyJ", "token")))
     check("/server/data:W6.2 processes/workspaces 欄位",
           "processes" in sd and "workspaces" in sd
           and isinstance(sd["processes"], list))

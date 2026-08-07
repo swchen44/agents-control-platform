@@ -168,6 +168,10 @@ class ControlAPI:
             "outcomes": outcomes,
             "pending": pending,
             "cost_usd": round(sum(s.cost_usd or 0 for s in sessions), 4),
+            # W9.1:poll 統計(已 poll 幾次 / 起始 / 間隔)
+            "poll_count": int(getattr(self.poller, "_cycles", 0)),
+            "started_at": float(getattr(self.poller, "started_at", 0.0)),
+            "poll_interval": float(getattr(self.poller, "poll_interval", 0.0)),
         }
 
     def start(self) -> None:

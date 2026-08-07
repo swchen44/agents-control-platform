@@ -626,7 +626,12 @@ _CONTROL_JS = ("<script>"
     ".catch(()=>{$c('cmsg').textContent='control 離線 '+CTL;});}"
     "async function poll(){try{"
     "const j=await (await fetch(CTL+'/status')).json();"
+    "const up=j.started_at?(Date.now()/1000-j.started_at):0;"
+    "const hh=Math.floor(up/3600),mm=Math.floor(up%3600/60);"
+    "const upTxt=up?(hh+'h'+String(mm).padStart(2,'0')+'m'):'—';"
     "const t=[[j.paused?'⏸ 暫停':(j.stopping?'⏻ 關閉中':'▶ 運行'),'狀態'],"
+    "[(j.poll_count||0),'已 poll 次數'],[upTxt,'連續運行'],"
+    "[(j.poll_interval?j.poll_interval+'s':'—'),'poll 間隔'],"
     "[j.in_flight,'in-flight'],[j.queued,'queued'],[j.inactive,'inactive'],"
     "[(j.pending?Object.values(j.pending).reduce((a,b)=>a+b,0):0),'pending'],"
     "['$'+(j.cost_usd||0).toFixed(4),'總 cost'],[j.sessions,'sessions']];"
@@ -782,11 +787,17 @@ _SERVER_JS = ("<script>"
     "kv('claude',v.claude||'?')+kv('codex',v.codex||'?')+"
     "kv('workspace',r.cwd||'?')+'</div>';"
     # 登入狀態(只狀態不顯值)
-    "h+=\"<h2>登入 / 金鑰(只顯示狀態,不顯示值)</h2><div class='card'>\"+"
-    "`<div class='kv'><b>codex 已登入</b> ${badge(a.codex_logged_in)}</div>`+"
-    "`<div class='kv'><b>claude 已設定</b> ${badge(a.claude_configured)}</div>`+"
-    "`<div class='kv'><b>ANTHROPIC_API_KEY(env)</b> "
-    "${badge(a.anthropic_api_key_env)}</div>`+'</div>';"
+    "h+=\"<h2>登入 / 認證方式(只顯示帳號類別,不顯示金鑰/email)</h2>\"+"
+    "\"<div class='card'>\"+"
+    "`<div class='kv'><b>claude</b> ${badge(a.claude_configured)} `+"
+    "`<span class='mono' style='color:var(--accent-ink)'>`+"
+    "`${esc(a.claude_method||'?')}</span></div>`+"
+    "`<div class='kv'><b>codex</b> ${badge(a.codex_logged_in)} `+"
+    "`<span class='mono' style='color:var(--accent-ink)'>`+"
+    "`${esc(a.codex_method||'?')}</span></div>`+"
+    "`<div class='kv' style='color:var(--faint);font-size:11px'>`+"
+    "`OAuth=帳號登入(claude_max=個人 Max、enterprise=企業);`+"
+    "`ChatGPT 帳號=codex 訂閱登入;API key=用金鑰</div>`+'</div>';"
     # per-process(W6.2)
     "const ps=d.processes||[];"
     "h+=\"<h2>Agent 進程(claude/codex)</h2><div class='card'>\"+(ps.length?"
@@ -1244,6 +1255,16 @@ _THEME_JS = """
   if(b)b.addEventListener('click',function(){
     var cur=r.getAttribute('data-theme')||'light';
     apply(cur==='dark'?'light':'dark');});})();
+// W9.1:時區本地化——時間一律存 epoch(UTC-based),在此用「瀏覽器時區」顯示
+// (台灣=Asia/Taipei=+8)。所有 <span data-ts='<epoch_ms>'> 都會被格式化。
+window._TZFMT=new Intl.DateTimeFormat(undefined,{month:'2-digit',day:'2-digit',
+  hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+window.localizeTimes=function(root){
+  (root||document).querySelectorAll('[data-ts]').forEach(function(el){
+    var ms=+el.getAttribute('data-ts');
+    if(ms)el.textContent=window._TZFMT.format(new Date(ms));});};
+if(document.readyState!=='loading')localizeTimes();
+else document.addEventListener('DOMContentLoaded',function(){localizeTimes();});
 </script>"""
 
 
@@ -1706,17 +1727,33 @@ def render_timeline_section(evs: list[dict]) -> str:
         "})();</script></section>")
 
 
+def _ts_ms_span(ms: int) -> str:
+    """W9.1:時間占位(存 epoch ms),client 端 localizeTimes() 依瀏覽器時區顯示。"""
+    return (f"<time class='evt' data-ts='{int(ms)}' "
+            f"style='color:var(--faint);font-variant-numeric:tabular-nums;"
+            f"margin-right:8px'>—</time>")
+
+
+def _iso_to_ms(iso) -> int:
+    import datetime
+    try:
+        return int(datetime.datetime.fromisoformat(str(iso)).timestamp() * 1000)
+    except (ValueError, TypeError):
+        return 0
+
+
 def render_ticket(iid, journal, sessions) -> str:
     s = sessions.get(iid, {})
     key = s.get("key") or f"#{iid}"
     evs = [e for e in journal if e["issue_id"] == iid]
 
-    # L0/L1 journal
+    # L0/L1 journal(W9.1:前置本地時間)
     l0 = ""
     for e in evs:
         extra = {k: v for k, v in e.items()
                  if k not in ("ts", "type", "issue_id", "key")}
-        l0 += (f"<div class='ev'><span class='k'>{esc(e['type'])}</span> "
+        l0 += (f"<div class='ev'>{_ts_ms_span(float(e.get('ts') or 0) * 1000)}"
+               f"<span class='k'>{esc(e['type'])}</span> "
                f"<span class='t'>{esc(json.dumps(extra, ensure_ascii=False))}"
                f"</span></div>")
 
@@ -1746,16 +1783,26 @@ def render_ticket(iid, journal, sessions) -> str:
                 for i in items:
                     kind = i.get("kind") or i.get("type") or "?"
                     src = i.get("source", "")
-                    txt = ""
-                    if kind == "ConversationStateUpdateEvent":
+                    # W9.1:補訊息摘要 + 啟用 skills(原本只印 kind+source,太空)
+                    txt = _text_of((i.get("llm_message") or {}).get("content"))
+                    if not txt and kind == "ConversationStateUpdateEvent":
                         txt = f"{i.get('key','')}={str(i.get('value',''))[:60]}"
-                    elif kind == "ACPToolCallEvent":
-                        txt = str(i.get("title") or i.get("tool_kind") or "")[:60]
-                    rows += (f"<div class='ev'><span class='k'>{esc(kind)}</span> "
-                             f"<span class='t'>{esc(src)} {esc(txt)}</span></div>")
+                    elif not txt and kind == "ACPToolCallEvent":
+                        txt = str(i.get("title") or i.get("tool_kind") or "")
+                    txt = " ".join(txt.split())[:120]
+                    sk = i.get("activated_skills") or []
+                    sk_html = (f" <span style='color:var(--accent-ink)'>"
+                               f"⚙ {esc(','.join(sk))}</span>" if sk else "")
+                    ms = _iso_to_ms(i.get("timestamp"))
+                    tm = _ts_ms_span(ms) if ms else ""
+                    tag = ("var(--s-running)" if src == "user"
+                           else "var(--s-success)")
+                    rows += (f"<div class='ev'>{tm}"
+                             f"<span class='k' style='color:{tag}'>{esc(src or kind)}"
+                             f"</span> <span class='t'>{esc(txt)}{sk_html}</span></div>")
                 trace_layers += (
-                    f"<h2>{esc(n)} · L3 events ({sum(hist.values())}) "
-                    f"{esc(dict(hist))}</h2>"
+                    f"<h2>{esc(n)} · L3 conversation 事件({sum(hist.values())} 則:"
+                    f"user=harness 給的 prompt、agent=模型回覆)</h2>"
                     f"<div class='card layer L3'>{rows}</div>")
                 convo_panes += (f"<h2>{esc(n)}</h2><div class='card'>"
                                 f"{render_conversation(items)}</div>")
@@ -2176,24 +2223,38 @@ def _sm_svg() -> str:
     return "".join(out)
 
 
+# W9.1:第三欄=此態如何由 DB 欄位推導(canonical_state 的判斷來源)。
 _STATE_DOC = [
-    ("待處理 todo", "被 watch 到、尚無 session(還沒派工或不歸任何 route)。"),
-    ("進行中 running", "有 active session 正在跑 attempt(占機器額度)。"),
-    ("排隊 queued", "本輪並發額滿,下輪重評(F1 分層閘門)。"),
-    ("等待人類 pending", "需要人:UNKNOWN、預算上限、交人決定、審批門、max-attempts。"),
-    ("交人 inactive", "assignee 在人類手上→不派工、讓出額度(改回機器人即 resume)。"),
-    ("成功 success", "verify(grader)通過=SUCCESS(證據型停止,非 agent 自稱)。"),
-    ("失敗 failure", "max_attempts 用盡仍未過驗證。"),
-    ("撤銷 aborted", "人在看板關成 Done/Cancelled,或 @agent cancel。"),
+    ("待處理 todo", "被 watch 到、尚無 session(還沒派工或不歸任何 route)。",
+     "ticket_watch 有列、但 ticket_session 無此 issue_id"),
+    ("進行中 running", "有 active session 正在跑 attempt(占機器額度)。",
+     "ticket_session.outcome=NULL 且 pending_reason=NULL 且 queued=0 且 inactive=0"),
+    ("排隊 queued", "本輪並發額滿,下輪重評(F1 分層閘門)。",
+     "ticket_session.queued=1"),
+    ("等待人類 pending", "需要人:UNKNOWN、預算上限、交人決定、審批門、max-attempts。",
+     "ticket_session.pending_reason 非空(或 outcome='UNKNOWN')"),
+    ("交人 inactive", "assignee 在人類手上→不派工、讓出額度(改回機器人即 resume)。",
+     "ticket_session.inactive=1"),
+    ("成功 success", "verify(grader)通過=SUCCESS(證據型停止,非 agent 自稱)。",
+     "ticket_session.outcome='SUCCESS'"),
+    ("失敗 failure", "max_attempts 用盡仍未過驗證。",
+     "ticket_session.outcome='FAILURE'"),
+    ("撤銷 aborted", "人在看板關成 Done/Cancelled,或 @agent cancel。",
+     "ticket_session.outcome='ABORTED'"),
 ]
 
 
 def render_concepts_page() -> str:
     """W7.6:系統概念/資料流生命週期/狀態機(純 SVG)——使用說明書。"""
-    doc_rows = "".join(
-        f"<tr><td style='white-space:nowrap;color:var(--ink)'>{esc(k)}</td>"
-        f"<td class='sys' style='text-align:left'>{esc(v)}</td></tr>"
-        for k, v in _STATE_DOC)
+    doc_rows = (
+        "<tr><td><b>態</b></td><td><b>意義</b></td>"
+        "<td><b>DB 判斷來源</b></td></tr>"
+        + "".join(
+            f"<tr><td style='white-space:nowrap;color:var(--ink)'>{esc(k)}</td>"
+            f"<td class='sys' style='text-align:left'>{esc(v)}</td>"
+            f"<td class='mono' style='font-size:11px;color:var(--muted)'>"
+            f"{esc(db)}</td></tr>"
+            for k, v, db in _STATE_DOC))
     return (
         f"{_nav('concepts')}<header><h1>概念 · 資料流生命週期 · 狀態機</h1>"
         f"</header><main id='main' tabindex='-1'>"
@@ -2595,6 +2656,7 @@ class Handler(BaseHTTPRequestHandler):
                      "cur.innerHTML=nu.innerHTML;"
                      "[...cur.querySelectorAll('details')].forEach((d,i)=>{"
                      "if(open[i])d.open=true});"
+                     "if(window.localizeTimes)localizeTimes(cur);"  # W9.1 重localize
                      "if(typeof tab==='function')"
                      "tab((location.hash||'#convo').slice(1));}"
                      # W6.7:時間軸在 main 之外——單獨抽資料島更新(不摧毀 widget)
