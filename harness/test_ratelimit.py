@@ -106,5 +106,34 @@ except urllib.error.HTTPError as e:
 check("R4 讀 429 立即拋(不重試)", err is not None and st["n"] == 1)
 check("R4 讀不退避", len(sleeps) == 0)
 
+# -- W6.7:on_write 回呼(harness→Jira 寫入補記 jira_write) ------------------ #
+writes = []
+src.on_write = lambda action, iid, detail="": writes.append((action, iid, detail))
+_install(["ok"])
+src.add_comment(7, "hello")
+check("W6.7 add_comment 觸發 on_write(comment)",
+      writes == [("comment", 7, "hello")])
+_install(["ok"])
+src.assign(7, "acct-9")
+check("W6.7 assign 觸發 on_write(assign)", writes[-1] == ("assign", 7, "acct-9"))
+_install(["ok"])
+src.assign(7, None)     # 取消指派
+check("W6.7 assign(None) 記(取消指派)", writes[-1][0] == "assign"
+      and "取消" in writes[-1][2])
+# 回呼壞掉不可影響寫入本身(only warn)
+src.on_write = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+_install(["ok"])
+err = None
+try:
+    src.add_comment(7, "x")
+except Exception as e:
+    err = e
+check("W6.7 on_write 拋錯不影響 Jira 寫入", err is None)
+# 預設 on_write=None → 不記、不炸
+src2 = JiraCloudSource("https://x", "e@x", "tok")
+_install(["ok"])
+src2.add_comment(1, "y")
+check("W6.7 預設 on_write=None 安全", src2.on_write is None)
+
 print("test-ratelimit:", "PASS" if ok else "FAIL")
 sys.exit(0 if ok else 1)

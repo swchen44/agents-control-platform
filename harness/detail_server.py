@@ -290,6 +290,20 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tool .io{font-family:ui-monospace,monospace;color:#8b949e;margin-top:2px}
 .think{margin:6px 0 6px 20px;color:#8b949e;font-style:italic;font-size:12px}
 .sys{color:#8b949e;font-size:11px;text-align:center;margin:8px 0}
+/* W6.7 事件時間軸(vis-timeline;深色主題覆寫 + 群組配色) */
+.tlsec{padding:8px 16px 24px}.tlsec h2{margin:8px 0}
+.tlsec .sys{text-align:left}
+#evtl{background:#161b22;border:1px solid #30363d;border-radius:8px}
+.vis-timeline{border-color:#30363d!important}
+.vis-item{border-radius:6px;color:#0d1117;font-size:12px;border:none}
+.vis-item.tl-in{background:#58a6ff}.vis-item.tl-jira{background:#d29922}
+.vis-item.tl-life{background:#a371f7;color:#fff}.vis-item.tl-run{background:#3fb950}
+.vis-item .vis-item-content{padding:3px 8px}
+.vis-labelset .vis-label,.vis-time-axis .vis-text{color:#8b949e}
+.vis-panel,.vis-grid.vis-vertical,.vis-time-axis .vis-grid.vis-minor{
+  border-color:#30363d!important}
+.vis-grid.vis-minor{border-color:#21262d!important}
+.vis-current-time{background:#f85149}
 """
 
 
@@ -1263,6 +1277,108 @@ def render_transcript_card(iid: int, s: dict) -> str:
             f"<div class='ctl'>{links}{gen_btn}</div></div>")
 
 
+# ── W6.7:事件時間軸(per-ticket,只 harness/Jira 生命週期,不含 agent 對話)── #
+_TL_GROUPS = [
+    {"id": "in", "content": "外部輸入(人/Jira)"},
+    {"id": "jira", "content": "Jira 寫入(harness→)"},
+    {"id": "life", "content": "生命週期 / 決策"},
+    {"id": "run", "content": "執行 / 產物"},
+]
+# 事件型別 → (group, 中文標籤)。jira_write 另依 action 細分(見下)。
+_TL_MAP = {
+    "new_issue": ("in", "🆕 新票"),
+    "comment_added": ("in", "💬 收到留言"),
+    "assignee_changed": ("in", "👤 assignee 變更"),
+    "status_changed": ("in", "📋 status 變更"),
+    "route_matched": ("life", "🎯 路由命中"),
+    "session_created": ("life", "🎬 session 建立"),
+    "queued": ("life", "⏳ 排隊"),
+    "resolved": ("life", "✅ 結案"),
+    "pending": ("life", "⏸ 等待人類"),
+    "handoff": ("life", "🔀 換手"),
+    "handoff_invalid": ("life", "⚠ 換手無效"),
+    "inactive_set": ("life", "😴 交人類(讓出額度)"),
+    "inactive_cleared": ("life", "▶ 回機器人(resume)"),
+    "external_abort": ("life", "🛑 外部撤銷"),
+    "external_pending": ("life", "⏸ 外部變更暫停"),
+    "external_cleared": ("life", "▶ 外部恢復"),
+    "command_accepted": ("life", "✔ 指令接受"),
+    "command_denied": ("life", "🚫 指令拒絕(未授權)"),
+    "command_rejected": ("life", "🚫 指令拒絕"),
+    "command_unknown": ("life", "❓ 指令不明"),
+    "approval": ("life", "🔐 審批"),
+    "adopted": ("life", "📌 認養(baseline)"),
+    "workspace_reclaimed": ("life", "♻ workspace 回收"),
+    "workspace_unhealthy": ("life", "⚠ workspace 異常"),
+    "attempt_started": ("run", "▶ attempt 開始"),
+    "attempt_finished": ("run", "⏹ attempt 結束"),
+    "attempt_crash_recovered": ("run", "🔧 crash 復原"),
+    "evicted": ("run", "⏻ 強制驅逐"),
+    "dispatch_error": ("run", "💥 派工錯誤"),
+    "transcript_packed": ("run", "📄 transcript 產出"),
+    "script_run_started": ("run", "📜 script 開始"),
+    "script_run_finished": ("run", "📜 script 結束"),
+    "trigger_started": ("run", "⏱ trigger 開始"),
+    "trigger_finished": ("run", "⏱ trigger 結束"),
+    "trigger_error": ("run", "⏱ trigger 錯誤"),
+}
+_TL_JIRA = {"comment": "💬 留言 Jira", "assign": "👤 改 assignee",
+            "transition": "📋 transition", "description": "📝 改 description"}
+
+
+def timeline_data(evs: list[dict]) -> dict:
+    """journal 事件 → vis-timeline items/groups。時間戳 epoch→ms;完整欄位進
+    tooltip(title);className 依 group 上色。只含 harness/Jira 生命週期。"""
+    items = []
+    for i, e in enumerate(evs):
+        et = e.get("type", "?")
+        if et == "jira_write":
+            grp, label = "jira", _TL_JIRA.get(e.get("action", ""), "✍ Jira 寫入")
+        else:
+            grp, label = _TL_MAP.get(et, ("life", et))
+        extra = {k: v for k, v in e.items()
+                 if k not in ("ts", "type", "issue_id", "key")}
+        det = json.dumps(extra, ensure_ascii=False)
+        items.append({
+            "id": i, "group": grp, "content": label,
+            "start": int(float(e.get("ts") or 0) * 1000),
+            "className": "tl-" + grp,
+            "title": f"{et} · {det}"[:400],
+        })
+    return {"groups": _TL_GROUPS, "items": items}
+
+
+def render_timeline_section(evs: list[dict]) -> str:
+    """W6.7:事件時間軸區塊。**刻意放 <main> 之外**——ticket 頁每 5s 會整段
+    替換 <main>.innerHTML,widget 若在其中會被反覆摧毀且永遠 diff 不符→閃爍。
+    放外面則 widget 只初始化一次;刷新只抽 #evtl-data 資料島更新 DataSet。"""
+    data = json.dumps(timeline_data(evs), ensure_ascii=False)
+    return (
+        "<section class='tlsec'>"
+        "<h2>📅 事件時間軸(harness / Jira 生命週期)</h2>"
+        "<p class='sys' style='margin:0 0 8px'>只含 harness↔Jira 生命週期事件"
+        "(agent 對話請看上方 Conversation / transcript)。滾輪縮放需按住 Ctrl。</p>"
+        "<div id='evtl'></div>"
+        f"<script id='evtl-data' type='application/json'>{data}</script>"
+        "<link rel='stylesheet' href='/tvendor/vis-timeline.min.css'>"
+        "<script src='/tvendor/vis-timeline.min.js'></script>"
+        "<script>(function(){"
+        "function rd(){try{return JSON.parse("
+        "document.getElementById('evtl-data').textContent)}"
+        "catch(e){return{groups:[],items:[]}}}"
+        "function build(d){var el=document.getElementById('evtl');"
+        "if(!el||!window.vis)return null;"
+        "var items=new vis.DataSet(d.items),groups=new vis.DataSet(d.groups);"
+        "var tl=new vis.Timeline(el,items,groups,{stack:true,"
+        "orientation:'top',zoomKey:'ctrlKey',margin:{item:6},"
+        "tooltip:{followMouse:true},maxHeight:420});"
+        "return{tl:tl,items:items};}"
+        "var T=build(rd());"
+        "window.__evtlUpdate=function(nd){if(!T){T=build(nd);return;}"
+        "T.items.clear();T.items.add(nd.items);};"
+        "})();</script></section>")
+
+
 def render_ticket(iid, journal, sessions) -> str:
     s = sessions.get(iid, {})
     key = s.get("key") or f"#{iid}"
@@ -1362,7 +1478,9 @@ def render_ticket(iid, journal, sessions) -> str:
             f"</div>"
             f"<div class='pane on' id='pane-convo'>{convo_view}</div>"
             f"<div class='pane' id='pane-trace'>{trace_view}</div>"
-            f"{tabs_js}</main>")
+            f"{tabs_js}</main>"
+            # W6.7:時間軸刻意在 </main> 之外(5s 刷新只換 main,widget 存活)
+            f"{render_timeline_section(evs)}")
 
 
 # ── W6.5:REST API 文件(vendored Swagger UI,離線可用)────────────────────── #
@@ -1671,14 +1789,21 @@ class Handler(BaseHTTPRequestHandler):
                      "await r.text(),'text/html');"
                      "const nu=doc.querySelector('main'),"
                      "cur=document.querySelector('main');"
-                     "if(!nu||!cur||nu.innerHTML===cur.innerHTML)return;"
+                     "if(nu&&cur&&nu.innerHTML!==cur.innerHTML){"
                      "const open=[...cur.querySelectorAll('details')]"
                      ".map(d=>d.open);"
                      "cur.innerHTML=nu.innerHTML;"
                      "[...cur.querySelectorAll('details')].forEach((d,i)=>{"
                      "if(open[i])d.open=true});"
                      "if(typeof tab==='function')"
-                     "tab((location.hash||'#convo').slice(1));"
+                     "tab((location.hash||'#convo').slice(1));}"
+                     # W6.7:時間軸在 main 之外——單獨抽資料島更新(不摧毀 widget)
+                     "const nd=doc.querySelector('#evtl-data'),"
+                     "live=document.querySelector('#evtl-data');"
+                     "if(nd&&window.__evtlUpdate&&(!live||"
+                     "live.textContent!==nd.textContent)){"
+                     "if(live)live.textContent=nd.textContent;"
+                     "window.__evtlUpdate(JSON.parse(nd.textContent));}"
                      "}catch(e){}},5000);</script>")
         else:
             body = render_index(journal, sessions, read_watch())

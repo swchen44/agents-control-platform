@@ -80,6 +80,10 @@ for iid in range(1, 8):
         summary=f"任務摘要 {iid}", description=f"細節描述 {iid}"))  # W4.7 過濾
 store.journal("approval", 7, "P-7", decision="reprompt", revisions=1)
 store.journal("handoff", 3, "P-3", kind="agent", to="other")   # 換手起點
+# W6.7:harness→Jira 寫入(jira_write)+ 結案,供事件時間軸驗證
+store.journal("jira_write", 1, "P-1", action="comment", detail="[agent] done")
+store.journal("jira_write", 1, "P-1", action="transition", detail="done")
+store.journal("resolved", 1, "P-1", outcome="SUCCESS")
 
 
 class FakePoller:
@@ -235,6 +239,34 @@ try:
     # W6.4:被動產生按鈕(有 session_id 才有;打 control /gen_transcript)
     check("transcript 卡:被動產生按鈕",
           "/gen_transcript/1" in t1 and "重新產生" in t1)
+    # W6.7:事件時間軸(vis-timeline,只 harness/Jira 生命週期,放 </main> 外)
+    check("時間軸:區塊 + vendored vis 資產(離線)",
+          "事件時間軸" in t1
+          and "/tvendor/vis-timeline.min.js" in t1
+          and "/tvendor/vis-timeline.min.css" in t1
+          and "id='evtl'" in t1)
+    check("時間軸:section 在 </main> 之外(刷新不摧毀 widget)",
+          "</main>" in t1
+          and t1.index("class='tlsec'") > t1.index("</main>"))
+    import re as _re2
+    mtl = _re2.search(
+        r"<script id='evtl-data' type='application/json'>(.*?)</script>",
+        t1, _re2.S)
+    check("時間軸:資料島可解析", bool(mtl))
+    tld = json.loads(mtl.group(1)) if mtl else {"groups": [], "items": []}
+    gids = {g["id"] for g in tld["groups"]}
+    check("時間軸:四分組(外部/Jira/生命週期/執行)",
+          gids == {"in", "jira", "life", "run"})
+    jira_items = [i for i in tld["items"] if i["group"] == "jira"]
+    check("時間軸:jira_write→jira 組 + 中文標籤",
+          any("留言 Jira" in i["content"] for i in jira_items)
+          and any("transition" in i["content"] for i in jira_items))
+    check("時間軸:new_issue→外部、resolved→生命週期、start 為 epoch ms",
+          any(i["group"] == "in" and "新票" in i["content"]
+              for i in tld["items"])
+          and any(i["group"] == "life" and "結案" in i["content"]
+                  for i in tld["items"])
+          and all(isinstance(i["start"], int) for i in tld["items"]))
     fh = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/tfile/1/final.html", timeout=5)
     check("tfile:HTML 內容可讀",

@@ -21,7 +21,10 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from .logutil import get_logger
 from .ticket import Comment, Ticket
+
+log = get_logger("jira")
 
 
 def _ssl_context() -> ssl.SSLContext:
@@ -89,6 +92,19 @@ class JiraCloudSource:
         raw = f"{email}:{api_token}".encode()
         self._auth = "Basic " + base64.b64encode(raw).decode()
         self._ssl = _ssl_context()
+        # W6.7:harness→Jira 寫入回呼(留言/assign/transition/description);
+        # run_poller 接成 store.journal("jira_write",…),供事件時間軸顯示
+        # 「HH:MM 留言 Jira / 改 assignee / transition」。None = 不記(測試預設)。
+        self.on_write = None
+
+    def _notify_write(self, action: str, id_or_key, detail: str = "") -> None:
+        """寫入成功後記一筆 jira_write;回呼壞掉絕不影響 Jira 寫入本身。"""
+        if not self.on_write:
+            return
+        try:
+            self.on_write(action, id_or_key, detail)
+        except Exception as e:  # noqa: BLE001
+            log.warning("on_write 回呼失敗(%s %s):%s", action, id_or_key, e)
 
     # -- transport --------------------------------------------------------- #
     def _request(self, method: str, path: str,
@@ -195,6 +211,7 @@ class JiraCloudSource:
     def add_comment(self, id_or_key: str | int, text: str) -> None:
         self._request("POST", f"/rest/api/3/issue/{id_or_key}/comment",
                       body={"body": text_to_adf(text)})
+        self._notify_write("comment", id_or_key, text)
 
     def create_ticket(self, project_key: str, summary: str,
                       description: str = "", issue_type_id: str = "10003",
@@ -226,6 +243,7 @@ class JiraCloudSource:
                 self._request("POST",
                              f"/rest/api/3/issue/{id_or_key}/transitions",
                              body={"transition": {"id": tr["id"]}})
+                self._notify_write("transition", id_or_key, to_category)
                 return True
         return False
 
@@ -233,11 +251,13 @@ class JiraCloudSource:
         """Overwrite the issue description (W2.3 審批門寫分區段 plan)。"""
         self._request("PUT", f"/rest/api/3/issue/{id_or_key}",
                       body={"fields": {"description": text_to_adf(text)}})
+        self._notify_write("description", id_or_key, "更新 description")
 
     def assign(self, id_or_key: str | int, account_id: str | None) -> None:
         """Set assignee by accountId(None = 取消指派)。W2.3/W2.4 換手用。"""
         self._request("PUT", f"/rest/api/3/issue/{id_or_key}/assignee",
                       body={"accountId": account_id})
+        self._notify_write("assign", id_or_key, account_id or "(取消指派)")
 
     # -- mapping ------------------------------------------------------------ #
     def _to_ticket(self, issue: dict) -> Ticket:

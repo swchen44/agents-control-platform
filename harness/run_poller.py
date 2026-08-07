@@ -94,6 +94,18 @@ def main() -> int:
                           write_retry_base=float(_wr.get("base_sec", 1.0)))
     profiles = load_profiles("routes.yaml")
     store = Store("./runtime_live")          # 持久,絕不 wipe(lesson #9)
+
+    # W6.7:harness→Jira 每次寫入補記 jira_write(供 ticket 頁事件時間軸顯示
+    # 「HH:MM 留言/assign/transition」)。key 由 store 反查;回呼壞不擋寫入。
+    def _on_jira_write(action, id_or_key, detail=""):
+        try:
+            iid = int(id_or_key)
+        except (ValueError, TypeError):
+            return
+        w = store.get(iid)
+        store.journal("jira_write", iid, w.key if w else str(id_or_key),
+                      action=action, detail=str(detail)[:80])
+    src.on_write = _on_jira_write
     jql = source_cfg["jql"]
     # W12/W2.3:機器人身份(assignee 方向判定 + 審批放行偵測)。
     # config 可覆寫(source.bot_account_id),否則啟動時 myself() 解析一次。

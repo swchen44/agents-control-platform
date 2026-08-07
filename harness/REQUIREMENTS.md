@@ -182,6 +182,11 @@ vis-timeline 元件)+ 明確補記 harness 的 Jira 寫入(留言/assign/transit
 時 journal 一筆 `jira_write`,讓時間軸清楚顯示「HH:MM 留言 Jira: SUCCESS」)。
 **決策(2026-08-07 敲定)**:時間軸範圍 = **只 harness/Jira 生命週期**(乾淨);
 agent 對話留給 transcript 的 timeline,不併入(避免吵雜、避免重複)。
+- **已實作(W6.7)**:JiraCloudSource 加 `on_write` 回呼(source 層統一,涵蓋
+  comment/assign/transition/description 24 個寫入點,免逐點改),run_poller 接成
+  `store.journal("jira_write",…)`;ticket 頁加事件時間軸(重用 vendored vis-timeline,
+  四分組:外部輸入/Jira 寫入/生命週期/執行·產物),**刻意放 `</main>` 之外**——5s
+  自動刷新只換 main,widget 不被摧毀(Chrome 實測過刷新後 widget 存活、無閃爍)。
 
 ### 10.5 連線 IP 追蹤 + history
 dashboard/control 記錄連線 client IP + 時間;Server 頁顯示目前連線 + 近期 history。
