@@ -119,6 +119,53 @@ Jira issue ─▶ rule engine(assignee/keyword JSON)─▶ workspace + skills �
 - **生命週期事件**都記在 journal `events.jsonl`(new_issue/attempt_*/resolved/pending/
   handoff/jira_write/human_score…);ticket 詳情頁的**事件時間軸**由它繪製。
 
+## 多實例部署(同一台機器並存多個 Control Plane)
+
+想同時跑多個 Control Plane(例:一個顧 SCRUM、一個顧 OPS),做法是**複製整個
+`agents-control-platform` 資料夾**成獨立一份,各自有獨立 `runtime_live/`、設定與 port。
+每個實例在 dashboard 左上角會顯示 `ARCP Control Plane · <name>` 方便分辨。
+
+**每個實例務必各自不同的(否則會互相干擾):**
+
+| 項目 | 在哪設 | 為何 |
+|---|---|---|
+| **實例名 `name`** | `routes.yaml` → `outer_loop.source.name`(或 env `ARCP_NAME`) | 顯示在 dashboard 標題/瀏覽器分頁,分辨是哪個實例 |
+| **Jira project + jql**(最重要) | `routes.yaml` → `source.project` / `source.jql` | ⚠️ **兩個實例絕不可 poll 同一 project/重疊 jql** —— 否則兩個 poller 互搶同一批票、覆寫彼此狀態(這正是我們 e2e 併發時撞到的 flaky 來源)。用不同 project,或至少用不重疊的 label/JQL 濾條 |
+| **control API port** | `routes.yaml` → `control.port`(預設 8787) | 每實例的 REST 控制面要獨立 port |
+| **dashboard port** | 啟動 `detail_server.py <runtime> <port>` 的 `<port>`(預設 8788) | 每實例的 dashboard 要獨立 port |
+| **dashboard→control 指向** | `detail_server.py` 第三引數或 env `ARCP_CONTROL_URL` | dashboard 的 Evict/狀態按鈕要打到**自己這個**實例的 control port,不能指到別台 |
+
+**共用、但要留意的:**
+
+- **Jira 憑證** `~/.env`(`JIRA_BASE_URL/EMAIL/API_TOKEN`):同一個 Jira 站的不同
+  project 可共用同一份;若要接**不同 Jira 站**,需為該實例準備不同憑證來源
+  (目前 `config.jira_credentials` 固定讀 `~/.env`,跨站需自行調整 env path)。
+- **機器人帳號 `bot_account_id`**:同站同 bot 帳號在**不同 project** 上並存 OK(自家
+  `[agent]` 留言互相忽略);但若不慎讓兩實例落到**同一 project**,一方會把另一方的
+  assignee/留言當「外部變更」處理 → 再次強調:**分 project**。
+- **claude / codex 登入**(`~/.claude`、`~/.codex`)全域共用:沒問題,但兩實例的
+  agent 併發會共用同一組 API rate limit 與**花費**。預算上限(單次/月)是
+  **per-instance**(各讀自己的 journal),**跨實例總花費不會合計** → 併發時把每實例的
+  `concurrency` 設保守一點,避免合計超過機器/額度。
+- **agent session / transcript 檔**(`~/.claude/projects`、`~/.codex/sessions`)全域:
+  session id 唯一不衝突;transcript 與月花費彙總各讀自己實例的 journal,per-instance OK。
+- **dashboard 綁定**:預設 `0.0.0.0`(內網開放)。多實例只要 port 不同即可並存;要鎖
+  本機用 `ARCP_DASH_HOST=127.0.0.1`。
+
+**快速範例(起第二個實例 "ops"):**
+
+```bash
+cp -R agents-control-platform arcp-ops && cd arcp-ops/harness
+# 編輯 routes.yaml:source.name: ops、source.project/jql 改成別的專案、control.port: 8797
+python3 run_poller.py &                                  # 用 routes.yaml 的 control.port
+ARCP_DASH_HOST=127.0.0.1 python3 detail_server.py ./runtime_live 8798 \
+  http://127.0.0.1:8797                                  # dashboard 8798 → 指向自己的 control 8797
+```
+
+> 一句話:**分資料夾、分 name、分 Jira project/jql、分 port(control + dashboard)、
+> dashboard 指向自己的 control**。其餘(憑證/登入/session 檔)可共用,但預算與機器
+> 資源是 per-instance、不跨實例合計,併發請設保守。
+
 ## 現況與路線圖
 
 研究階段(pre-alpha),介面會變。已完成:統一 event schema、雙 CLI driver、

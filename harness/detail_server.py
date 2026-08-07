@@ -48,6 +48,26 @@ CONTROL = (sys.argv[3] if len(sys.argv) > 3
 HOST = os.environ.get("ARCP_DASH_HOST", "0.0.0.0")
 # W7.5:Agent Detail 讀 routes.yaml(harness 設定 + profiles)。憑證在 ~/.env 不在此。
 _CONFIG_PATH = os.environ.get("ARCP_CONFIG", "routes.yaml")
+
+
+def _instance_name() -> str:
+    """W8.6:此 Control Plane 實例名(routes.yaml source.name;多實例分辨用)。
+    輕量讀取、壞掉不擋站。ARCP_NAME 環境變數可覆寫。"""
+    env = os.environ.get("ARCP_NAME")
+    if env:
+        return env
+    try:
+        import yaml
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
+            doc = yaml.safe_load(f) or {}
+        return str((((doc.get("outer_loop") or {}).get("source") or {})
+                    .get("name")) or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+_INSTANCE_NAME = _instance_name()
+_TITLE_TAIL = (" · " + _INSTANCE_NAME) if _INSTANCE_NAME else ""
 # W6.6:連線 IP 環形緩衝(記憶體,重啟清)
 _CONNS: deque = deque(maxlen=200)
 # 內網/離線:transcript(cclog)本需從 CDN 載 vis-timeline,已 vendor 到本地
@@ -324,6 +344,10 @@ code{font-family:var(--font-mono);font-size:.92em;background:var(--panel-2);
   color:var(--ink);letter-spacing:-.01em}
 .cmdbar .brand .sub{font-family:var(--font-body);font-size:10px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--muted);margin-left:8px}
+.cmdbar .brand .iname{font-family:var(--font-mono);font-size:12px;
+  color:var(--accent);background:var(--accent-soft);
+  border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
+  border-radius:20px;padding:2px 10px;margin-left:10px;letter-spacing:0}
 .cmdbar .live{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--accent)}
 .cmdbar .live i{width:7px;height:7px;border-radius:50%;background:var(--accent);
@@ -1233,11 +1257,13 @@ def _nav(active: str) -> str:
             + tab("agent", "/agent", "Agent Detail")
             + tab("server", "/server", "Server")
             + tab("concepts", "/concepts", "概念"))
+    nm = (f"<span class='iname'>{esc(_INSTANCE_NAME)}</span>"
+          if _INSTANCE_NAME else "")
     return ("<a class='skip' href='#main'>跳到主要內容</a>"
             "<div class='cmdbar'>"
             "<span class='brand' translate='no'>ARCP"
-            "<span class='sub'>Control&nbsp;Plane</span>"
-            "</span><span class='live'><i aria-hidden='true'></i>Live</span>"
+            "<span class='sub'>Control&nbsp;Plane</span>" + nm
+            + "</span><span class='live'><i aria-hidden='true'></i>Live</span>"
             f"<nav class='navtabs'>{tabs}</nav>"
             "<button class='tgl' id='arcp-tgl' type='button' aria-label='切換明暗主題'>"
             "<span id='arcp-tgi'>☾</span><span id='arcp-tgn'>深色</span>"
@@ -2493,7 +2519,7 @@ class Handler(BaseHTTPRequestHandler):
                     else render_concepts_page() if self.path == "/concepts"
                     else render_server_page())
             page = (f"<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><meta name='theme-color' content='#F1EEE6' media='(prefers-color-scheme:light)'><meta name='theme-color' content='#1E1C19' media='(prefers-color-scheme:dark)'>"
-                    f"<title>ARCP</title><style>{CSS}</style></head>"
+                    f"<title>ARCP{_TITLE_TAIL}</title><style>{CSS}</style></head>"
                     f"<body>{body}</body></html>")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -2584,7 +2610,7 @@ class Handler(BaseHTTPRequestHandler):
         # live 更新一律走 fetch 局部替換(index 表身/統計卡、ticket main),
         # 不再整頁 meta refresh(W4.1)
         page = (f"<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><meta name='theme-color' content='#F1EEE6' media='(prefers-color-scheme:light)'><meta name='theme-color' content='#1E1C19' media='(prefers-color-scheme:dark)'>"
-                f"<title>ARCP Detail</title><style>{CSS}</style></head>"
+                f"<title>ARCP Detail{_TITLE_TAIL}</title><style>{CSS}</style></head>"
                 f"<body>{body}</body></html>")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")

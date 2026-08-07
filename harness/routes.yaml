@@ -4,6 +4,10 @@ version: 1
 
 outer_loop:
   source:
+    # W8.6:此 Control Plane 實例名(多實例並存時用來分辨;顯示在 dashboard 標題
+    # 「ARCP Control Plane · <name>」與瀏覽器分頁)。多實例務必各取不同名 + 不同
+    # Jira project/jql + 不同 port(見 README「多實例部署」)。
+    name: default
     project: SCRUM
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
