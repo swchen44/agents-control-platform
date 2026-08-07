@@ -151,6 +151,9 @@
 - **cclog 支援 codex**:已接 `--provider codex`,W6 實測補證。
 - **不漏 claude/codex sub-session** transcript。
 - **Why**:定時產正在執行的太耗;改事件+按需,且要知道每份是何時、為何產的。
+- **已實作(W6.5)**:snapshotter 移除;finalize 統一入口帶 reason 寫 `meta.json`
+  (generated_at/reason/session_id/subs);被動 = control `POST /gen_transcript/<id>`
+  + ticket 頁按鈕;卡片顯示時間/原因(中文化);cclog codex 真 session 實測通過。
 
 ### 10.4 REST API 文件(2026-08-07 更新:改用 vendored Swagger UI)
 目前**無**任何連結。~~加自寫 `/docs` 頁~~ → **vendor Swagger UI**(swagger-ui-dist
@@ -159,6 +162,11 @@
 **Why**:使用者 2026-08-07 指示 vendor 回來——Swagger UI 美觀實用、可 try-it-out;
 評估確認它是自包靜態檔,vendor 後完全離線(不違反內網原則)。原「手寫」理由
 (Swagger UI 需 CDN)在 vendor 後不成立。⚠️ try-it-out 對寫入端點=真操控,頁面標註。
+- **已實作(W6.5)**:vendor `tools/vendor/swagger-ui/`(css+bundle.js+LICENSE,
+  無外部引用);detail_server 出 `/openapi.json`(手寫 3.1,唯讀+寫入分兩 server,
+  寫入端點 tag『control-plane ⚠️』+ operation-level server 指向 control API)、
+  `/docs`(Swagger UI,專屬 CSP 含 unsafe-eval 因 bundle 有 1 處 new Function)、
+  `/swagger-assets/<file>`;Server 頁連結。Chrome 實測離線渲染 + 無 console 錯誤。
 
 ### 10.6 事件時間軸(2026-08-07 新增)
 使用者看到 `aN.events.jsonl`(L3 events)不解其用,想要「有時間、看得到 user/agent
@@ -172,8 +180,8 @@
 **做法**:per-ticket 詳情頁加「**事件時間軸**」,用 journal 事件(重用已 vendor 的
 vis-timeline 元件)+ 明確補記 harness 的 Jira 寫入(留言/assign/transition 於寫入
 時 journal 一筆 `jira_write`,讓時間軸清楚顯示「HH:MM 留言 Jira: SUCCESS」)。
-**決策(待確認)**:時間軸範圍 = 只 harness/Jira 生命週期(乾淨) vs 併入 agent 對話
-(可能吵雜;agent 對話已有 transcript 的 timeline)。
+**決策(2026-08-07 敲定)**:時間軸範圍 = **只 harness/Jira 生命週期**(乾淨);
+agent 對話留給 transcript 的 timeline,不併入(避免吵雜、避免重複)。
 
 ### 10.5 連線 IP 追蹤 + history
 dashboard/control 記錄連線 client IP + 時間;Server 頁顯示目前連線 + 近期 history。

@@ -279,6 +279,44 @@ try:
     check("Server 頁無金鑰值樣式",
           not _re.search(r"sk-ant|eyJ[A-Za-z0-9_-]{20}",
                          json.dumps(sd)))
+    check("Server 頁:REST API 文件連結", "href='/docs'" in spage)
+
+    # W6.5:REST API 文件(vendored Swagger UI,離線可用)
+    oa = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/openapi.json", timeout=5).read())
+    check("/openapi.json:3.1 規格 + 關鍵端點",
+          oa["openapi"].startswith("3.1")
+          and "/evict/{issue_id}" in oa["paths"]
+          and "/gen_transcript/{issue_id}" in oa["paths"]
+          and "/data" in oa["paths"])
+    check("/openapi.json:寫入端點 ⚠️ 標示 + 指向 control server",
+          oa["paths"]["/evict/{issue_id}"]["post"]["summary"].startswith("⚠️")
+          and oa["paths"]["/evict/{issue_id}"]["post"]["servers"][0]["url"]
+          == ctl_url)
+    docs = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/docs", timeout=5)
+    dhtml = docs.read().decode()
+    check("/docs:Swagger UI 載入本地資產",
+          "SwaggerUIBundle" in dhtml
+          and "/swagger-assets/swagger-ui-bundle.js" in dhtml
+          and "/openapi.json" in dhtml)
+    check("/docs:CSP 放行本地 + control(無外部 CDN)",
+          "default-src 'self'" in (docs.headers.get(
+              "Content-Security-Policy") or "")
+          and "://" not in (docs.headers.get("Content-Security-Policy") or ""
+                            ).replace(ctl_url, ""))
+    css = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/swagger-assets/swagger-ui.css", timeout=5)
+    check("/swagger-assets:vendored 資產本地服務",
+          css.status == 200
+          and int(css.headers.get("Content-Length") or 0) > 10000)
+    try:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/swagger-assets/..%2f..%2fdetail_server.py",
+            timeout=5)
+        check("/swagger-assets:traversal 擋掉", False)
+    except urllib.error.HTTPError as e:
+        check("/swagger-assets:traversal 擋掉", e.code == 404)
 
     # 按鈕背後的端點契約(JS fetch 打的就是這些)
     req = urllib.request.Request(f"{ctl_url}/pause", method="POST")

@@ -50,6 +50,9 @@ _CONNS: deque = deque(maxlen=200)
 # 內網/離線:transcript(cclog)本需從 CDN 載 vis-timeline,已 vendor 到本地
 _VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "tools", "cclog", "vendor")
+# W6.5:Swagger UI(REST API 文件)也 vendor 到本地(內網不外連 CDN)
+_SWAGGER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "tools", "vendor", "swagger-ui")
 # transcript HTML(外部工具產出)硬擋任何外部載入(只允許同源 + 內嵌 + data:)
 _CSP_TRANSCRIPT = ("default-src 'none'; script-src 'self' 'unsafe-inline'; "
                    "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
@@ -57,6 +60,13 @@ _CSP_TRANSCRIPT = ("default-src 'none'; script-src 'self' 'unsafe-inline'; "
 # 主頁(我們自寫,已無外部引用)——同樣擋外部,但放行本地 control API 的
 # 跨埠 fetch(Evict / 狀態);defense-in-depth,防未來誤加 CDN。
 _CSP_MAIN = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+             "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+             "font-src 'self' data:; connect-src 'self' " + CONTROL)
+# W6.5:/docs(Swagger UI)專屬——vendored bundle 內含 1 處 new Function
+# (bundled lib),需 unsafe-eval;仍只放行同源資產 + 對 control API 的 Try it out。
+# 內容為自 host 已審 bundle,unsafe-eval 侷限此頁可接受(defense-in-depth)。
+_CSP_DOCS = ("default-src 'self'; "
+             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
              "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
              "font-src 'self' data:; connect-src 'self' " + CONTROL)
 
@@ -1355,6 +1365,150 @@ def render_ticket(iid, journal, sessions) -> str:
             f"{tabs_js}</main>")
 
 
+# ── W6.5:REST API 文件(vendored Swagger UI,離線可用)────────────────────── #
+def openapi_spec() -> dict:
+    """手寫 OpenAPI 3.1 規格。涵蓋兩個 server:
+      - dashboard(唯讀觀測,本頁同源 `/`):/data /server/data /db/* /tfile
+      - control-plane(寫入 ⚠️,另一 port CONTROL):/pause /evict /gen_transcript…
+    寫入端點以 tag『control-plane ⚠️』標示,並用 operation-level `servers`
+    指向 CONTROL,讓 Swagger UI『Try it out』打到正確 host。"""
+    ctl = [{"url": CONTROL, "description": "control API(寫入;預設只綁 127.0.0.1)"}]
+
+    def w(summary, desc="", params=None, req=None):
+        """寫入端點模板(⚠️ + operation-level control server)。"""
+        op = {"tags": ["control-plane ⚠️(寫入)"], "servers": ctl,
+              "summary": "⚠️ " + summary, "description": desc,
+              "responses": {"200": {"description": "OK",
+                                    "content": {"application/json": {}}}}}
+        if params:
+            op["parameters"] = params
+        if req:
+            op["responses"]["404"] = {"description": "無此 session / 終態 / 哨值"}
+            op["responses"]["400"] = {"description": "issue id 非數字"}
+        return op
+
+    iid_param = [{"name": "issue_id", "in": "path", "required": True,
+                  "schema": {"type": "integer"},
+                  "description": "Jira issue 的數字 id"}]
+    return {
+        "openapi": "3.1.0",
+        "info": {
+            "title": "ARCP Harness API",
+            "version": "W6.5",
+            "description": (
+                "Jira 事件驅動 headless coding-agent harness 的 REST 介面。\n\n"
+                "**兩個 server**:\n"
+                "- *dashboard*(本頁同源):唯讀觀測資料。\n"
+                "- *control-plane*(另一 port,預設 `127.0.0.1:8787`):寫入/控制,"
+                "端點以 ⚠️ 標示。\n\n"
+                "寫入端點會改變 poller 狀態或殺進程,請確認再『Try it out』。"),
+        },
+        "servers": [{"url": "/", "description": "dashboard(唯讀觀測,本頁同源)"}],
+        "tags": [
+            {"name": "observability(唯讀)", "description": "儀表板/Server 頁資料源"},
+            {"name": "db(唯讀)", "description": "SQLite 瀏覽器(僅 SELECT)"},
+            {"name": "artifacts", "description": "transcript 產物與規格"},
+            {"name": "control-plane ⚠️(寫入)",
+             "description": "poller 控制面(pause/resume/reload/shutdown/evict/"
+                            "gen_transcript);打到 control API host。"},
+        ],
+        "paths": {
+            "/data": {"get": {
+                "tags": ["observability(唯讀)"],
+                "summary": "儀表板單一資料源(所有 ticket session + 彙總)",
+                "responses": {"200": {"description": "rows/彙總",
+                                      "content": {"application/json": {}}}}}},
+            "/server/data": {"get": {
+                "tags": ["observability(唯讀)"],
+                "summary": "Server 頁資料源(系統/版本/登入/連線/程序/workspace/evict)",
+                "responses": {"200": {"description": "sys/conns/processes/"
+                                      "workspaces/evict",
+                                      "content": {"application/json": {}}}}}},
+            "/db/tables": {"get": {
+                "tags": ["db(唯讀)"], "summary": "SQLite 資料表清單 + 列數",
+                "responses": {"200": {"description": "tables",
+                                      "content": {"application/json": {}}}}}},
+            "/db/table/{name}": {"get": {
+                "tags": ["db(唯讀)"], "summary": "分頁讀取一張表",
+                "parameters": [
+                    {"name": "name", "in": "path", "required": True,
+                     "schema": {"type": "string"}},
+                    {"name": "limit", "in": "query",
+                     "schema": {"type": "integer", "default": 100}},
+                    {"name": "offset", "in": "query",
+                     "schema": {"type": "integer", "default": 0}}],
+                "responses": {"200": {"description": "cols/rows",
+                                      "content": {"application/json": {}}}}}},
+            "/db/query": {"post": {
+                "tags": ["db(唯讀)"],
+                "summary": "唯讀 SQL 查詢(僅允許 SELECT)",
+                "requestBody": {"content": {"application/json": {"schema": {
+                    "type": "object",
+                    "properties": {"sql": {"type": "string"}}}}}},
+                "responses": {"200": {"description": "cols/rows 或 error",
+                                      "content": {"application/json": {}}}}}},
+            "/tfile/{issue_id}/{name}": {"get": {
+                "tags": ["artifacts"],
+                "summary": "transcript 產物(HTML 檢視 / tgz 下載 / log)",
+                "parameters": iid_param + [
+                    {"name": "name", "in": "path", "required": True,
+                     "schema": {"type": "string"},
+                     "description": "final.html / transcript.tgz / *.log"}],
+                "responses": {"200": {"description": "檔案內容"},
+                              "404": {"description": "無此產物"}}}},
+            "/openapi.json": {"get": {
+                "tags": ["artifacts"], "summary": "本 OpenAPI 規格(JSON)",
+                "responses": {"200": {"description": "spec",
+                                      "content": {"application/json": {}}}}}},
+            "/health": {"get": {
+                "tags": ["control-plane ⚠️(寫入)"], "servers": ctl,
+                "summary": "control API 健康檢查", "responses": {"200": {
+                    "description": "{ok:true}",
+                    "content": {"application/json": {}}}}}},
+            "/status": {"get": {
+                "tags": ["control-plane ⚠️(寫入)"], "servers": ctl,
+                "summary": "poller 狀態彙總(paused/in_flight/queued/cost…)",
+                "responses": {"200": {"description": "狀態",
+                                      "content": {"application/json": {}}}}}},
+            "/pause": {"post": w(
+                "暫停派工(graceful:只 watch,不派新工,不中斷正在跑的)")},
+            "/resume": {"post": w("恢復派工")},
+            "/reload": {"post": w(
+                "熱重載 routes.yaml(壞 config 回 400、舊設定續用、不弄死 poller)")},
+            "/shutdown": {"post": w(
+                "優雅關閉(當前 poll 輪跑完後退出並清理)")},
+            "/evict/{issue_id}": {"post": w(
+                "強制驅逐(killpg):殺此票 agent 進程組,不耗 attempt,下輪 resume",
+                desc="agent 卡住或要立即讓出 CPU/記憶體時用。屬異常處置,"
+                     "發生次數會記錄於 session.evict_count。",
+                params=iid_param, req=True)},
+            "/gen_transcript/{issue_id}": {"post": w(
+                "被動產生 transcript(定格 final HTML,reason=manual)",
+                desc="進行中/等待人類/已完成皆可;哨值 workspace 或無 session_id → 404。",
+                params=iid_param, req=True)},
+        },
+    }
+
+
+def render_docs_page() -> str:
+    """W6.5:Swagger UI 載入頁(全本地資產:/swagger-assets/* + /openapi.json)。"""
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<title>ARCP API — Swagger UI</title>"
+        "<link rel='stylesheet' href='/swagger-assets/swagger-ui.css'>"
+        "<style>body{margin:0}.topbar{display:none}</style></head><body>"
+        "<div id='swagger-ui'></div>"
+        "<script src='/swagger-assets/swagger-ui-bundle.js'></script>"
+        "<script>window.onload=function(){window.ui=SwaggerUIBundle({"
+        "url:'/openapi.json',dom_id:'#swagger-ui',deepLinking:true,"
+        "presets:[SwaggerUIBundle.presets.apis],layout:'BaseLayout',"
+        "tryItOutEnabled:true});};</script></body></html>")
+
+
+_SWAGGER_CT = {".css": "text/css", ".js": "application/javascript",
+               ".txt": "text/plain"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -1397,6 +1551,38 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/server/data":            # W6.1 Server 頁資料源
             self._send_json(build_server_data())
+            return
+        if self.path == "/openapi.json":           # W6.5 REST API 規格
+            self._send_json(openapi_spec())
+            return
+        if self.path == "/docs":                   # W6.5 Swagger UI(本地資產)
+            page = render_docs_page()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", _CSP_DOCS)
+            self.end_headers()
+            self.wfile.write(page.encode())
+            return
+        if self.path.startswith("/swagger-assets/"):  # W6.5 vendored Swagger UI
+            try:
+                name = os.path.basename(self.path)     # 防 traversal
+                p = os.path.join(_SWAGGER_DIR, name)
+                if not os.path.isfile(p):
+                    raise FileNotFoundError(p)
+                data = open(p, "rb").read()
+                _, ext = os.path.splitext(name)
+                self.send_response(200)
+                self.send_header(
+                    "Content-Type",
+                    f"{_SWAGGER_CT.get(ext, 'application/octet-stream')}"
+                    "; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "max-age=86400")
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception:
+                self.send_response(404)
+                self.end_headers()
             return
         if self.path == "/db/tables":              # W5.6 DB 瀏覽器
             self._send_json(db_tables())
