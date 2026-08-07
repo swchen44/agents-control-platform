@@ -90,6 +90,7 @@ port = free_port()
 proc = subprocess.Popen(
     [sys.executable, "detail_server.py", root, str(port), ctl_url],
     cwd=os.path.dirname(os.path.abspath(__file__)),
+    env=dict(os.environ, ARCP_DASH_HOST="127.0.0.1"),  # 測試綁本機免防火牆彈窗
     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     for _ in range(50):                       # 等 server 起來(最多 5s)
@@ -243,6 +244,23 @@ try:
         check("tfile:traversal 擋掉", False)
     except urllib.error.HTTPError as e:
         check("tfile:traversal 擋掉", e.code == 404)
+
+    # W6.1:Server 頁 + 系統資料源 + 金鑰不外洩
+    spage = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/server", timeout=5).read().decode()
+    check("Server 頁 + 4 tab 導覽",
+          "id='sroot'" in spage and "🖥 Server" in spage)
+    sd = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/server/data", timeout=5).read())
+    check("/server/data:sys 版本/資源/登入狀態齊",
+          all(k in (sd.get("sys") or {}) for k in
+              ("versions", "auth", "resources", "anomalies")))
+    check("/server/data:auth 只布林(不外洩金鑰值)",
+          all(isinstance(v, bool) for v in sd["sys"]["auth"].values()))
+    import re as _re
+    check("Server 頁無金鑰值樣式",
+          not _re.search(r"sk-ant|eyJ[A-Za-z0-9_-]{20}",
+                         json.dumps(sd)))
 
     # 按鈕背後的端點契約(JS fetch 打的就是這些)
     req = urllib.request.Request(f"{ctl_url}/pause", method="POST")

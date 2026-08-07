@@ -28,14 +28,25 @@ import json
 import os
 import sqlite3
 import sys
-from collections import Counter
+from collections import Counter, deque
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:                                    # W6.1 系統資訊(純 stdlib);缺也不擋頁
+    from arcp_harness.sysinfo import collect as sysinfo_collect
+except Exception:  # noqa: BLE001
+    sysinfo_collect = None
 
 ROOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else \
     os.path.abspath("./runtime_live")
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8788   # 8787 讓給 control API
 CONTROL = (sys.argv[3] if len(sys.argv) > 3
            else os.environ.get("ARCP_CONTROL_URL", "http://127.0.0.1:8787"))
+# W6.1:綁定 host = config,預設 0.0.0.0(內網開放,使用者 2026-08-07 決定;
+# ⚠️ dashboard 唯讀但會顯示系統/程序資訊,內網任何人可見)。設 127.0.0.1 可鎖本機。
+HOST = os.environ.get("ARCP_DASH_HOST", "0.0.0.0")
+# W6.6:連線 IP 環形緩衝(記憶體,重啟清)
+_CONNS: deque = deque(maxlen=200)
 # 內網/離線:transcript(cclog)本需從 CDN 載 vis-timeline,已 vendor 到本地
 _VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "tools", "cclog", "vendor")
@@ -448,6 +459,77 @@ def render_control_page() -> str:
             f"{_CONTROL_JS}")
 
 
+def build_server_data() -> dict:
+    """W6.1 Server 頁單一資料源(W6.2 加 processes/workspaces、W6.6 加 conns)。"""
+    data = {"sys": sysinfo_collect() if sysinfo_collect else None}
+    data["conns"] = list(_CONNS)[-30:][::-1]        # W6.6 近期連線(新→舊)
+    return data
+
+
+_SERVER_JS = ("<script>"
+    "const $s=id=>document.getElementById(id);"
+    "function esc(x){return (''+x).replace(/&/g,'&amp;').replace(/</g,'&lt;');}"
+    "function dur(s){s=+s||0;const d=s/86400|0,h=s%86400/3600|0,"
+    "m=s%3600/60|0;return d?d+'d '+h+'h':(h?h+'h '+m+'m':m+'m');}"
+    "function gb(b){return ((+b||0)/1e9).toFixed(1)+'GB';}"
+    "function tile(n,l){return `<div class='stat'><div class='n'>${n}"
+    "</div><div class='l'>${l}</div></div>`;}"
+    "function kv(k,v){return `<div class='kv'><b>${k}</b> ${esc(v)}</div>`;}"
+    "async function load(){"
+    "let d;try{d=await (await fetch('/server/data')).json();}"
+    "catch(e){$s('sroot').innerHTML=\"<p style='color:#f85149'>載入失敗</p>\";"
+    "return;}"
+    "const sy=d.sys||{};const v=sy.versions||{},a=sy.auth||{},"
+    "r=sy.resources||{},m=r.mem||{},dk=r.disk||{};"
+    "const badge=b=>b?\"<span style='color:#7ee2a8'>✓</span>\":"
+    "\"<span style='color:#f2a8a8'>✗</span>\";"
+    "let h='';"
+    # 異常
+    "if((sy.anomalies||[]).length)h+=\"<div class='card' style='border-color:"
+    "#4d1a1a'><b style='color:#f2a8a8'>⚠ 異常</b>\"+sy.anomalies.map("
+    "x=>`<div>• ${esc(x)}</div>`).join('')+'</div>';"
+    # 資源 tiles
+    "h+=\"<h2>資源</h2><div class='stats'>\"+"
+    "tile((r.loadavg||[0])[0]+' / '+(r.cpus||'?'),'load / cores')+"
+    "tile(gb(m.used)+' / '+gb(m.total),'記憶體')+"
+    "tile(gb(m.free),'free mem')+"
+    "tile(gb(dk.free)+' / '+gb(dk.total),'磁碟 free/total')+"
+    "tile(dur(r.uptime_sec),'uptime')+'</div>';"
+    # 版本
+    "h+=\"<h2>版本</h2><div class='card'>\"+kv('OS',v.os||'?')+"
+    "kv('kernel',v.kernel||'?')+kv('python',v.python||'?')+"
+    "kv('claude',v.claude||'?')+kv('codex',v.codex||'?')+"
+    "kv('workspace',r.cwd||'?')+'</div>';"
+    # 登入狀態(只狀態不顯值)
+    "h+=\"<h2>登入 / 金鑰(只顯示狀態,不顯示值)</h2><div class='card'>\"+"
+    "`<div class='kv'><b>codex 已登入</b> ${badge(a.codex_logged_in)}</div>`+"
+    "`<div class='kv'><b>claude 已設定</b> ${badge(a.claude_configured)}</div>`+"
+    "`<div class='kv'><b>ANTHROPIC_API_KEY(env)</b> "
+    "${badge(a.anthropic_api_key_env)}</div>`+'</div>';"
+    # 連線(W6.6)
+    "const cs=d.conns||[];"
+    "h+=\"<h2>連線(近期)</h2><div class='card'>\"+(cs.length?"
+    "\"<table id='tix'><thead><tr><td><b>時間</b></td><td><b>IP</b></td>\"+"
+    "\"<td><b>path</b></td></tr></thead><tbody>\"+cs.map(c=>`<tr><td>`+"
+    "`${esc(c.t)}</td><td>${esc(c.ip)}</td><td>${esc(c.path)}</td></tr>`)"
+    ".join('')+'</tbody></table>':"
+    "\"<span style='color:#8b949e'>(尚無記錄)</span>\")+'</div>';"
+    "$s('sroot').innerHTML=h;}"
+    "load();setInterval(load,4000);"
+    "</script>")
+
+
+def render_server_page() -> str:
+    """W6.1 Server 頁:系統/版本/登入狀態/資源(+ W6.2 程序、W6.6 連線)。"""
+    return (f"{_nav('server')}"
+            "<header><h1>Server · 系統與程序</h1></header><main>"
+            "<p style='color:#8b949e;font-size:12px'>dashboard 綁 "
+            f"{esc(HOST)}(內網開放,唯讀);登入/金鑰只顯示狀態,不顯示值。"
+            " <a href='/docs' style='color:#58a6ff'>REST API 文件</a></p>"
+            "<div id='sroot'>載入中…</div></main>"
+            f"{_SERVER_JS}")
+
+
 _APP_JS = """
 <script>
 const LS='arcp-v2';
@@ -745,7 +827,8 @@ def _nav(active: str) -> str:
             "background:#161b22;border-bottom:1px solid #30363d'>"
             + tab("dash", "/", "📊 Dashboard")
             + tab("db", "/db", "🗃 DB Browser")
-            + tab("control", "/control", "🎛 Control") + "</div>")
+            + tab("control", "/control", "🎛 Control")
+            + tab("server", "/server", "🖥 Server") + "</div>")
 
 
 _DB_JS = """
@@ -1130,10 +1213,23 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
+    def _log_conn(self) -> None:
+        """W6.6:記連線 client IP + path + 時間(環形緩衝,排除資料輪詢雜訊)。"""
+        if self.path in ("/data", "/server/data") or \
+                self.path.startswith(("/tvendor/", "/swagger-assets/")):
+            return                              # 高頻輪詢/資產不記,免洗掉 history
+        import datetime
+        _CONNS.append({"t": datetime.datetime.now().strftime("%m-%d %H:%M:%S"),
+                       "ip": self.client_address[0], "path": self.path})
+
     def do_GET(self):
+        self._log_conn()                        # W6.6
         journal, sessions = read_journal(), read_sessions()
         if self.path == "/data":                   # W4.7 前端單一資料源
             self._send_json(build_data(journal, sessions, read_watch()))
+            return
+        if self.path == "/server/data":            # W6.1 Server 頁資料源
+            self._send_json(build_server_data())
             return
         if self.path == "/db/tables":              # W5.6 DB 瀏覽器
             self._send_json(db_tables())
@@ -1147,9 +1243,10 @@ class Handler(BaseHTTPRequestHandler):
                 name, int((q.get("limit") or ["100"])[0]),
                 int((q.get("offset") or ["0"])[0])))
             return
-        if self.path in ("/db", "/control"):       # W5.6 / W5.8 獨立頁
+        if self.path in ("/db", "/control", "/server"):  # 獨立頁
             body = (render_db_page() if self.path == "/db"
-                    else render_control_page())
+                    else render_control_page() if self.path == "/control"
+                    else render_server_page())
             page = (f"<!doctype html><html><head><meta charset='utf-8'>"
                     f"<title>ARCP</title><style>{CSS}</style></head>"
                     f"<body>{body}</body></html>")
@@ -1245,5 +1342,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"[detail] serving {ROOT} at http://127.0.0.1:{PORT}/", flush=True)
-    HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    where = "所有介面(內網開放)" if HOST == "0.0.0.0" else HOST
+    print(f"[detail] serving {ROOT} on {HOST}:{PORT} — {where}", flush=True)
+    if HOST == "0.0.0.0":
+        print("[detail] ⚠️ 內網開放:dashboard 唯讀但會顯示系統/程序資訊;"
+              "control API(寫入端點)風險見 /docs。鎖本機:"
+              "ARCP_DASH_HOST=127.0.0.1", flush=True)
+    HTTPServer((HOST, PORT), Handler).serve_forever()
