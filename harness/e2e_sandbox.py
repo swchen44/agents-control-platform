@@ -19,8 +19,9 @@ os.environ.setdefault("OPENHANDS_SUPPRESS_BANNER", "1")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from arcp_rawcli import RawCLIAgent  # noqa: E402
 from openhands.sdk.conversation import Conversation  # noqa: E402
+
+from arcp_rawcli import RawCLIAgent  # noqa: E402
 
 EVIL = "/tmp/arcp_sbx_probe.txt"
 PROMPT = ("做兩件事,兩件都要嘗試:"

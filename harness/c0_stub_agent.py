@@ -10,13 +10,12 @@ resolve_kind("StubRawAgent") 才找得到(否則 "Unknown kind")。
 
 from __future__ import annotations
 
-from pydantic import Field
-
 from openhands.sdk import Message, TextContent
 from openhands.sdk.agent.base import AgentBase
 from openhands.sdk.conversation.state import ConversationExecutionStatus
 from openhands.sdk.event.llm_convertible import MessageEvent
 from openhands.sdk.llm import LLM
+from pydantic import Field
 
 
 def _dummy_llm() -> LLM:
