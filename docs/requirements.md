@@ -388,3 +388,40 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 - REST API:互動服務能力開成乾淨 REST,供未來人類自己的 agent(Hermes/openclaw 類)代理;
   proxy 本體遠期。
 - **Why**:人隨時可點進觀測;API 先定形,未來接人類代理 agent 不必重構。
+
+## 15. Workspace 佈建能力(2026-08-09 口述定案;設計見 [design/workspace.md](design/workspace.md))
+
+一張票 → 一個隔離工作區。除既有的「整包 copytree 模板」外,新增三個能力,讓不同 agent
+的起手環境可精準客製。完整流程/目標解析/schema 見設計文件;這裡記 What/Why。
+
+### 15.1 install 腳本佈建(`workspace_install`)
+- **What**:profile 可設一條安裝命令(argv:`uv run x.py`/`uvx x`/`npx x`/`./x.sh`/
+  `python x.py`)。建 workspace 空資料夾後執行,ARCP 附兩個絕對路徑參數
+  `<workspace> <template>`,cwd=模板夾,stdout/stderr 用 logger 吐出,rc==0 才算成功;
+  設了 install 就用它佈建、不自動 copytree。
+- **Why**:copytree 只能靜態複製;真實環境常需 **git clone / 產生設定 / 改檔再複製**
+  等程序化佈建 —— 交給腳本最靈活,又不把這些邏輯塞進 harness 核心。
+
+### 15.2 common skills 選子集(`common_skills`)
+- **What**:`config/skills/<name>/` 是可重用的 skill 庫;profile 用 `common_skills: [..]`
+  **選子集**,佈建時整包複製到 workspace 的 skills 目錄。
+- **Why**:多數 agent 共用一組能力但各取所需;集中維護一份、按 profile 選,勝過每個模板
+  各自塞一份 skills(會漂移)。
+
+### 15.3 行為守則注入(`inject_md`,`config/templates/inject_claude_md_end.md`)
+- **What**:全域 inject 檔的內容,佈建最後一步貼到 workspace 的 `CLAUDE.md` / `AGENTS.md`
+  尾(marker 包住、冪等);profile `inject_md: false` 可關。
+- **Why**:共同工作守則(先讀 TICKET.md、對驗收標準做、只動 workspace…)要能**一處改、
+  處處生效**,不必每個模板重寫。
+
+### 15.4 統一目標解析(skills 與 md 共用)
+- **What**:`.claude/*` vs `.agents/*`、`CLAUDE.md` vs `AGENTS.md` —— 兩者都不存在就建
+  `.claude` 側;只一個存在就用它;兩個都在且互為 link 就做一次、不同檔就兩邊都做。
+- **Why**:順應模板既定的慣例(有的用 Claude Code 的 `.claude/`,有的用 AGENTS 生態的
+  `.agents/`),不強加單一約定;link 去重避免重複貼/重複複製。
+
+### 15.5 TICKET.md 加 goal / 驗收標準 / Jira 連結
+- **What**:任務簡報加「目標」(profile.goal)、「驗收標準」(由 profile.verify 渲染成
+  人看得懂的檔案/指令門檻)、「Jira 連結」(`<base_url>/browse/<key>`)。
+- **Why**:讓 agent **對著證據做**(loop on evidence,呼應 [D2](decisions.md)),而非自以為
+  完成;人也能從 workspace 反查回 Jira。

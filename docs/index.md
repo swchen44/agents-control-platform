@@ -48,6 +48,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 [Workspace 佈建](design/workspace.md) ·
 [互動服務(HIL 人機介面)](design/interaction.md) ·
 [可觀測性](design/observability.md) ·
+[DB Schema](design/database.md) ·
 [執行隔離](design/isolation.md) ·
 [冪等](design/idempotency.md) ·
 [熱重載](design/hotreload.md) ·
