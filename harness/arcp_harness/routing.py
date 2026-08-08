@@ -90,6 +90,7 @@ def load_config(path: str) -> tuple[dict, list[Route]]:
         "per_profile": dict(conc.get("per_profile") or {}),
     }
     src["control"] = dict(outer.get("control") or {})    # W2.6 控制面
+    src["form"] = dict(outer.get("form") or {})          # W11 互動表單服務
     src["commands"] = dict(outer.get("commands") or {})  # W4.5:接線+可 reload
     src["external_change"] = dict(outer.get("external_change") or {})
     return src, routes

@@ -20,6 +20,8 @@ from arcp_harness.commands import CommandHandler, ExternalChangePolicy
 from arcp_harness.config import jira_credentials
 from arcp_harness.control_api import ControlAPI
 from arcp_harness.dispatcher import Dispatcher
+from arcp_harness.form_server import FormServer
+from arcp_harness.hil import apply_submission
 from arcp_harness.jira_source import JiraCloudSource
 from arcp_harness.poller import OuterLoop
 from arcp_harness.profiles import load_profiles
@@ -125,13 +127,22 @@ def main() -> int:
         (source_cfg.get("external_change") or {}).get("cancel_states")
         or ["完成", "Done", "Concluído"],
         bot_account_id=bot_id, profiles=profiles)      # W4.3 離手定格
+    # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
+    # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
+    fcfg = source_cfg.get("form") or {}
+    form_host = fcfg.get("host", "127.0.0.1")
+    form_port = int(fcfg.get("port", 8790))
+    form_base = fcfg.get("base_url") or f"http://{form_host}:{form_port}"
+    mention = fcfg.get("mention_account_id", "")
+
     loop = OuterLoop(
         src, store, routes, jql,
         dispatcher=disp, commands=cmds, external=ext,
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
         triggers=load_triggers("routes.yaml", profiles),   # W3.4 scheduled
-        scoregate=ScoreGate(src, store))                    # W7.2 人類評分
+        scoregate=ScoreGate(src, store, base_url=form_base,  # W11:HIL(End) 表單
+                            mention=mention))
     loop.poll_interval = interval                            # W9.1 control 顯示
 
     _reload = make_reload(loop, disp, cmds, ext)       # W13/W4.5 hot reload
@@ -147,6 +158,22 @@ def main() -> int:
     # POST /gen_transcript/<id>)。決策見 REQUIREMENTS.md §10.3。
     print(f"[poller] control API on http://{ctl.get('host', '127.0.0.1')}:"
           f"{api.port} (/status /health /pause /resume /reload)", flush=True)
+
+    # W11:互動表單服務。健康探針決定「暫勿送出」與提交是否落地(不做 work queue);
+    # 提交成功即 inline 回寫 Jira + 觸發 resume(hil.apply_submission)。
+    def _jira_up() -> bool:
+        try:
+            src.myself()
+            return True
+        except Exception:      # noqa: BLE001 — 探不到就當異常(暫勿送出)
+            return False
+
+    form = FormServer(store, host=form_host, port=form_port,
+                      jira_health_fn=_jira_up,
+                      on_submit=lambda r: apply_submission(src, store, r))
+    form.start()
+    print(f"[poller] form service on {form_base} (一次性表單;/form/<token>)",
+          flush=True)
 
     adopted = adopt_existing(src, store, routes, jql)
     print(f"[poller] adopted {adopted} pre-existing ticket(s); "
@@ -172,6 +199,7 @@ def main() -> int:
                   f"retry next cycle", flush=True)
         time.sleep(interval)
     print("[poller] timebox ended", flush=True)
+    form.stop()
     api.stop()
     store.close()
     return 0

@@ -26,6 +26,15 @@ outer_loop:
     host: 127.0.0.1
     port: 8787
 
+  # W11 互動表單服務(一次性 token 連結;人面向寫入,與唯讀 dashboard / control 分離)
+  # 內網行動裝置要能連 → host 設 0.0.0.0 且 base_url 設成該主機可達 URL。
+  # mention_account_id = 需要人介入時 @mention 的 Counterpart accountId(選填)。
+  form:
+    host: 127.0.0.1
+    port: 8790
+    # base_url: 'http://<intranet-host>:8790'   # 選填;預設 http://host:port
+    # mention_account_id: '...'                  # 選填
+
   # W3.4 內部觸發源(scheduled/oneshot,不經 Jira 票、不經審批門;config 即授權)
   # folder = {agent}__{run_name}__{timestamp};結果進 journal/dashboard。
   # 範例(打開即生效——scheduled 由 poller 檢 due;省略 every = 只能
