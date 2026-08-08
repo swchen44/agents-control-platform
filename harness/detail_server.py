@@ -175,6 +175,7 @@ def build_data(journal, sessions, watch) -> dict:
             "desc": w.get("description") or "",
             "profile": s.get("profile") or "-",
             "status": label,
+            "status_cls": _cls,               # W10.1:徽章 class(語意名)
             "outcome": s.get("outcome") or "",
             "assignee": w.get("last_assignee") or "",
             "created": w.get("first_seen_ts") or first_ts.get(iid) or 0,
@@ -375,9 +376,12 @@ code{font-family:var(--font-mono);font-size:.92em;background:var(--panel-2);
   border-radius:20px;font-size:11.5px;font-weight:600;border:1px solid var(--line-2);
   color:var(--muted);background:var(--panel-2)}
 .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-.SUCCESS{color:var(--s-success);background:color-mix(in srgb,var(--s-success) 12%,transparent);border-color:color-mix(in srgb,var(--s-success) 30%,transparent)}
-.FAILURE,.UNKNOWN,.ABORTED{color:var(--s-failure);background:color-mix(in srgb,var(--s-failure) 12%,transparent);border-color:color-mix(in srgb,var(--s-failure) 30%,transparent)}
-.pending{color:var(--s-pending);background:color-mix(in srgb,var(--s-pending) 14%,transparent);border-color:color-mix(in srgb,var(--s-pending) 32%,transparent)}
+.SUCCESS,.success{color:var(--s-success);background:color-mix(in srgb,var(--s-success) 12%,transparent);border-color:color-mix(in srgb,var(--s-success) 30%,transparent)}
+.FAILURE,.failure{color:var(--s-failure);background:color-mix(in srgb,var(--s-failure) 12%,transparent);border-color:color-mix(in srgb,var(--s-failure) 30%,transparent)}
+/* W10.1:HIL(End)·未定 灰、HIL(Middle) 琥珀、撤銷 用 aborted 色 */
+.UNKNOWN,.unknown{color:var(--s-inactive);background:color-mix(in srgb,var(--s-inactive) 14%,transparent);border-color:color-mix(in srgb,var(--s-inactive) 30%,transparent)}
+.ABORTED,.aborted{color:var(--s-aborted);background:color-mix(in srgb,var(--s-aborted) 14%,transparent);border-color:color-mix(in srgb,var(--s-aborted) 30%,transparent)}
+.pending,.hilmid{color:var(--s-pending);background:color-mix(in srgb,var(--s-pending) 14%,transparent);border-color:color-mix(in srgb,var(--s-pending) 32%,transparent)}
 .queued{color:var(--s-queued);background:color-mix(in srgb,var(--s-queued) 12%,transparent);border-color:color-mix(in srgb,var(--s-queued) 30%,transparent)}
 .inactive{color:var(--s-inactive);background:color-mix(in srgb,var(--s-inactive) 14%,transparent);border-color:color-mix(in srgb,var(--s-inactive) 30%,transparent)}
 .running{color:var(--s-running);background:color-mix(in srgb,var(--s-running) 12%,transparent);border-color:color-mix(in srgb,var(--s-running) 30%,transparent)}
@@ -460,9 +464,9 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #smsvg .sm-elabel{fill:var(--muted)}
 #smsvg .sm-arrow{fill:var(--muted)}
 #smsvg .st-todo{--nc:var(--s-todo)}#smsvg .st-running{--nc:var(--s-running)}
-#smsvg .st-queued{--nc:var(--s-queued)}#smsvg .st-pending{--nc:var(--s-pending)}
-#smsvg .st-inactive{--nc:var(--s-inactive)}#smsvg .st-success{--nc:var(--s-success)}
-#smsvg .st-failure{--nc:var(--s-failure)}#smsvg .st-aborted{--nc:var(--s-aborted)}
+#smsvg .st-queued{--nc:var(--s-queued)}#smsvg .st-hil_middle{--nc:var(--s-pending)}
+#smsvg .st-hil_end{--nc:var(--s-success)}#smsvg .st-aborted{--nc:var(--s-aborted)}
+#smsvg .st-closed{--nc:var(--s-queued)}
 #smsvg .st-exit{--nc:var(--accent)}
 /* W8.3 可及性:全域可見焦點環(勿只靠 hover;鍵盤使用者需要) */
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,
@@ -538,42 +542,60 @@ def queue_positions(sessions: dict[int, dict]) -> dict[int, int]:
     return {s["issue_id"]: i + 1 for i, s in enumerate(q)}
 
 
+# W10.1:HIL(End) 結果 / HIL(Middle) 原因 → 中文短語(徽章顯示用)
+_HILEND_RESULT = {"SUCCESS": "成功", "FAILURE": "失敗", "UNKNOWN": "未定"}
+_HILMID_REASON = {
+    "awaiting-approval": "審批", "approval": "審批", "triage": "待審視",
+    "budget": "預算", "budget-cap": "預算", "max-attempts": "重試上限",
+    "handoff": "換手", "external": "外部變更",
+}
+
+
 def session_status(s: dict, qpos: dict[int, int]) -> tuple[str, str]:
-    """→ (徽章文字, css class)。優先序:outcome > pending > queued > inactive。"""
+    """→ (徽章文字, css class)。W10.1 HIL 模型:success/failure/unknown 顯示成
+    「HIL(End)·結果」;inactive+pending 併成「HIL(Middle)·原因」。class 用小寫語意名
+    (success/failure/unknown/hilmid/queued/running/aborted),與 badgeCls / CSS 對齊。"""
     oc = s.get("outcome")
-    if oc:
-        return oc, oc if oc in ("SUCCESS", "FAILURE", "UNKNOWN",
-                                "ABORTED") else ""
+    if oc == "ABORTED":
+        return "撤銷", "aborted"
+    if oc in ("SUCCESS", "FAILURE", "UNKNOWN"):
+        return (f"HIL(End)·{_HILEND_RESULT[oc]}",
+                {"SUCCESS": "success", "FAILURE": "failure",
+                 "UNKNOWN": "unknown"}[oc])
     pr = s.get("pending_reason")
     if pr:
-        return f"pending:{pr}", "pending"
+        rs = _HILMID_REASON.get(pr, pr)
+        return f"HIL(Middle)·{rs}", "hilmid"
     if s.get("queued"):
-        return f"QUEUED #{qpos.get(s.get('issue_id'), '?')}", "queued"
+        return f"排隊 #{qpos.get(s.get('issue_id'), '?')}", "queued"
     if s.get("inactive"):
-        return "INACTIVE", "inactive"
-    return "active", "running"
+        return "HIL(Middle)·交人", "hilmid"
+    return "進行中", "running"
 
 
 def canonical_state(s: dict | None) -> str:
-    """W7(R4/R6):把 (outcome, pending_reason, queued, inactive, 有無 session)
-    收斂成單一 8 態 key(dashboard per-profile 圖 + R6 狀態機共用)。
-    優先序:終態(成功/失敗/撤銷)> UNKNOWN/pending(等待人類)> 排隊 > 交人 > 進行中。
-    無 session = 待處理。"""
+    """W10.1(HIL 模型):把 (outcome, pending_reason, queued, inactive, 有無 session)
+    收斂成單一生命週期 key(6 態:dashboard per-profile 圖 + 狀態機共用)。
+
+    Model A:success/failure/unknown 不再是頂層態,收斂成 **hil_end** 的「結果」屬性
+    (result=outcome);舊 inactive(交人)+ 非終態 pending(審批/預算/待審視…)合併成
+    **hil_middle**。closed 是概念終點(人關 Jira→離開 jql,不設 DB 態)。
+    優先序:aborted > hil_end(終態評分)> hil_middle(pending 原因)> 排隊 >
+    hil_middle(交人)> 進行中。無 session = 待處理。此函式**唯讀**,只從既有 DB
+    欄位映射,不改 runtime 行為。"""
     if not s:
         return "todo"
     oc = s.get("outcome")
-    if oc == "SUCCESS":
-        return "success"
-    if oc == "FAILURE":
-        return "failure"
     if oc == "ABORTED":
         return "aborted"
-    if oc == "UNKNOWN" or s.get("pending_reason"):
-        return "pending"                 # 等待人類
+    if oc in ("SUCCESS", "FAILURE", "UNKNOWN"):
+        return "hil_end"                 # 終點交人:評分 → 續跑/關票
+    if s.get("pending_reason"):
+        return "hil_middle"              # 過程中等人(審批/預算/待審視…)
     if s.get("queued"):
         return "queued"
     if s.get("inactive"):
-        return "inactive"                # 交人
+        return "hil_middle"              # 過程中等人(交人:assignee 在人手上)
     return "running"                     # 進行中
 
 
@@ -591,21 +613,27 @@ def overview_cards(sessions: dict[int, dict],
     選配 → 顯示人力成本對比)。"""
     vals = list(sessions.values())
     oc = Counter(s.get("outcome") for s in vals if s.get("outcome"))
-    succ, fail = oc.get("SUCCESS", 0), oc.get("FAILURE", 0)
+    succ, fail, unk = (oc.get("SUCCESS", 0), oc.get("FAILURE", 0),
+                       oc.get("UNKNOWN", 0))
     done = succ + fail
     fail_rate = f"{fail / done * 100:.0f}%" if done else "–"
     in_flight = sum(1 for s in vals
                     if not s.get("outcome") and not s.get("pending_reason")
                     and not s.get("queued") and not s.get("inactive"))
     live = [s for s in vals if not s.get("outcome")]
+    # W10.1 HIL 模型:hil_middle = 交人(inactive)+ 過程中 pending;hil_end =
+    # 終態評分中(成功/失敗/未定)。失敗率仍由 outcome 直接算(獨立於顯示態)。
+    hil_middle = sum(1 for s in live
+                     if s.get("inactive") or s.get("pending_reason"))
+    hil_end = succ + fail + unk
     total_cost = sum(s.get("cost_usd") or 0 for s in vals)
     stats = [
         (f"${total_cost:.4f}", "總 cost"),
-        (in_flight, "in-flight"),
-        (sum(1 for s in live if s.get("queued")), "queued"),
-        (sum(1 for s in live if s.get("inactive")), "inactive"),
-        (sum(1 for s in live if s.get("pending_reason")), "pending"),
-        (succ, "SUCCESS"), (fail, "FAILURE"), (fail_rate, "失敗率"),
+        (in_flight, "進行中"),
+        (sum(1 for s in live if s.get("queued")), "排隊"),
+        (hil_middle, "HIL(Middle)"),
+        (hil_end, "HIL(End)"),
+        (succ, "成功"), (fail, "失敗"), (fail_rate, "失敗率"),
     ]
     mins = saved_minutes(journal or [])
     if mins:
@@ -647,8 +675,10 @@ _CONTROL_JS = ("<script>"
     "const t=[[j.paused?'⏸ 暫停':(j.stopping?'⏻ 關閉中':'▶ 運行'),'狀態'],"
     "[(j.poll_count||0),'已 poll 次數'],[upTxt,'連續運行'],"
     "[(j.poll_interval?j.poll_interval+'s':'—'),'poll 間隔'],"
-    "[j.in_flight,'in-flight'],[j.queued,'queued'],[j.inactive,'inactive'],"
-    "[(j.pending?Object.values(j.pending).reduce((a,b)=>a+b,0):0),'pending'],"
+    # W10.1 HIL 模型:in-flight=進行中;inactive+pending 併顯為 HIL(Middle)
+    "[j.in_flight,'進行中'],[j.queued,'排隊'],"
+    "[((j.inactive||0)+(j.pending?Object.values(j.pending)"
+    ".reduce((a,b)=>a+b,0):0)),'HIL(Middle)'],"
     "['$'+(j.cost_usd||0).toFixed(4),'總 cost'],[j.sessions,'sessions']];"
     "$c('cstatus').innerHTML=t.map(x=>`<div class='stat'><div class='n'>`+"
     "`${x[0]}</div><div class='l'>${x[1]}</div></div>`).join('');"
@@ -890,10 +920,21 @@ function syncPalette(){
     success:cssv('--s-success'),fail:cssv('--s-failure'),ai:cssv('--s-pending'),
     human:cssv('--s-running'),waste:cssv('--s-failure'),
     txt:cssv('--muted'),grid:cssv('--line'),ink:cssv('--ink')};
-  STATE8=[['todo',['待處理',cssv('--s-todo')]],['running',['進行中',cssv('--s-running')]],
-    ['queued',['排隊',cssv('--s-queued')]],['pending',['等待人類',cssv('--s-pending')]],
-    ['inactive',['交人',cssv('--s-inactive')]],['success',['成功',cssv('--s-success')]],
-    ['failure',['失敗',cssv('--s-failure')]],['aborted',['撤銷',cssv('--s-aborted')]]];
+  // W10.1 HIL 模型:6 態 canonical(todo/running/queued/hil_middle/hil_end/
+  // aborted),per-profile 圖再把 hil_end 依 outcome 拆成 成功/失敗/未定(保留
+  // 每 profile 的失敗可視);每格帶 predicate(r)判定歸屬。
+  STATE8=[
+    ['todo',['待處理',cssv('--s-todo'),r=>r.state==='todo']],
+    ['running',['進行中',cssv('--s-running'),r=>r.state==='running']],
+    ['queued',['排隊',cssv('--s-queued'),r=>r.state==='queued']],
+    ['hil_middle',['HIL·過程中',cssv('--s-pending'),r=>r.state==='hil_middle']],
+    ['hil_success',['HIL·成功',cssv('--s-success'),
+      r=>r.state==='hil_end'&&r.outcome==='SUCCESS']],
+    ['hil_failure',['HIL·失敗',cssv('--s-failure'),
+      r=>r.state==='hil_end'&&r.outcome==='FAILURE']],
+    ['hil_unknown',['HIL·未定',cssv('--s-inactive'),
+      r=>r.state==='hil_end'&&r.outcome==='UNKNOWN']],
+    ['aborted',['撤銷',cssv('--s-aborted'),r=>r.state==='aborted']]];
 }
 // ---- 過濾(置頂,統管全部) ----
 function filtered(){
@@ -913,14 +954,16 @@ function filtered(){
 }
 // ---- 統計卡 ----
 function renderStats(rows){
+  // W10.1 HIL 模型:改用 canonical r.state 計數(原本靠 status 文字前綴,
+  // 中文化後失效);失敗率仍由 outcome 直接算。
   const cost=rows.reduce((a,r)=>a+r.cost,0);
   const oc=o=>rows.filter(r=>r.outcome===o).length;
-  const st=p=>rows.filter(r=>r.status.startsWith(p)).length;
+  const sc=k=>rows.filter(r=>r.state===k).length;
   const succ=oc('SUCCESS'),fail=oc('FAILURE'),done=succ+fail;
   const mins=rows.reduce((a,r)=>a+r.human_min,0);
-  const t=[[money(cost),'總 cost'],[st('active'),'in-flight'],
-    [st('QUEUED'),'queued'],[st('INACTIVE'),'inactive'],
-    [st('pending'),'pending'],[succ,'SUCCESS'],[fail,'FAILURE'],
+  const t=[[money(cost),'總 cost'],[sc('running'),'進行中'],
+    [sc('queued'),'排隊'],[sc('hil_middle'),'HIL(Middle)'],
+    [sc('hil_end'),'HIL(End)'],[succ,'成功'],[fail,'失敗'],
     [done?Math.round(fail/done*100)+'%':'–','失敗率']];
   if(mins){t.push([(mins/60).toFixed(1)+'h','節省人時']);
     if(S.rate)t.push(['$'+Math.round(mins/60*S.rate)+' vs $'+cost.toFixed(2),
@@ -1045,8 +1088,8 @@ function drawHBar(el,groups,segsOf,fmt,{stacked=true,minTick=0,labelOf=null}={})
 }
 function renderPState(rows){
   drawHBar($('chart-pstate'),byProfile(rows),
-    rs=>STATE8.map(([k,[lb,c]])=>({c,label:lb,
-      v:rs.filter(r=>r.state===k).length})),v=>Math.round(v),{minTick:1});
+    rs=>STATE8.map(([k,[lb,c,fn]])=>({c,label:lb,
+      v:rs.filter(fn).length})),v=>Math.round(v),{minTick:1});
   legend($('lg-pstate'),STATE8.map(([,[lb,c]])=>[c,lb]));
 }
 function renderPCost(rows){
@@ -1094,9 +1137,10 @@ const _MONEY=new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',
   currencyDisplay:'narrowSymbol',minimumFractionDigits:2,maximumFractionDigits:4});
 function fmt(ts){return ts?_DT.format(new Date(ts*1000)):'-';}
 function money(v){return _MONEY.format(v||0);}
-function badgeCls(st){if(st==='SUCCESS'||st==='FAILURE'||st==='UNKNOWN'||st==='ABORTED')return st;
-  if(st.startsWith('pending'))return 'pending';if(st.startsWith('QUEUED'))return 'queued';
-  if(st==='INACTIVE')return 'inactive';return st==='active'?'running':'';}
+// W10.1:徽章 class 直接用後端算好的 r.status_cls(不再解析中文文字);保留舊
+// badgeCls 作為容錯 fallback(僅認得的英文碼)
+function badgeCls(st){return {SUCCESS:'success',FAILURE:'failure',UNKNOWN:'unknown',
+  ABORTED:'aborted'}[st]||'';}
 function esc(x){return (''+x).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 function renderTable(rows){
   const k=S.sort;
@@ -1115,7 +1159,7 @@ function renderTable(rows){
     `<tr><td><a href='/ticket/${r.iid}' translate='no'>${esc(r.key)}</a></td>`+
     `<td title='${esc(r.summary)}'>${esc(r.summary.slice(0,28))}</td>`+
     `<td>${esc(r.profile)}</td>`+
-    `<td><span class='badge ${badgeCls(r.status)}'>${esc(r.status)}</span></td>`+
+    `<td><span class='badge ${r.status_cls||badgeCls(r.status)}'>${esc(r.status)}</span></td>`+
     `<td>${r.score!=null?r.score+'/10':'<span style="color:var(--faint)">未評</span>'}</td>`+
     `<td>${esc(r.assignee||'-')}</td><td>${fmt(r.created)}</td>`+
     `<td>${fmt(r.finished)}</td><td>${fmt(r.handoff)}</td>`+
@@ -1447,7 +1491,8 @@ def render_index(journal, sessions, watch=None) -> str:
                  f"</a></td>"
                  f"<td>{esc(r['summary'][:28])}</td>"
                  f"<td>{esc(r['profile'])}</td>"
-                 f"<td><span class='badge'>{esc(r['status'])}</span></td>"
+                 f"<td><span class='badge {esc(r.get('status_cls') or '')}'>"
+                 f"{esc(r['status'])}</span></td>"
                  f"<td>{(str(r['score']) + '/10') if r['score'] is not None else '未評'}</td>"
                  f"<td>{esc(r['assignee'] or '-')}</td>"
                  f"<td>{esc(fmt_ts(r['created']))}</td>"
@@ -1908,9 +1953,10 @@ def render_ticket(iid, journal, sessions) -> str:
                "document.getElementById('pane-'+n).classList.add('on');"
                "document.getElementById('tab-'+n).classList.add('on');}"
                "tab((location.hash||'#convo').slice(1));</script>")
+    _htxt, _hcls = session_status(s, {}) if s else ("-", "")
     return (f"<header><h1><a href='/'>← </a>{esc(key)} · "
-            f"<span class='badge {esc(s.get('outcome') or '')}'>"
-            f"{esc(s.get('outcome') or '-')}</span></h1></header><main id='main' tabindex='-1'>"
+            f"<span class='badge {esc(_hcls)}'>"
+            f"{esc(_htxt)}</span></h1></header><main id='main' tabindex='-1'>"
             f"<div class='card'><div class='row'>"
             f"<span class='kv'><b>profile</b> {esc(s.get('profile','-'))}</span>"
             f"<span class='kv'><b>attempts</b> {esc(s.get('attempts',0))}</span>"
@@ -2235,38 +2281,40 @@ def render_agent_page() -> str:
 # ── W7.6:概念/生命週期/狀態機頁(純 SVG,零依賴)────────────────────────── #
 # 8 態節點:key → (cx, cy, 中文)。座標經手調,盡量少交叉。
 # 顏色改由 CSS class st-<key>(見 CSS #smsvg 區)驅動,隨明暗主題變。
+# W10.1 HIL 模型狀態機(目標設計;含 triage 閘與 base 跨票交接,行為 W10.2/W10.3
+# 才接線,此圖先作為 spec)。節點:(cx, cy, 標籤)
 _SM_NODES = {
-    "todo": (95, 250, "待處理"),
-    "running": (300, 250, "進行中"),
-    "queued": (300, 370, "排隊"),
-    "pending": (510, 130, "等待人類"),
-    "inactive": (510, 370, "交人(inactive)"),
-    "success": (720, 95, "成功"),
-    "failure": (720, 205, "失敗"),
-    "aborted": (720, 370, "撤銷"),
-    "exit": (880, 150, "人評分→關票→離開"),
+    "todo": (95, 255, "待處理"),
+    "hil_middle": (325, 90, "HIL(Middle)"),
+    "running": (325, 255, "進行中"),
+    "queued": (325, 415, "排隊"),
+    "hil_end": (590, 170, "HIL(End)"),
+    "aborted": (590, 410, "撤銷/交接"),
+    "closed": (865, 170, "關票·離開"),
 }
-# 轉移:(from, to, 標籤)
+# 轉移:(from, to, 標籤)。標籤縮短(完整語意見下方表格/說明);HIL(Middle) 兼
+# 「開跑前 triage/審批」與「過程中等人」;HIL(End) 結果=成功/失敗/未定,人評分後
+# (A)關票 或 (B)重置額度續跑。
 _SM_EDGES = [
-    ("todo", "running", "路由命中·派工"),
+    ("todo", "running", "路由·派工"),
+    ("todo", "hil_middle", "triage/審批"),
+    ("hil_middle", "running", "resume"),
+    ("running", "hil_middle", "需人"),
     ("running", "queued", "額滿"),
     ("queued", "running", "有額度"),
-    ("running", "pending", "UNKNOWN/預算/交人決定/審批"),
-    ("pending", "running", "@agent run·retry / budget_override"),
-    ("running", "inactive", "assignee→人"),
-    ("inactive", "running", "assignee→機器人"),
-    ("running", "success", "verify 過"),
-    ("running", "failure", "max-attempts"),
-    ("running", "aborted", "cancel / 外部關 Done"),
-    ("success", "exit", "人評分(0–10)→關 Done"),
-    ("failure", "exit", ""),
+    ("running", "hil_end", "完成/未定"),
+    ("hil_end", "running", "(B)續跑"),
+    ("hil_end", "closed", "(A)關票"),
+    ("hil_middle", "aborted", "decline"),
+    ("running", "aborted", "cancel/關Done"),
+    ("hil_end", "aborted", "交接(base)"),
 ]
 
 
 def _sm_svg() -> str:
     """8 態狀態機 SVG:中心→中心連線裁切到矩形邊界 + 箭頭 + 雙向邊垂直偏移。"""
     hw, hh = 62, 22           # 節點半寬/半高
-    W, H = 980, 440
+    W, H = 1000, 490
     out = ["<svg id='smsvg' viewBox='0 0 %d %d' width='100%%' "
            "preserveAspectRatio='xMinYMin meet' "
            "style='max-height:%dpx;font-size:11px'>" % (W, H, H),
@@ -2298,7 +2346,10 @@ def _sm_svg() -> str:
             f"x2='{x2:.0f}' y2='{y2:.0f}' stroke-width='1.3' "
             f"marker-end='url(#ah)'/>")
         if label:
-            mx, my = (x1 + x2) / 2 + ox, (y1 + y2) / 2 + oy
+            # 標籤放邊的 40% 處(非中點):雙向邊(a→b 與 b→a)因起點相反,分別落在
+            # 40% 與 60%,自然錯開不重疊;再加 2× 垂直偏移拉開左右
+            mx = x1 + (x2 - x1) * 0.4 + ox * 2
+            my = y1 + (y2 - y1) * 0.4 + oy * 2
             out.append(
                 f"<text class='sm-elabel' x='{mx:.0f}' y='{my:.0f}' "
                 f"text-anchor='middle'>{esc(label)}</text>")
@@ -2313,24 +2364,31 @@ def _sm_svg() -> str:
     return "".join(out)
 
 
-# W9.1:第三欄=此態如何由 DB 欄位推導(canonical_state 的判斷來源)。
+# W10.1 HIL 模型:6 態 + closed 概念終點。第三欄=此態如何由 DB 欄位推導
+# (canonical_state 唯讀映射,不改 runtime)。
 _STATE_DOC = [
     ("待處理 todo", "被 watch 到、尚無 session(還沒派工或不歸任何 route)。",
      "ticket_watch 有列、但 ticket_session 無此 issue_id"),
     ("進行中 running", "有 active session 正在跑 attempt(占機器額度)。",
-     "ticket_session.outcome=NULL 且 pending_reason=NULL 且 queued=0 且 inactive=0"),
+     "outcome=NULL 且 pending_reason=NULL 且 queued=0 且 inactive=0"),
     ("排隊 queued", "本輪並發額滿,下輪重評(F1 分層閘門)。",
      "ticket_session.queued=1"),
-    ("等待人類 pending", "需要人:UNKNOWN、預算上限、交人決定、審批門、max-attempts。",
-     "ticket_session.pending_reason 非空(或 outcome='UNKNOWN')"),
-    ("交人 inactive", "assignee 在人類手上→不派工、讓出額度(改回機器人即 resume)。",
-     "ticket_session.inactive=1"),
-    ("成功 success", "verify(grader)通過=SUCCESS(證據型停止,非 agent 自稱)。",
-     "ticket_session.outcome='SUCCESS'"),
-    ("失敗 failure", "max_attempts 用盡仍未過驗證。",
-     "ticket_session.outcome='FAILURE'"),
-    ("撤銷 aborted", "人在看板關成 Done/Cancelled,或 @agent cancel。",
+    ("HIL(Middle) 過程中等人",
+     "合併舊「交人 + 等待人類」:開跑前 triage/審批,或過程中需人(預算/交人)。"
+     "不佔額度;assignee→機器人、且 description human 段條件滿足才查排隊+resume。"
+     "原因(審批/待審視/預算/交人)供徽章顯示。",
+     "inactive=1 或 pending_reason 非空(且 outcome 非終態)"),
+    ("HIL(End) 終點交人",
+     "跑完(成功/失敗/未定)轉人評分(0–10):人續做→關票,或判可續→重置額度續跑。"
+     "結果=outcome。",
+     "outcome ∈ {SUCCESS, FAILURE, UNKNOWN}"),
+    ("撤銷/交接 aborted",
+     "人在看板關 Done/Cancelled、@agent cancel,或交接→新票被 supersede。",
      "ticket_session.outcome='ABORTED'"),
+    ("關票·離開 closed(概念終點)",
+     "HIL(End) 後人關 Jira(Done)→ 票離開 jql 視野;非 DB 態,session 保留最後"
+     "result+score 供稽核。",
+     "(無 DB 欄位;Jira status=Done 從 jql 消失)"),
 ]
 
 
@@ -2351,19 +2409,42 @@ def render_concepts_page() -> str:
         "<h2>一句話</h2><div class='card'><p>ARCP 讓 <code>claude -p</code> / "
         "<code>codex exec</code> 由 <b>Jira 事件驅動</b>、可觀測、可控制。搞定系統"
         "先搞定<b>資料流的生命週期</b>——下面是一張票從進來到離開的狀態流動。</p></div>"
-        "<h2>Jira ticket 狀態機(harness 內部 8 態)</h2>"
+        "<h2>Jira ticket 狀態機(harness 內部 · HIL 模型 6 態 + 概念終點)</h2>"
         f"<div class='card'>{_sm_svg()}</div>"
-        "<h2>8 態說明</h2><div class='card'><table>" + doc_rows + "</table></div>"
+        "<h2>HIL(Human In the Loop)模型</h2><div class='card'>"
+        "<ul style='line-height:1.8'>"
+        "<li><b>合併</b>:舊「交人 inactive」與「等待人類 pending」語意一致,合併成 "
+        "<b>HIL(Middle)</b>(過程中等人:開跑前 triage/審批,或跑到一半需人給預算/交人)。"
+        "帶「原因」供徽章區分。</li>"
+        "<li><b>HIL(End)</b>:跑完(成功/失敗/未定,<code>outcome</code> 三態即"
+        "「結果」屬性,不再是頂層狀態)轉人評分(0–10),再由人 <b>(A)</b> 續做後關票、"
+        "或 <b>(B)</b> 判斷 agent 可續 → native resume + 重置額度回「進行中」。</li>"
+        "<li><b>resume 觸發</b>:<code>assignee</code> 改回機器人;harness 讀 "
+        "description 的 <code>[ARCP owner=human]</code> 段重評條件(審批已填/預算已放寬/"
+        "純交人無條件),滿足才查排隊 + resume,否則留在 HIL(Middle)。</li>"
+        "<li><b>closed</b> 是概念終點:人關 Jira(Done)→ 票離開 jql 視野(非 DB 態)。</li>"
+        "</ul></div>"
+        "<h2>6 態說明</h2><div class='card'><table>" + doc_rows + "</table></div>"
+        "<h2>agent↔agent 交接(兩種,見 DESIGN_architecture「怎麼選」)</h2>"
+        "<div class='card'><ul style='line-height:1.8'>"
+        "<li><b>同票換手</b> <code>@agent next &lt;profile&gt;</code>:就地換 "
+        "profile/引擎,不開新票、脈絡全留 —— 適合「小幅換手、同一件事繼續」。</li>"
+        "<li><b>跨票 base 繼承</b>:人自建新 Jira,宣告 <code>base:&lt;ref&gt;</code>"
+        "(description human 段 或 Control 頁登記);harness 只登記 + 注入脈絡"
+        "(複製 base 的 transcript 進新 workspace + prompt 前置 + 貼 Jira 連結),"
+        "舊票收成 <b>ABORTED(交接,非 failure)</b> —— 適合「換引擎/重開/跨專案/"
+        "人策展重啟」等泛化場景。<span class='sys'>(行為 W10.3 實作)</span></li>"
+        "</ul></div>"
         "<h2>狀態存在哪(重要)</h2><div class='card'>"
         "<ul style='line-height:1.8'>"
         "<li><b>Jira 這邊</b>:真正的 <code>status</code>(To Do/進行中/Done)存 "
         "Jira,harness 只讀進來鏡射到 DB <code>ticket_watch.last_state</code>。</li>"
         "<li><b>我們系統這邊</b>:內部判定 <code>outcome</code>"
         "(SUCCESS/FAILURE/ABORTED/UNKNOWN)+ <code>pending_reason</code> 只存 DB "
-        "<code>ticket_session</code>,<b>不寫回 Jira</b>。上面 8 態就是由這些欄位"
+        "<code>ticket_session</code>,<b>不寫回 Jira</b>。上面 6 態就是由這些欄位"
         "(加 queued/inactive/有無 session)推導的單一 canonical 狀態。</li>"
         "<li><b>harness 不主動 transition Jira 狀態</b>(只留言);關票=人做"
-        "(W7:成功/失敗後交人評分,人填 <code>score</code> 再關)。</li>"
+        "(成功/失敗後交人評分,人填 <code>score</code> 再關)。</li>"
         "<li><b>生命週期事件</b>都記在 journal <code>events.jsonl</code>"
         "(new_issue/attempt_*/resolved/pending/handoff/jira_write/human_score…),"
         "ticket 詳情頁的<b>事件時間軸</b>即由它繪製。</li>"

@@ -126,14 +126,15 @@ try:
     # C4 總覽卡
     check("總覽:總 cost 1.75", "$1.7500" in index)
     check("總覽:失敗率 50%", "50%" in index and "失敗率" in index)
-    check("總覽:in-flight 卡在", "in-flight" in index)
+    check("總覽:進行中卡在", "進行中" in index and "HIL(Middle)" in index)
     # F2 徽章 + FIFO 位置(queued_at 100 的 P-5 在前)
-    check("徽章:P-5 QUEUED #1", "QUEUED #1" in index)
-    check("徽章:P-4 QUEUED #2", "QUEUED #2" in index)
-    check("徽章:INACTIVE", "INACTIVE" in index)
-    check("徽章:pending:approval", "pending:approval" in index)
-    check("徽章:FAILURE(outcome 優先於 pending)",
-          ">FAILURE</span>" in index)
+    check("徽章:P-5 排隊 #1", "排隊 #1" in index)
+    check("徽章:P-4 排隊 #2", "排隊 #2" in index)
+    check("徽章:HIL(Middle)·交人(舊 inactive)", "HIL(Middle)·交人" in index)
+    check("徽章:HIL(Middle)·審批(舊 pending:approval)",
+          "HIL(Middle)·審批" in index)
+    check("徽章:HIL(End)·失敗(outcome 優先於 pending)",
+          ">HIL(End)·失敗</span>" in index)
     # 控制列指向 control API
     # W5.8:control 移到獨立頁,index 不再有控制列
     check("index 不含控制列(已移 /control)", "Pause" not in index)
@@ -221,10 +222,11 @@ try:
     check("/data:summary/desc 可過濾來源", by[3]["summary"] == "任務摘要 3"
           and by[3]["desc"] == "細節描述 3")
     check("/data:rate_default 欄位存在", "rate_default" in dat)
-    # W7.4:8 態 canonical state + 完成度 score 進 /data
-    check("/data:canonical state(8 態)",
-          by[1]["state"] == "success" and by[3]["state"] == "running"
-          and by[7]["state"] == "pending")
+    # W10.1:HIL 模型 6 態 canonical state + 完成度 score 進 /data
+    check("/data:canonical state(HIL 6 態)",
+          by[1]["state"] == "hil_end" and by[1]["outcome"] == "SUCCESS"
+          and by[3]["state"] == "running"
+          and by[7]["state"] == "hil_middle")
     check("/data:完成度 score", by[1]["score"] == 8 and by[3]["score"] is None)
     # 首頁:profile filter + 三張 per-profile 圖容器 + 完成度欄
     idx = urllib.request.urlopen(
@@ -419,11 +421,12 @@ try:
     # W7.6:概念/狀態機頁(純 SVG,零依賴)
     cpage = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/concepts", timeout=5).read().decode()
-    check("概念頁:狀態機 SVG + 8 態 + 儲存說明",
+    check("概念頁:狀態機 SVG + HIL 6 態 + a2a + 儲存說明",
           "href='/concepts'" in cpage and "<svg " in cpage
           and "marker id='ah'" in cpage
-          and all(s in cpage for s in ("待處理", "進行中", "等待人類",
-                                       "成功", "失敗", "撤銷"))
+          and all(s in cpage for s in ("待處理", "進行中", "排隊",
+                                       "HIL(Middle)", "HIL(End)", "撤銷"))
+          and "base 繼承" in cpage
           and "狀態存在哪" in cpage)
 
     # W7.7:REST /api/v1(給 LLM 監控;三合一 ref 解析 + 狀態/事件/log)
@@ -432,11 +435,11 @@ try:
             f"http://127.0.0.1:{port}{path}", timeout=5).read())
     lst = _api("/api/v1/tickets")
     check("/api/v1/tickets:列表", lst["count"] >= 1
-          and any(t["key"] == "P-1" and t["state"] == "success"
+          and any(t["key"] == "P-1" and t["state"] == "hil_end"
                   for t in lst["tickets"]))
     st1 = _api("/api/v1/tickets/P-1")           # 用 Jira key
     check("/api/v1/tickets/{key}:單票狀態",
-          st1["iid"] == 1 and st1["state"] == "success"
+          st1["iid"] == 1 and st1["state"] == "hil_end"
           and st1["score"] == 8 and st1["completion_pct"] == 80
           and st1["clearquest_id"] == "CR-1001" and st1["timeline"])
     check("/api/v1:三合一 ref(CR id / 內部 id 都解析同票)",
