@@ -65,7 +65,9 @@ agents-control-platform/
 
 ## `docs/`
 
-見 [index](index.md)。`docs/design/` 是各子系統機制細節。
+見 [index](index.md)。`docs/design/` 是各子系統機制細節;`docs/study/` 是研究/實驗的
+「結論 + 比較」策展文章(原始長文留 `research/`);`docs/troubleshooting.md` +
+`docs/design/observability.md` + `docs/ai-debugging.md` 是離線除錯層。
 
 ## `examples/` / `research/`(dev-only)
 

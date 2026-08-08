@@ -12,6 +12,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 | **想看全貌** | [專案檔案介紹](project-overview.md) — 目錄地圖、每個檔案在幹嘛 |
 | **想懂「為什麼這樣設計」** | [需求與理由](requirements.md) — 每個能力的 What / Why / 現狀 |
 | **想懂重大決策** | [決策記錄](decisions.md) — 關鍵取捨與理由(ADR-lite) |
+| **想看研究與對照** | [Study](study/README.md) — 研究/實驗的結論與比較文章 |
 | **要除錯/分析** | [除錯 runbook](troubleshooting.md) — 症狀 → 診斷 → 處置 |
 | **在離線內網(AI/人)** | [離線除錯導引](ai-debugging.md) — 凍結 snapshot 的工作守則與起點 |
 | **有疑問** | [FAQ](faq.md) |
@@ -26,6 +27,16 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 - **[可觀測性](design/observability.md)** — 證據地圖(journal/db/transcript/dashboard)、
   怎麼讀 journal、**42 種事件字典**、典型事件序列。
 - **[LESSONS](lessons.md)** — 歷史踩坑全紀錄(症狀 → 根因 → 對策)。
+
+## 研究與對照(Study)
+
+開發過程的研究/實驗策展成「結論 + 比較」文章(原始長文留在 `research/`):
+[總體研究](study/runtime-control-plane.md) ·
+[後端 A/B/C 對照](study/backend-abc.md) ·
+[Crash→Resume](study/crash-recovery.md) ·
+[Jira 整合設計](study/jira-integration.md) ·
+[對照 qm 平台](study/qm-comparison.md) ·
+[總覽](study/README.md)
 
 ## 深入設計
 

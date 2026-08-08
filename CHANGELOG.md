@@ -6,6 +6,9 @@
 ## [Unreleased]
 
 ### Added
+- **研究策展(docs/study)**:把開發過程的研究/實驗策展成「結論 + 比較」文章 ——
+  總體研究、後端 A/B/C 對照、Crash→Resume、Jira 整合設計、對照 qm 平台,各附對照表
+  與「對 ARCP 的影響」,連回 `research/` 原始長文;`docs/index` 加 Study 分區。
 - **離線內網文件自足(W13)**:為「交付到內網當凍結 snapshot、只能靠 repo 內文件除錯」
   而補的除錯層 —— `docs/ai-debugging.md`(離線工作守則 + 標準除錯路徑 + 關鍵不變量)、
   `docs/troubleshooting.md`(症狀導向 runbook)、`docs/design/observability.md`(證據地圖 +
