@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import os
 import sys
-import time
 import uuid
 
 _A_ROUTE = os.path.join(os.path.dirname(os.path.dirname(
@@ -31,8 +30,7 @@ from .inner_runner import run_attempt  # noqa: E402
 from .jira_source import JiraCloudSource  # noqa: E402
 from .logutil import get_logger  # noqa: E402
 from .profiles import Profile  # noqa: E402
-from .scoring import collect_budget_override, write_handoff_sections  # noqa: E402
-from .sections import parse as parse_sections  # noqa: E402
+from .scoring import collect_budget_override  # noqa: E402
 from .store import Store, TicketSession  # noqa: E402
 from .ticket import Ticket  # noqa: E402
 from .transcript import engine_of_agent  # noqa: E402
@@ -123,43 +121,6 @@ class Dispatcher:
                             engine_of_agent(profile.agent),
                             sess.workspace, pack=False, reason="pending:budget")
         return ev
-
-    def _handoff_for_scoring(self, ticket: Ticket, profile: Profile,
-                             sess: TicketSession) -> None:
-        """W7.2:終態(SUCCESS/FAILURE)交人評分——把 goal 寫進 agent 段 + seed
-        human score placeholder;best-effort 交人 assignee;記首次「催評時間」為現在,
-        讓 ScoreGate 首次催評延後一輪(∵ 終態留言本身已提示評分),不立刻重催。"""
-        try:
-            write_handoff_sections(self.source, ticket, profile)
-        except Exception as e:  # noqa: BLE001 — 寫 section 壞不擋結案流程
-            log.warning("%s 交人評分 section 寫入失敗:%s", ticket.key, e)
-        assignee = self._human_assignee(ticket, profile)
-        if assignee and (ticket.assignee_id or "") != assignee:
-            try:
-                self.source.assign(ticket.id, assignee)
-            except Exception as e:  # noqa: BLE001
-                log.warning("%s 交人 assign 失敗:%s", ticket.key, e)
-        sess.score_reminded_at = time.time()
-        self.store.upsert_session(sess)
-
-    def _human_assignee(self, ticket: Ticket, profile: Profile) -> str | None:
-        """轉人類時的 assignee:description human 段 `human_email` →
-        profile.approver(fallback 鏈)。email 經 user-search 解析成 accountId,
-        解析不到 → 試下一候選;離線 mock(無 user-search)→ 原樣回。"""
-        _b, secs, _a = parse_sections(ticket.description or "")
-        email = next((str(s.data().get("human_email") or "").strip()
-                      for s in secs if s.owner == "human"), "")
-        find = getattr(self.source, "find_account_id", None)
-        for cand in (email, profile.approver or ""):
-            if not cand:
-                continue
-            if "@" in cand and find is not None:
-                acct = find(cand)
-                if acct:
-                    return acct
-                continue               # 解析不到 → fallback 下一候選
-            return cand                # 已是 accountId(或離線 mock)
-        return None
 
     def _effective_agent(self, profile: Profile) -> dict:
         """Inject shared-server info for openhands-server backend (conc.3)."""
@@ -379,20 +340,16 @@ class Dispatcher:
                                         engine_of_agent(profile.agent),
                                         sess.workspace, pack=False,
                                         reason="handoff-human")
+                    # W11:assignee 恆定,不再 assign 人;要 agent 繼續可留言
+                    # @agent run(留言指令保留),或人於後續一次性表單回覆。
                     self.source.add_comment(ticket.id, (
                         f"[agent] handoff→human:{summarize(res.structured)}\n"
                         f"請人工接手;要 agent 繼續請留言 @agent run。"
                         f"\n{_resume_hint(sess)}"))
-                    # assignee 不信 agent 自由文字 next.to:human 段
-                    # human_email → approver(fallback);解析不到就不改
-                    assignee = self._human_assignee(ticket, profile)
-                    if assignee:
-                        self.source.assign(ticket.id, assignee)
                     events.append(self.store.journal(
                         "handoff", ticket.id, ticket.key, kind="human",
-                        to=nxt["to"], assignee=assignee))
-                    log.info("%s handoff → human(assignee=%s)",
-                             ticket.key, assignee)
+                        to=nxt["to"]))
+                    log.info("%s handoff → human", ticket.key)
                     return events
                 target = str(nxt["to"])
                 if target in self.profiles and target != profile.name:
@@ -430,8 +387,7 @@ class Dispatcher:
                 self.source.add_comment(ticket.id, (
                     f"[agent] outcome=SUCCESS(attempt {sess.attempts},"
                     f" 累計 ${sess.cost_usd:.4f})\n驗證結果:\n{checks}{self_eval}\n"
-                    f"請在 description 的 human 段填 `score: <0–10>` 給完成度評分。\n"
-                    f"{_resume_hint(sess)}"))
+                    f"進入 HIL(End):稍後會發一次性評分/裁決表單連結給你。"))
                 # W3.5 C3:公式 v1 = est 平計(attempts>1 不折減——人也會重試)。
                 # W7(R3):未設估時→預設 240 分,效益一律算得出。
                 events.append(self.store.journal(
@@ -441,7 +397,7 @@ class Dispatcher:
                 log.info("%s SUCCESS attempt=%d cost=$%.4f",
                          ticket.key, sess.attempts, sess.cost_usd)
                 self._pack_transcript(sess, profile, ticket, events)  # W4.2
-                self._handoff_for_scoring(ticket, profile, sess)      # W7.2
+                # W11:HIL(End) 評分改由 ScoreGate 發 score_and_close 表單
                 return events
 
             feedback = verdict.summary()
@@ -465,12 +421,11 @@ class Dispatcher:
         self.source.add_comment(ticket.id, (
             f"[agent] outcome=FAILURE:{profile.max_attempts} 次嘗試未過驗證。"
             f"最後失敗證據:\n{feedback}{self_eval}\n"
-            f"請在 description 的 human 段填 `score: <0–10>` 評 agent 幫了多少"
-            f"(反映還有多少 gap)。\n{_resume_hint(sess)}"))
+            f"進入 HIL(End):稍後會發一次性評分/裁決表單連結給你。"))
         events.append(self.store.journal(
             "pending", ticket.id, ticket.key, reason="max-attempts"))
         log.info("%s FAILURE (max-attempts=%d, cost=$%.4f)",
                  ticket.key, profile.max_attempts, sess.cost_usd)
         self._pack_transcript(sess, profile, ticket, events)          # W4.2
-        self._handoff_for_scoring(ticket, profile, sess)              # W7.2
+        # W11:HIL(End) 評分改由 ScoreGate 發 score_and_close 表單
         return events

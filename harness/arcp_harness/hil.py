@@ -100,8 +100,8 @@ def apply_submission(source, store, req: InteractionRequest, *,
             else:                              # close:人授權 → 系統轉 Done
                 store.upsert_session(sess)
                 if source.transition(req.issue_id, "Done"):
-                    evs.append(store.journal(
-                        "resolved", req.issue_id, req.key, by="human",
+                    evs.append(store.journal(       # closed(有別於 SUCCESS 的
+                        "closed", req.issue_id, req.key, by="human",  # resolved)
                         request_id=req.request_id))
         else:                                  # need_info / decision → resume
             sess.pending_reason = None

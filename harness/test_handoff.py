@@ -168,7 +168,7 @@ def test_g1_handoff_to_human():
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     d = Dispatcher(MockSource(), store, dict(PROFILES), root=root)
-    # assignee 來源 = human 段 human_email(不信 agent 自由文字 next.to)
+    # W11:assignee 恆定,handoff→human 不再 assign(人機互動改走一次性表單)
     desc = render("", [Section("human",
                                "agent_name: p\nhuman_email: boss@x.tw")],
                   "原始需求")
@@ -179,11 +179,11 @@ def test_g1_handoff_to_human():
     assert sess.pending_reason == "human-decision"  # 交人,不排 agent 隊列
     assert sess.profile == "p"                      # 不換 profile
     assert sess.session_id == "s-new"               # session 留著可 resume
-    assert d.source.assigns == [(1, "boss@x.tw")]   # 離線 mock:原樣 email
+    assert d.source.assigns == []                   # W11:不再改 assignee
 
 
-def test_g1_handoff_to_human_fallback_approver():
-    # 無 human_email → fallback profile.approver;兩者皆無 → 不改 assignee
+def test_g1_handoff_to_human_no_assign():
+    # W11:handoff→human 不論有無 human_email/approver,一律不改 assignee
     fork, _ = _fork_recorder(structured={
         "reason": "x", "status": "handoff",
         "next": {"to": "誰", "kind": "human"}})
@@ -192,14 +192,9 @@ def test_g1_handoff_to_human_fallback_approver():
     store = Store(os.path.join(root, "s"))
     profiles = {"p": _profile("p", approver="APPR-ACCT")}
     d = Dispatcher(MockSource(), store, profiles, root=root)
-    d.handle(_ticket(), "p")                        # description 無 human 段
-    assert d.source.assigns == [(1, "APPR-ACCT")]
-
-    store2 = Store(os.path.join(root, "s2"))
-    d2 = Dispatcher(MockSource(), store2, dict(PROFILES), root=root)
-    d2.handle(_ticket(), "p")                       # 無 email、無 approver
-    assert d2.source.assigns == []                  # 不亂指派
-    assert store2.get_session(1).pending_reason == "human-decision"
+    d.handle(_ticket(), "p")
+    assert d.source.assigns == []                   # 不亂指派
+    assert store.get_session(1).pending_reason == "human-decision"
 
 
 def test_handoff_to_approval_profile_regates():
