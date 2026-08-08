@@ -8,7 +8,7 @@
 | # | 項目 | 做法 | effort | 價值 |
 |---|---|---|---|---|
 | **V1** | **真後端 e2e + inner_runner 路徑 bug 複驗** | W12.4b/c 修了 W12.1 遺留的 runner 定位 bug(`HERE` 曾解析到 `src/` 找不到 runner,已改 `arcp.paths`);離線測試沒覆蓋真派工。下次真 Jira/agent 整合測時,**優先用一次真實 rawcli 派工確認 runner 能被 spawn**,並一併複驗 [C3/C5 retry 計數 flaky](見 memory)。 | 低(需真 Jira/agent) | 這 bug 會炸的正是真派工路徑;離線 CI 抓不到 |
-| **W13** | **離線內網文件自足性(AI 自我除錯)** | ⚠️**新目標**:repo 之後會被下載進**公司內網當凍結 snapshot**,無法再抓最新版、無法連外、無法問原作者。文件必須自足到「AI(和人)只靠 repo 內文件就能理解系統、定位問題、做分析」。缺口盤點 + wave 計畫見下方 §「主題 H」。 | 中 | 決定這份交付在內網到底能不能被人/AI 用起來 |
+| **W13** | **離線內網文件自足性(AI 自我除錯)** | ✅**核心完成**(2026-08-08,e2418d0,CI 綠):見下方 §「主題 H」H1-H4 皆做。repo 之後會下載進內網當凍結 snapshot,文件已自足到 AI/人只靠 repo 內就能除錯分析。後續可強化見 H 表備註。 | 中 | 決定這份交付在內網到底能不能被人/AI 用起來 |
 
 ## ★ 使用者圈定優先級(2026-08-04,全 23 項逐項問過)
 
@@ -150,17 +150,20 @@ grader 作關鍵任務的可選雙保險(profile 決定)。
 > 無法問原作者。文件必須自足到「AI(和人)只靠 repo 內文件,就能理解系統、定位問題、
 > 做分析」。現有 docs 擅長「理解/操作/設計理由」,但缺**除錯操作面**與**證據語意面**。
 
-| # | 項目 | 做法 | effort | 價值 |
-|---|---|---|---|---|
-| H1 | **troubleshooting / runbook** | `docs/troubleshooting.md`:常見故障模式 → 症狀 → 診斷步驟 → 處置。涵蓋:agent 卡住/stall、假完成(rc=0)、runner spawn 失敗(V1 那類路徑問題)、Jira 降級、預算/額度閘、resume 不生效、workspace 搬家、睡眠假 stall。每條指向要看的證據。 | 中 | 離線除錯的第一入口;把散在 LESSONS/design 的排錯知識收斂成可操作步驟 |
-| H2 | **journal 事件字典 + 證據地圖** | `docs/design/observability.md`:①**事件字典**——約 20 種 `store.journal(...)` 事件逐一(何時發、欄位、代表什麼、正常/異常樣態);②**證據地圖**——journal `events.jsonl` / snapshot / transcript / dashboard 各在哪、怎麼讀、如何串出一張票 end-to-end;③如何用 dashboard 事件時間軸定位。 | 中 | journal 是離線除錯的主要證據軌,現在要逆向工程 code 才懂 |
-| H3 | **給離線 AI 分析者的入口** | `docs/ai-debugging.md`(或強化 HANDOFF/CLAUDE.md):此 repo 是什麼、**離線工作守則**(不連外、用哪些離線測試驗假設)、關鍵不變量/契約(envelope schema、狀態機、冪等)、關鍵檔案地圖、「先讀什麼」的除錯導引。CLAUDE.md/HANDOFF 明確指向 H1/H2。 | 低-中 | 讓內網的 AI session 有明確起點與可驗證的地面真值 |
-| H4 | **索引整合** | LESSONS.md(踩坑史)搬進 `docs/` 或在 `docs/index.md` 當除錯資源浮上來;index 加「除錯/可觀測」分區串起 H1-H3。 | 低 | 現有寶貴的踩坑知識沒被當除錯資源索引 |
+| # | 項目 | 狀態 | 交付 |
+|---|---|---|---|
+| H1 | **troubleshooting / runbook** | ✅ | `docs/troubleshooting.md`:症狀導向(票沒被處理/卡住/假完成/runner 失敗/resume 冪等/Jira 降級/指令/花費/dashboard),每條指向該看的 journal 事件與證據 |
+| H2 | **journal 事件字典 + 證據地圖** | ✅ | `docs/design/observability.md`:證據地圖 + **42 事件字典**(`scripts/gen_event_dict.py` 自動列表 + 手寫語意分組)+ 典型事件序列 + 純 stdlib 離線查法 |
+| H3 | **給離線 AI 分析者的入口** | ✅ | `docs/ai-debugging.md`:離線工作守則、標準除錯路徑、關鍵不變量、離線驗證怎麼跑;CLAUDE.md 已指向 |
+| H4 | **索引整合** | ✅ | `harness/LESSONS.md` → `docs/lessons.md`;`docs/index.md` 加「除錯/可觀測」分區串起 H1-H3 |
 
-**設計決策點(待使用者定,或我給建議)**:
-- 深度:精要可操作(runbook 式,推薦)vs 鉅細靡遺(每事件+每檔逐一)?
-- 事件字典要不要**從 code 自動生成**(掃 `store.journal` 呼叫)以防日後漂移,還是手寫一次?
-- LESSONS.md 搬進 docs/ 還是留 harness/ 只加索引?
+**已定的決策**:事件字典 = **混合**(掃碼列表防漂移 + 手寫語意);LESSONS 搬進 docs/。
+
+**後續可強化(非阻塞)**:
+- observability §3 手寫語意目前是「分組概述 + 標異常訊號」,42 事件未逐一逐段展開;
+  真需要時可再細化高風險事件。
+- troubleshooting 的除錯範例可補**真實 journal 片段**(需真跑一次,連同 V1 複驗)。
+- 可加 pre-commit hook 跑 `gen_event_dict.py --check`(目前只在 CI)。
 
 ## AI 建議(供參考,你決定)
 
