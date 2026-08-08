@@ -131,8 +131,9 @@ with tempfile.TemporaryDirectory() as tmp:
         pending_reason=None, cost_usd=0))
     pol.on_assignee_changed(t(id=9))
     s9 = store.get_session(9)
-    check("assignee 改走 -> pending:external + 說明留言",
-          s9.pending_reason == "external" and "撤銷授權" in src.comments[-1][1])
+    check("assignee 改走 -> 告警提醒(W11:不改回、不動狀態)",
+          s9.pending_reason is None and s9.inactive is False
+          and "表單" in src.comments[-1][1])
     store.close()
 
 print(f"\n{ok} passed, {fail} failed")

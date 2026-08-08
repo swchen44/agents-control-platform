@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""W2.4 — assignee=資源開關 單元測(§6/W12;pytest-compatible,亦自跑)。
+"""W11 — assignee 恆定=Agent 單元測(取代 W2.4 資源開關;亦自跑)。
 
-涵蓋:assignee→人類=inactive+讓出額度(active_sessions 排除)、assignee→機器人=
-清 inactive 可 resume、inactive 期間 dispatcher 不派工、審批中(pending:approval)
-不誤標、未配置 bot_account_id 退回舊語義(pending:external)、無 session/終態不管。
+W11 起 assignee 不再是資源開關/觸發(人機互動改走一次性表單)。涵蓋:assignee 被改離
+agent → 告警 + 提醒(不強制改回)、改回 agent → 靜默記錄、未配置 bot_id → 一律告警、
+無 session/終態不管、dispatcher 仍略過 inactive session。
 """
 from __future__ import annotations
 
@@ -53,78 +53,35 @@ def _ticket(assignee_id):
                   assignee="someone", assignee_id=assignee_id, description="")
 
 
-def test_assignee_to_human_sets_inactive_and_yields_quota():
+def test_assignee_away_alerts_no_revert():
+    # W11:被改離 agent → 告警 + 提醒 comment,不強制改回、不動 session 狀態
     store = _store()
     store.upsert_session(_sess())
     pol = _policy(store)
-    assert [s.issue_id for s in store.active_sessions()] == [1]  # 原本占額度
     ev = pol.on_assignee_changed(_ticket("HUMAN-1"))
-    assert [e["type"] for e in ev] == ["inactive_set"]
-    assert store.get_session(1).inactive is True
-    assert store.active_sessions() == []                # W8:讓出 F1 額度
-    assert any("inactive" in c for _, c in pol.source.comments)
+    assert [e["type"] for e in ev] == ["assignee_alert"]
+    assert any("assignee" in c and "表單" in c for _, c in pol.source.comments)
+    s = store.get_session(1)
+    assert s.inactive is False and s.pending_reason is None   # 不改回、不動狀態
+    assert [x.issue_id for x in store.active_sessions()] == [1]  # 仍占額度
 
 
-def test_assignee_back_to_bot_clears_inactive():
+def test_assignee_back_to_bot_quiet():
     store = _store()
-    store.upsert_session(_sess(inactive=True))
+    store.upsert_session(_sess())
     pol = _policy(store)
     ev = pol.on_assignee_changed(_ticket(BOT))
-    assert [e["type"] for e in ev] == ["inactive_cleared"]
-    sess = store.get_session(1)
-    assert sess.inactive is False
-    assert sess.session_id == "s1"                      # session 留著才能 resume
-    assert [s.issue_id for s in store.active_sessions()] == [1]
+    assert [e["type"] for e in ev] == ["assignee_restored"]
+    assert pol.source.comments == []                    # 靜默,不留言
 
 
-def test_human_to_human_no_duplicate():
-    store = _store()
-    store.upsert_session(_sess(inactive=True))
-    pol = _policy(store)
-    assert pol.on_assignee_changed(_ticket("HUMAN-2")) == []
-    assert pol.source.comments == []                    # 不重複留言
-
-
-def test_bot_while_active_noop():
-    store = _store()
-    store.upsert_session(_sess())                       # 本來就 active
-    pol = _policy(store)
-    assert pol.on_assignee_changed(_ticket(BOT)) == []
-
-
-def test_approval_pending_not_marked_inactive():
-    # 審批流用 assignee 當放行信號(W2.3),不可誤標 inactive
-    store = _store()
-    store.upsert_session(_sess(session_id=None, pending_reason="approval"))
-    pol = _policy(store)
-    assert pol.on_assignee_changed(_ticket("APPROVER")) == []
-    assert store.get_session(1).inactive is False
-
-
-def test_pending_session_inactive_but_quiet():
-    # 已 pending(如 G1 handoff 後 human-decision):inactive 照標(讓出額度)
-    # 但不留言——pending comment 已說明怎麼繼續,再留言重複矛盾(SCRUM-22 實測)
-    store = _store()
-    store.upsert_session(_sess(pending_reason="human-decision"))
-    pol = _policy(store)
-    ev = pol.on_assignee_changed(_ticket("HUMAN-1"))
-    assert [e["type"] for e in ev] == ["inactive_set"]
-    assert store.get_session(1).inactive is True
-    assert pol.source.comments == []                    # 靜默
-    ev2 = pol.on_assignee_changed(_ticket(BOT))         # 回機器人也靜默
-    assert [e["type"] for e in ev2] == ["inactive_cleared"]
-    assert pol.source.comments == []
-
-
-def test_legacy_without_bot_id():
-    # 未配置機器人身份 → 舊語義:任何變更 = 撤銷授權(pending:external)
+def test_assignee_no_bot_id_alerts():
+    # 未配置機器人身份 → 無法確認是否為 agent,一律告警
     store = _store()
     store.upsert_session(_sess())
     pol = _policy(store, bot=None)
     ev = pol.on_assignee_changed(_ticket("HUMAN-1"))
-    assert [e["type"] for e in ev] == ["external_pending"]
-    assert store.get_session(1).pending_reason == "external"
-    assert store.get_session(1).inactive is False
+    assert [e["type"] for e in ev] == ["assignee_alert"]
 
 
 def test_no_session_or_terminal_untouched():

@@ -168,46 +168,19 @@ class ExternalChangePolicy:
         return []
 
     def on_assignee_changed(self, t: Ticket) -> list[dict]:
+        """W11:assignee **恆定=Agent**,不再當資源開關/觸發(人機互動改走一次性
+        表單)。被改離 agent → 記告警 + 貼一次提醒(**不強制改回**,避免搶 assignee +
+        revert→通知噪音);改回 agent → 靜默記錄。poller 只在 assignee 實際變動時呼此,
+        故一次變動只提醒一次(冪等)。"""
         sess = self.store.get_session(t.id)
         if sess is None or sess.outcome is not None:
             return []                       # 無 session / 已終態:不管
-        if self.bot_account_id is None:     # 舊語義:變更 = 撤銷授權
-            sess.pending_reason = "external"
-            self.store.upsert_session(sess)
-            self.source.add_comment(
-                t.id, "[agent] assignee 變更 → 視為撤銷授權,暫停。"
-                      "要繼續請留言 @agent run")
-            return [self.store.journal("external_pending", t.id, t.key,
-                                       reason="assignee-changed")]
-
-        # W12 assignee=資源開關(DESIGN §6)。審批中的票除外:審批流自己用
-        # assignee 當放行信號(W2.3 指派審批者/交回機器人),不可誤標 inactive。
-        if sess.pending_reason == "approval":
-            return []
-        # 已 pending 的票(human-decision/budget/…):inactive 只記 journal 不留言
-        # ——pending comment 已說明怎麼繼續;再留言會重複甚至矛盾(SCRUM-22 實測:
-        # G1 handoff 交人後,資源開關把 harness 自己改的 assignee 當外部變更補留言)。
-        quiet = sess.pending_reason is not None
-        if (t.assignee_id or "") == self.bot_account_id:
-            if not sess.inactive:
-                return []                   # 本來就 active,無事
-            sess.inactive = False
-            self.store.upsert_session(sess)
-            if not quiet:
-                self.source.add_comment(
-                    t.id, "[agent] assignee 回到機器人 → 恢復 active,"
-                          "下輪 resume 續跑。")
-            log.info("%s assignee 回機器人 → active(resume)", t.key)
-            return [self.store.journal("inactive_cleared", t.id, t.key)]
-        if sess.inactive:
-            return []                       # 已 inactive(人→人)不重複
-        sess.inactive = True
-        self.store.upsert_session(sess)
-        _finalize_leaving(sess, self.profiles, "assignee-inactive")  # W6.4
-        if not quiet:
-            self.source.add_comment(
-                t.id, "[agent] assignee 交給人類 → inactive:不再派工、讓出並發"
-                      "額度(不占 CPU/memory)。把 assignee 改回機器人即恢復續跑。")
-        log.info("%s assignee 交人類 → inactive(讓出額度)", t.key)
-        return [self.store.journal("inactive_set", t.id, t.key,
+        if self.bot_account_id and (t.assignee_id or "") == self.bot_account_id:
+            log.info("%s assignee 改回 agent(靜默)", t.key)
+            return [self.store.journal("assignee_restored", t.id, t.key)]
+        self.source.add_comment(
+            t.id, "[agent] 提醒:本票由 agent 處理,assignee 請保持為 agent。"
+                  "人類要介入,請用 agent 貼出的一次性表單連結(請勿改 assignee)。")
+        log.info("%s assignee 被改離 agent → 告警(不改回)", t.key)
+        return [self.store.journal("assignee_alert", t.id, t.key,
                                    assignee=t.assignee or "")]
