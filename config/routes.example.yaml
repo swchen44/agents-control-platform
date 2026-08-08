@@ -41,9 +41,13 @@ inner_loop:
       max_budget_monthly_usd: 50.0
       human_minutes_est: 30          # KPI 節省人時估算
       workspace:
-        template: empty
+        template: empty              # empty | <name>_template(config/templates/ 下,整包 copytree)
         folder: 'tickets/{issue_id}'
-      skills: []
+        # --- 進階佈建(docs/design/workspace.md;預設都關/空)---
+        # install: 'uv run install.py'   # 設了就用命令佈建(不 copytree);ARCP 附 <ws> <template> 兩參數
+        # common_skills: [example-skill] # 從 config/skills/ 選子集,複製到 ws 的 skills 目錄
+        # inject_md: true                # 是否把 config/templates/inject_claude_md_end.md 貼到 CLAUDE.md/AGENTS.md 尾
+      skills: []                    # 舊式逐檔 SKILL.md(相容;新專案用 common_skills)
       agent:
         backend: rawcli              # 純 stdlib,無需 openhands venv
         engine: claude               # claude | codex

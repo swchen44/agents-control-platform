@@ -1,93 +1,191 @@
-"""Workspace provisioning + health check (v5 §4.4).
+"""Workspace provisioning + health check(設計見 docs/design/workspace.md)。
 
-Layout per ticket (keyed by NUMERIC issue id — v5 C3; the path never changes
-once created, because native resume is cwd-bound):
+一張票 → 一個隔離工作區。全新建立時依序:內容佈建(install 腳本 / copytree / 空)→
+common skills 複製 → inject CLAUDE.md/AGENTS.md → 寫 TICKET.md。resume 時只刷新
+TICKET.md,其餘跳過(native resume 綁 cwd,重跑會重貼/重 clone)。
 
-    <root>/tickets/<issue_id>/
-        ws/                  the agent's working directory
-        ws/.claude/skills/   injected skills (from profile.skills paths)
-        ws/TICKET.md         rendered ticket context (re-rendered when stale)
-
-Health check before any resume (v5 §6-16): never assume the last run ended
-cleanly.
+Layout(以不變的 numeric issue_id 命名,native resume cwd-bound → 路徑永不變):
+    <root>/tickets/<folder>/ws/          agent 工作目錄
+                           /ws/TICKET.md  任務簡報(每輪刷新)
 """
 
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
+import subprocess
 
-from .paths import templates_dir
+from .logutil import get_logger
+from .paths import common_skills_dir, templates_dir
 from .profiles import Profile
 from .ticket import Ticket
 
-TICKET_TEMPLATE = """# {key}: {summary}
+log = get_logger("workspace")
 
-- issue_id: {id}
-- 狀態: {state}
-- assignee: {assignee}
-- labels: {labels}
-
-## 描述
-
-{description}
-
-## 最新留言(最多 5 則)
-
-{comments}
-"""
+_INJECT_FILE = "inject_claude_md_end.md"
+_MARK_BEGIN = "<!-- BEGIN arcp inject -->"
+_MARK_END = "<!-- END arcp inject -->"
 
 
-def render_ticket_md(t: Ticket) -> str:
+def _render_acceptance(profile: Profile | None) -> str:
+    """把 profile.verify 渲染成人看得懂的驗收標準(= grader 的確定性門檻)。"""
+    if not profile or not profile.verify:
+        return "(此 profile 無確定性驗收步驟;以描述交付為準)"
+    lines: list[str] = []
+    for s in profile.verify:
+        for fname, expected in (s.files or {}).items():
+            suffix = f"(內容含 '{expected}')" if expected else ""
+            lines.append(f"- [{s.name}] 必須產出檔案:`{fname}`{suffix}")
+        if s.cmd:
+            lines.append(f"- [{s.name}] 指令需通過:`{' '.join(s.cmd)}`")
+    return "\n".join(lines) or "(此 profile 無確定性驗收步驟)"
+
+
+def render_ticket_md(t: Ticket, profile: Profile | None = None,
+                     base_url: str | None = None) -> str:
+    """任務簡報(agent prompt 第一句叫它讀這個)。內容 = Jira 票 + profile。"""
     comments = "\n".join(
         f"- [{c.author}] {c.body[:300]}" for c in t.comments[-5:]) or "(無)"
-    return TICKET_TEMPLATE.format(
-        key=t.key, summary=t.summary, id=t.id, state=t.state,
-        assignee=t.assignee or "-", labels=", ".join(t.labels) or "-",
-        description=t.description or "(無)", comments=comments)
+    head = [f"# {t.key}: {t.summary}", "",
+            f"- issue_id: {t.id}", f"- 狀態: {t.state}",
+            f"- assignee: {t.assignee or '-'}",
+            f"- labels: {', '.join(t.labels) or '-'}"]
+    if base_url and t.key:
+        head.append(f"- Jira: {base_url.rstrip('/')}/browse/{t.key}")
+    parts = ["\n".join(head)]
+    if profile and profile.goal:
+        parts.append(f"## 目標\n\n{profile.goal}")
+    parts.append(f"## 描述(要做什麼)\n\n{t.description or '(無)'}")
+    parts.append("## 驗收標準(通過才算 SUCCESS)\n\n" + _render_acceptance(profile))
+    parts.append(f"## 最新留言(最多 5 則)\n\n{comments}")
+    return "\n\n".join(parts) + "\n"
 
 
 def _slug(s: str) -> str:
-    """Folder-safe token: keep it readable, replace anything odd with '-'."""
     return "".join(c if (c.isalnum() or c in "-.") else "-" for c in s)
 
 
-def provision(root: str, ticket: Ticket, profile: Profile) -> str:
-    """Create (or refresh) the ticket workspace; returns the ws path.
+def _resolve_targets(ws: str, claude_rel: str, agents_rel: str,
+                     create_default: bool) -> list[str]:
+    """統一目標解析(skills 目錄 / md 檔共用,docs/design/workspace.md):
+    兩者都不存在 → 建 .claude 側(create_default 時);只一個存在 → 那個;兩個都在:
+    同檔(soft/hard link)→ 一個;不同檔 → 兩個。"""
+    c = os.path.join(ws, claude_rel)
+    a = os.path.join(ws, agents_rel)
+    ce, ae = os.path.exists(c), os.path.exists(a)
+    if ce and ae:
+        try:
+            if os.path.samefile(c, a):
+                return [c]
+        except OSError:
+            pass
+        return [c, a]
+    if ce:
+        return [c]
+    if ae:
+        return [a]
+    return [c] if create_default else []
 
-    template=class → workspace=instance (docs/design/lifecycle.md §1): when
-    profile.workspace_template is a folder path (not "empty"), a fresh instance
-    is a copytree of it; skills layer on top. Path is keyed by the never-changing
-    issue_id tail so native resume (cwd-bound) survives even if summary/key are
-    edited (§2). Existing ws is never re-copied (instance state preserved).
-    """
+
+def _run_install(ws: str, template: str, install_cmd: str, timeout: float) -> None:
+    """執行 profile 的安裝命令:<argv…> <ws絕對> <template絕對>;cwd=template。
+    stdout/stderr → logger;rc!=0 擲例外(provisioning 失敗)。"""
+    argv = shlex.split(install_cmd) + [os.path.abspath(ws), os.path.abspath(template)]
+    log.info("[install] run: %s (cwd=%s)", " ".join(argv), template)
+    try:
+        proc = subprocess.run(argv, cwd=template, stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"install 逾時({timeout}s):{install_cmd}") from e
+    except OSError as e:
+        raise RuntimeError(f"install 無法執行:{install_cmd}: {e}") from e
+    for line in (proc.stdout or "").splitlines():
+        log.info("[install] %s", line)
+    for line in (proc.stderr or "").splitlines():
+        log.warning("[install:err] %s", line)
+    if proc.returncode != 0:
+        raise RuntimeError(f"install 失敗 rc={proc.returncode}:{install_cmd}")
+
+
+def _copy_common_skills(ws: str, names: list[str]) -> None:
+    """config/skills/<name>/ 整包 → <skills目標>/<name>/(profile 選子集)。"""
+    if not names:
+        return
+    base = common_skills_dir() or "."
+    targets = _resolve_targets(ws, ".claude/skills", ".agents/skills",
+                               create_default=True)
+    for t in targets:
+        os.makedirs(t, exist_ok=True)
+    for name in names:
+        src = os.path.join(base, name)
+        if not os.path.isdir(src):
+            raise FileNotFoundError(f"common skill 不存在: {src}")
+        for t in targets:
+            dst = os.path.join(t, name)
+            if os.path.isdir(dst):
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+
+
+def _apply_inject(ws: str) -> None:
+    """config/templates/inject_claude_md_end.md → append 到 CLAUDE.md/AGENTS.md 尾。
+    marker 包住(冪等,重跑不重貼);都不存在 → 建 CLAUDE.md。"""
+    inj = os.path.join(templates_dir() or ".", _INJECT_FILE)
+    if not os.path.isfile(inj):
+        return
+    content = open(inj, encoding="utf-8").read().rstrip("\n")
+    block = f"\n\n{_MARK_BEGIN}\n{content}\n{_MARK_END}\n"
+    for tgt in _resolve_targets(ws, "CLAUDE.md", "AGENTS.md", create_default=True):
+        existing = open(tgt, encoding="utf-8").read() if os.path.exists(tgt) else ""
+        if _MARK_BEGIN in existing:
+            continue                                   # 已注入,冪等跳過
+        with open(tgt, "a", encoding="utf-8") as f:
+            f.write(block)
+
+
+def provision(root: str, ticket: Ticket, profile: Profile,
+              base_url: str | None = None) -> str:
+    """建立(或刷新)票工作區,回傳 ws 路徑。全新建立才跑佈建;resume 只刷新 TICKET.md。"""
     base = os.path.join(root, profile.workspace_folder.format(
         agent=_slug(profile.name), key=_slug(ticket.key), issue_id=ticket.id))
     ws = os.path.join(base, "ws")
-    if not os.path.isdir(ws) and profile.workspace_template != "empty":
-        # W2 atomicity: copytree to a temp sibling, then rename into place, so a
-        # crash mid-copy never leaves a half-populated ws that looks healthy.
-        template = os.path.join(templates_dir() or ".", profile.workspace_template)
+
+    if not os.path.isdir(ws):                           # 全新建立
         os.makedirs(base, exist_ok=True)
-        tmp = ws + ".tmp"
-        if os.path.isdir(tmp):
-            shutil.rmtree(tmp)
-        shutil.copytree(template, tmp)
-        os.rename(tmp, ws)
-    else:
-        os.makedirs(ws, exist_ok=True)
-    for skill_path in profile.skills:          # skills layer on top of template
-        name = os.path.splitext(os.path.basename(skill_path))[0]
-        dst = os.path.join(ws, ".claude", "skills", name)
-        os.makedirs(dst, exist_ok=True)
-        shutil.copy(skill_path, os.path.join(dst, "SKILL.md"))
-    with open(os.path.join(ws, "TICKET.md"), "w") as f:
-        f.write(render_ticket_md(ticket))
+        tpl_root = templates_dir() or "."
+        if profile.workspace_install:                   # 2a. install 腳本佈建
+            os.makedirs(ws, exist_ok=True)
+            tpl = (os.path.join(tpl_root, profile.workspace_template)
+                   if profile.workspace_template != "empty" else tpl_root)
+            timeout = float(profile.agent.get("timeout_sec", 300)) + 120
+            _run_install(ws, tpl, profile.workspace_install, timeout)
+        elif profile.workspace_template != "empty":     # 2b. copytree(atomic)
+            template = os.path.join(tpl_root, profile.workspace_template)
+            tmp = ws + ".tmp"
+            if os.path.isdir(tmp):
+                shutil.rmtree(tmp)
+            shutil.copytree(template, tmp)
+            os.rename(tmp, ws)
+        else:                                           # 2c. 空 ws
+            os.makedirs(ws, exist_ok=True)
+        for skill_path in profile.skills:               # 3a. 舊 file-based skills(相容)
+            name = os.path.splitext(os.path.basename(skill_path))[0]
+            dst = os.path.join(ws, ".claude", "skills", name)
+            os.makedirs(dst, exist_ok=True)
+            shutil.copy(skill_path, os.path.join(dst, "SKILL.md"))
+        _copy_common_skills(ws, profile.common_skills)  # 3b. common skills(選子集)
+        if profile.inject_md:                           # 4. inject md
+            _apply_inject(ws)
+
+    with open(os.path.join(ws, "TICKET.md"), "w") as f:  # 5. 任務簡報(每輪刷新)
+        f.write(render_ticket_md(ticket, profile, base_url))
     return ws
 
 
-def health_check(ws: str, ticket: Ticket) -> tuple[bool, str]:
-    """(healthy, reason). Run before every resume (v5 §4.4)."""
+def health_check(ws: str, ticket: Ticket, profile: Profile | None = None,
+                 base_url: str | None = None) -> tuple[bool, str]:
+    """(healthy, reason)。每次 resume 前跑(v5 §4.4)。TICKET.md 過期則刷新後仍健康。"""
     if not os.path.isdir(ws):
         return False, "workspace 目錄不存在"
     if not os.access(ws, os.W_OK):
@@ -95,8 +193,8 @@ def health_check(ws: str, ticket: Ticket) -> tuple[bool, str]:
     ticket_md = os.path.join(ws, "TICKET.md")
     if not os.path.isfile(ticket_md):
         return False, "TICKET.md 遺失"
-    if open(ticket_md).read() != render_ticket_md(ticket):
-        # ticket 內容變了:重新渲染後仍算健康(資訊更新非損壞)
+    fresh = render_ticket_md(ticket, profile, base_url)
+    if open(ticket_md).read() != fresh:                 # 票內容變了:刷新非損壞
         with open(ticket_md, "w") as f:
-            f.write(render_ticket_md(ticket))
+            f.write(fresh)
     return True, "ok"

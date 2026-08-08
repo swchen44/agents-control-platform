@@ -5,6 +5,16 @@
 
 ## [Unreleased]
 
+### Added
+- **workspace 佈建三能力(docs/design/workspace.md)**:profile `workspace_install`
+  (安裝命令 argv,ARCP 附 `<ws> <template>` 兩絕對路徑、cwd=template、stdout/stderr→logger、
+  rc 判定)、`common_skills`(從 `config/skills/` 選子集,整包複製)、`inject_md`
+  (把 `config/templates/inject_claude_md_end.md` 貼到 CLAUDE.md/AGENTS.md 尾)。skills 與
+  md 共用「統一目標解析」(`.claude/*` vs `.agents/*`:都無→建 .claude 側、同 link→一次、
+  不同→兩邊);TICKET.md 加 目標 / 驗收標準(由 verify 渲染)/ Jira 連結。附 `config/`
+  範例(example_template + example-skill + inject 檔)。新增 `tests/test_workspace_provision.py`
+  (12 檢查:目標解析 4 情境 / common skills / inject 冪等 / install rc / TICKET.md 新段)。
+
 ### Changed
 - **消除 harness/,改分散到專業標準位置**:`config/`(routes*.yaml + templates/ + skills/,
   git 追蹤)、`vendor/`(離線 vendored 資產)、`runtime/`(harness.db/events/workspaces,

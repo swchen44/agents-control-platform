@@ -58,48 +58,48 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 <!-- BEGIN gen_event_dict -->
 | 事件 | 欄位(kwargs) | 產生點 |
 |---|---|---|
-| `adopted` | — | `scripts/run_poller.py:56` |
-| `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py:162` |
-| `assignee_alert` | `assignee` | `src/arcp/commands.py:185` |
-| `assignee_changed` | `new`, `old` | `src/arcp/poller.py:99` |
-| `assignee_restored` | — | `src/arcp/commands.py:180` |
-| `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py:212` |
-| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `truly_resumed` | `src/arcp/dispatcher.py:260`, `src/arcp/triggers.py:297` |
-| `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py:248` |
-| `closed` | `by`, `request_id` | `src/arcp/hil.py:105` |
-| `command_accepted` | `author`, `command`, `note` | `src/arcp/commands.py:104`, `src/arcp/commands.py:144` |
-| `command_denied` | `author`, `command` | `src/arcp/commands.py:92` |
-| `command_rejected` | `command`, `target` | `src/arcp/commands.py:115` |
-| `command_unknown` | `body` | `src/arcp/commands.py:96` |
-| `comment_added` | `author`, `body`, `comment_id` | `src/arcp/poller.py:108` |
-| `dispatch_error` | `error` | `src/arcp/poller.py:162` |
-| `evicted` | `count`, `session` | `src/arcp/dispatcher.py:284` |
-| `external_abort` | `state` | `src/arcp/commands.py:166` |
-| `external_cleared` | `cause` | `src/arcp/dispatcher.py:145` |
-| `handoff` | `author`, `from_profile`, `kind`, `to` | `src/arcp/commands.py:132`, `src/arcp/dispatcher.py:341`, `src/arcp/dispatcher.py:364` |
-| `handoff_invalid` | `to` | `src/arcp/dispatcher.py:369` |
-| `hil_requested` | `request_id`, `schema` | `src/arcp/hil.py:45` |
-| `hil_resumed` | `reason`, `request_id`, `schema` | `src/arcp/hil.py:112`, `src/arcp/hil.py:97` |
-| `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py:158` |
-| `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py:115` |
-| `jira_write` | `action`, `detail` | `scripts/run_poller.py:114` |
-| `new_issue` | `state`, `summary` | `src/arcp/poller.py:83` |
-| `pending` | `cause`, `cost_usd`, `reason`, `scope` | `src/arcp/dispatcher.py:109`, `src/arcp/dispatcher.py:225`, `src/arcp/dispatcher.py:302`, `src/arcp/dispatcher.py:314`, `src/arcp/dispatcher.py:417` |
-| `queued` | `engine`, `profile` | `src/arcp/poller.py:241` |
-| `resolved` | `attempts`, `cost_usd`, `human_minutes_saved` | `src/arcp/dispatcher.py:385` |
-| `route_matched` | `on_match`, `profile`, `route` | `src/arcp/poller.py:87` |
-| `score_reminded` | `reminders` | `src/arcp/scoring.py:155` |
-| `score_requested` | `request_id` | `src/arcp/scoring.py:137` |
-| `script_run_finished` | `duration_sec`, `outcome`, `rc`, `timeout`, `trigger` | `src/arcp/triggers.py:247` |
-| `script_run_started` | `cwd`, `script`, `trigger` | `src/arcp/triggers.py:220` |
-| `session_created` | `profile`, `workspace` | `src/arcp/dispatcher.py:183` |
-| `status_changed` | `new`, `old` | `src/arcp/poller.py:92` |
-| `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py:152`, `src/arcp/dispatcher.py:74` |
-| `trigger_error` | `error` | `src/arcp/poller.py:179`, `src/arcp/poller.py:197` |
-| `trigger_finished` | `attempts`, `cost_usd`, `human_minutes_saved`, `outcome` | `src/arcp/triggers.py:304`, `src/arcp/triggers.py:311`, `src/arcp/triggers.py:323` |
-| `trigger_started` | `profile`, `trigger`, `workspace` | `src/arcp/triggers.py:279` |
-| `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py:51` |
-| `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py:191` |
+| `adopted` | — | `scripts/run_poller.py` |
+| `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py` |
+| `assignee_alert` | `assignee` | `src/arcp/commands.py` |
+| `assignee_changed` | `new`, `old` | `src/arcp/poller.py` |
+| `assignee_restored` | — | `src/arcp/commands.py` |
+| `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py` |
+| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `truly_resumed` | `src/arcp/dispatcher.py`, `src/arcp/triggers.py` |
+| `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
+| `closed` | `by`, `request_id` | `src/arcp/hil.py` |
+| `command_accepted` | `author`, `command`, `note` | `src/arcp/commands.py` |
+| `command_denied` | `author`, `command` | `src/arcp/commands.py` |
+| `command_rejected` | `command`, `target` | `src/arcp/commands.py` |
+| `command_unknown` | `body` | `src/arcp/commands.py` |
+| `comment_added` | `author`, `body`, `comment_id` | `src/arcp/poller.py` |
+| `dispatch_error` | `error` | `src/arcp/poller.py` |
+| `evicted` | `count`, `session` | `src/arcp/dispatcher.py` |
+| `external_abort` | `state` | `src/arcp/commands.py` |
+| `external_cleared` | `cause` | `src/arcp/dispatcher.py` |
+| `handoff` | `author`, `from_profile`, `kind`, `to` | `src/arcp/commands.py`, `src/arcp/dispatcher.py` |
+| `handoff_invalid` | `to` | `src/arcp/dispatcher.py` |
+| `hil_requested` | `request_id`, `schema` | `src/arcp/hil.py` |
+| `hil_resumed` | `reason`, `request_id`, `schema` | `src/arcp/hil.py` |
+| `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py` |
+| `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py` |
+| `jira_write` | `action`, `detail` | `scripts/run_poller.py` |
+| `new_issue` | `state`, `summary` | `src/arcp/poller.py` |
+| `pending` | `cause`, `cost_usd`, `reason`, `scope` | `src/arcp/dispatcher.py` |
+| `queued` | `engine`, `profile` | `src/arcp/poller.py` |
+| `resolved` | `attempts`, `cost_usd`, `human_minutes_saved` | `src/arcp/dispatcher.py` |
+| `route_matched` | `on_match`, `profile`, `route` | `src/arcp/poller.py` |
+| `score_reminded` | `reminders` | `src/arcp/scoring.py` |
+| `score_requested` | `request_id` | `src/arcp/scoring.py` |
+| `script_run_finished` | `duration_sec`, `outcome`, `rc`, `timeout`, `trigger` | `src/arcp/triggers.py` |
+| `script_run_started` | `cwd`, `script`, `trigger` | `src/arcp/triggers.py` |
+| `session_created` | `profile`, `workspace` | `src/arcp/dispatcher.py` |
+| `status_changed` | `new`, `old` | `src/arcp/poller.py` |
+| `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py`, `src/arcp/dispatcher.py` |
+| `trigger_error` | `error` | `src/arcp/poller.py` |
+| `trigger_finished` | `attempts`, `cost_usd`, `human_minutes_saved`, `outcome` | `src/arcp/triggers.py` |
+| `trigger_started` | `profile`, `trigger`, `workspace` | `src/arcp/triggers.py` |
+| `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
+| `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
 > 共 42 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->

@@ -25,10 +25,17 @@
 config/
   templates/
     inject_claude_md_end.md          # 全域;貼到 CLAUDE.md/AGENTS.md 尾
+    example_template/                # ← 可照抄範例:含 install.sh + CLAUDE.md
     <name>_template/                 # 每個 profile 的起手骨架(可含 install 腳本 + 內容)
   skills/
+    example-skill/                   # ← 可照抄範例(SKILL.md)
     aflow/  bflow/  …                # common skills 庫(整包資料夾;profile 選子集)
 ```
+
+> 範例可直接照抄:[`config/templates/example_template/`](../../config/templates/example_template/)
+> (install 腳本)、[`config/skills/example-skill/`](../../config/skills/example-skill/)、
+> [`config/templates/inject_claude_md_end.md`](../../config/templates/inject_claude_md_end.md)。
+> `config/routes.example.yaml` 的 `default` profile 有註解版的 install/common_skills/inject_md 用法。
 
 ## 佈建流程(provision)
 

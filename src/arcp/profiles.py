@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import yaml
 
-from .paths import templates_dir
+from .paths import repo_root, templates_dir
 from .routing import ConfigError
 
 # W7(R3):未設 human_minutes_est 時的預設「人做同任務估時」(分鐘)。
@@ -49,6 +49,12 @@ class Profile:
     goal: str | None = None
     # W7(R7):月預算上限(日曆月、跨票、per-profile;None=不限)。超過只能改此設定。
     max_budget_monthly_usd: float | None = None
+    # workspace 佈建(docs/design/workspace.md):
+    # workspace_install=安裝命令(argv;設了就用它佈建,不 copytree);
+    # common_skills=從 config/skills/ 選的資料夾名;inject_md=是否注入 inject 檔
+    workspace_install: str | None = None
+    common_skills: list[str] = field(default_factory=list)
+    inject_md: bool = True
 
     def est_minutes(self) -> float:
         """W7(R3):有效估時——未設回預設 240 分(4h),讓效益一律算得出來。"""
@@ -89,8 +95,11 @@ def load_profiles(path: str) -> dict[str, Profile]:
                     f"profile {name}: isolation.provider 必須是 "
                     f"{list(PROVIDERS)}(拿到 {iso_provider!r})")
         venv = agent.get("venv")
-        if venv and not os.path.isdir(venv):
-            raise ConfigError(f"profile {name}: agent.venv 不存在: {venv}")
+        if venv:
+            vpath = venv if os.path.isabs(venv) else os.path.join(
+                repo_root() or ".", venv)   # venv 相對 repo root(同 inner_runner HERE)
+            if not os.path.isdir(vpath):
+                raise ConfigError(f"profile {name}: agent.venv 不存在: {vpath}")
         # template=class:非 "empty" 時視為 template folder path(相對 config/templates/),
         # fork 前整包複製成 workspace instance(docs/design/workspace.md)。fail-fast:
         # 不存在的 template 死在 load,不是 dispatch。
@@ -124,5 +133,9 @@ def load_profiles(path: str) -> dict[str, Profile]:
             goal=(str(p["goal"]) if p.get("goal") is not None else None),
             max_budget_monthly_usd=(
                 float(loop["max_budget_monthly_usd"])
-                if loop.get("max_budget_monthly_usd") is not None else None))
+                if loop.get("max_budget_monthly_usd") is not None else None),
+            workspace_install=(str(ws["install"])
+                               if ws.get("install") else None),
+            common_skills=list(ws.get("common_skills") or []),
+            inject_md=bool(ws.get("inject_md", True)))
     return profiles

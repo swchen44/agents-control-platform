@@ -164,7 +164,8 @@ class Dispatcher:
                 revisions=sess.approval_revisions))
             if decision != "proceed":
                 return events
-            sess.workspace = provision(self.root, ticket, profile)
+            sess.workspace = provision(self.root, ticket, profile,
+                                      getattr(self.source, "base_url", None))
             self.store.upsert_session(sess)
 
         if sess and (sess.outcome in ("SUCCESS", "ABORTED")
@@ -174,7 +175,8 @@ class Dispatcher:
             return events
 
         if sess is None:
-            ws = provision(self.root, ticket, profile)
+            ws = provision(self.root, ticket, profile,
+                                      getattr(self.source, "base_url", None))
             sess = TicketSession(
                 issue_id=ticket.id, key=ticket.key, profile=profile.name,
                 workspace=ws, session_id=None, attempts=0,
@@ -184,14 +186,17 @@ class Dispatcher:
                 "session_created", ticket.id, ticket.key,
                 profile=profile.name, workspace=ws))
         else:
-            healthy, reason = health_check(sess.workspace, ticket)
+            healthy, reason = health_check(
+                sess.workspace, ticket, profile,
+                getattr(self.source, "base_url", None))
             if not healthy:
                 # 重建(empty-template 安全)/ 換手哨值「(handoff)」→ 依現行
                 # profile 重 provision 新 instance;路徑要回存(換手後路徑不同)
                 events.append(self.store.journal(
                     "workspace_unhealthy", ticket.id, ticket.key,
                     reason=reason))
-                sess.workspace = provision(self.root, ticket, profile)
+                sess.workspace = provision(self.root, ticket, profile,
+                                      getattr(self.source, "base_url", None))
                 self.store.upsert_session(sess)
 
         grader = _grader(profile)

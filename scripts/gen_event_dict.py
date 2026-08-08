@@ -56,7 +56,7 @@ def collect(root: str) -> dict[str, dict]:
             for kw in node.keywords:
                 if kw.arg:                       # 略過 **kwargs 展開
                     e["fields"].add(kw.arg)
-            e["sites"].add(f"{rel}:{node.lineno}")
+            e["sites"].add(rel)          # 只到檔案(不帶行號)→ 鄰近改動不誤觸 --check
     return events
 
 
