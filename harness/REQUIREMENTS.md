@@ -326,3 +326,55 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 ### 13.4 互動式圖形(內網離線)
 - 狀態機 + 架構圖用 **svg-pan-zoom**(vendored,離線,同 vis-timeline)可拖曳/縮放。
 - **Why**:內網看,JS lib 必須預先下載 vendor,不能吃 CDN。
+
+## 14. W11 互動服務:HIL 人機介面(2026-08-08 口述定案,取代人編 description)
+
+> 完整設計見 [DESIGN_interaction.md](DESIGN_interaction.md)。**屬 runtime 行為,先只寫
+> 文件、程式待實作**(與 W10.2/W10.3 一併待審後排波)。
+
+### 14.1 核心原則
+- **assignee 恆定=Agent**;Description/state **單一寫入者=Agent/系統**;人類輸入一律經
+  **受控表單**(不吃 free-text);通知用 **@mention**(不動 assignee、不轉 state);全程可稽核。
+- **Why**:用 Jira description free-text 下指令易錯難處理;結構化表單 + 單一寫入者 + 可稽核
+  才穩。
+
+### 14.2 互動流程 + 表單
+- Agent 需人 → comment `@mention` +（**一次性連結** + 有效期 + Request ID）→ 人開受控表單
+  (版本化 schema、前後端雙驗、顯示 ticket 上下文)→ 送出 → 系統寫回 **Human Section
+  (hash+日期)** + 稽核 comment → **表單提交=HIL resume 觸發**(取代 assignee)。
+- 表單型別:`need_info`/`decision`(=HIL(Middle))、`score_and_close`(=HIL(End),三訊號
+  grader/agent自評0–10/人類0–10 + 關票裁決)。
+- **Why**:一次性表單防填錯、可回寫存證;提交當觸發比 assignee ping-pong 乾淨。
+
+### 14.3 Token
+- ≥128-bit 亂數、單次(提交即失效)、綁 ticket+Request ID+schema、有效期綁請求生命週期
+  (票關即失效、可設短窗)、與常駐 Detail Page 不同物件、不入共用日誌。
+- **Why**:capability URL 即授權;綁定 + 短命 + 單次 = 最小暴露面。**修正 AI 原案固定 3 個月**。
+
+### 14.4 獨立服務 + 安全模型分離
+- 互動服務=獨立進程/port(人面向 + token 寫入),與唯讀 dashboard、內部 control_api 分開。
+- **Why**:寫入面 + token 授權的安全模型,不該混進 zero-auth 唯讀 dashboard 或內部 control。
+
+### 14.5 assignee 被改
+- 記 journal 告警 + 貼一次 comment 提醒(冪等),**不強制改回**。
+- **Why**:不搶 assignee、不製造 revert→通知的噪音迴圈。
+
+### 14.6 催辦 / 異常記號(v1)
+- 回應期限(1天,可設)→ 逾期重 @mention;N 次(10,可設)無回應 → DB 記異常計數 + comment。
+- **Why**:避免票卡死等不到人;異常統計供後續制度化處理。
+
+### 14.7 Jira 異常處理(簡易版,**不做 work queue**)
+- 健康偵測失敗 → 系統「降級暫停」(停寫入/派工),不佇列;人開表單先測 Jira,異常則明示
+  「請先檢視、暫勿送出」,仍送出→直接回報異常不落地;恢復由 probe 自動或**管理者手動**
+  (管理頁通知 poller)→ 續跑。
+- **Why**:GRA/Jira 會中斷;work queue 有不同步風險,故用暫停/恢復(circuit-breaker)取代。
+
+### 14.8 關票裁決
+- `score_and_close` 送出 → **系統幫忙轉 Jira Done**(option a);人透過表單授權、系統執行。
+- **Why**:呼應「單一寫入者=Agent/系統也寫 state」;人只需在表單裁決,不必手動轉 Jira。
+
+### 14.9 Agent Link 欄 + REST API(v1)
+- Agent Link:常駐 Detail Page 連結寫進票(與一次性連結不同物件)。
+- REST API:互動服務能力開成乾淨 REST,供未來人類自己的 agent(Hermes/openclaw 類)代理;
+  proxy 本體遠期。
+- **Why**:人隨時可點進觀測;API 先定形,未來接人類代理 agent 不必重構。

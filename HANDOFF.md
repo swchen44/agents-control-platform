@@ -21,6 +21,17 @@
   - ⏸ **W10.2 HIL 行為**(合併 inactive+pending、resume re-eval、End A/B、triage 閘)
     與 **W10.3 a2a base 跨票交接** — **暫緩、待使用者審過模型/文件/網頁再接線**。
     (使用者明確選「先模型+文件+網頁,不動 runtime 行為」。)
+  - 📝 **W10 補強設計(2026-08-08 追加,待實作)**:HIL(End) 三訊號(grader + **agent
+    自評 0–10** + 人類 0–10);交接**兩機制對等**(同票 workspace-swap→進行中 / 跨票
+    base→撤銷+新票,優缺點 guide 見 DESIGN_architecture);「概念」頁→**Introduction**;
+    職責表加**檔名/分層/API 欄**;**再加一張 node+edge graph 圖**(全模組+多選過濾+focus)。
+
+- **W11 互動服務(HIL 人機介面)設計定案 📝(待實作)** `harness/DESIGN_interaction.md`
+  + `REQUIREMENTS §14` + 記憶 `w11-interaction-service-hil-interface`:取代「人直接編 Jira
+  description free-text」——**assignee 恆定=Agent**、一次性 **token 受控表單**、**@mention**
+  通知、**表單提交=HIL resume 觸發**、human 段系統寫+hash、`score_and_close` 系統轉 Done、
+  Jira 異常用**暫停/恢復(不做 work queue)**、催辦/異常記號、Agent Link 欄、REST API(供未來
+  人類 agent proxy)。**屬 runtime 行為,先只寫文件、程式待實作。**
 
 ## ★ 最新進展(2026-08-05)— 從研究進入分波實作
 
