@@ -428,14 +428,23 @@ try:
                                        "HIL(Middle)", "HIL(End)", "撤銷"))
           and "base 繼承" in cpage
           and "狀態存在哪" in cpage)
-    # W10.4:模組架構圖(分層)+ 職責表
-    check("概念頁:模組架構圖 + 職責表(分層/trigger/上下游)",
+    # W10.4/W10.6:模組架構圖(分層)+ 職責表(補檔名/分層/API 欄)
+    check("概念頁:模組架構圖 + 職責表(檔名/分層/API/trigger/上下游)",
           "id='archsvg'" in cpage and "模組架構" in cpage
           and "模組職責表" in cpage and "trigger 時間" in cpage
+          and "重要 API" in cpage and "檔名" in cpage
+          and "arcp_harness/poller.py" in cpage
+          and "OuterLoop.poll_once" in cpage
           and all(s in cpage for s in ("jira_source", "poller", "dispatcher",
                                        "store", "control_api"))
           and all(s in cpage for s in ("輸入層", "決策層", "執行層",
                                        "人機協作層")))
+    # W10.6:Introduction 改名 + HIL(End) 三訊號 + 交接兩機制對等
+    check("Introduction 改名 + 三訊號 + 交接兩線",
+          ">Introduction</a>" in cpage
+          and "Introduction ·" in cpage
+          and "agent 自評" in cpage and "三訊號" in cpage
+          and "同票換手" in cpage and "跨票 base" in cpage)
     # W10.5:svg-pan-zoom 互動(vendored 離線)
     check("概念頁:svg-pan-zoom 互動(離線 vendored)",
           "/tvendor/svg-pan-zoom.min.js" in cpage

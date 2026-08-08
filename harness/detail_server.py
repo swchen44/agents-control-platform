@@ -1345,7 +1345,7 @@ def _nav(active: str) -> str:
             + tab("control", "/control", "Control")
             + tab("agent", "/agent", "Agent Detail")
             + tab("server", "/server", "Server")
-            + tab("concepts", "/concepts", "概念"))
+            + tab("concepts", "/concepts", "Introduction"))
     nm = (f"<span class='iname'>{esc(_INSTANCE_NAME)}</span>"
           if _INSTANCE_NAME else "")
     return ("<a class='skip' href='#main'>跳到主要內容</a>"
@@ -2312,11 +2312,11 @@ _SM_EDGES = [
     ("running", "queued", "額滿"),
     ("queued", "running", "有額度"),
     ("running", "hil_end", "完成/未定"),
-    ("hil_end", "running", "(B)續跑"),
+    ("hil_end", "running", "(B)續跑 / 同票換手"),
     ("hil_end", "closed", "(A)關票"),
     ("hil_middle", "aborted", "decline"),
     ("running", "aborted", "cancel/關Done"),
-    ("hil_end", "aborted", "交接(base)"),
+    ("hil_end", "aborted", "跨票交接(base)"),
 ]
 
 
@@ -2566,26 +2566,69 @@ _SVGPZ_JS = (
     "})();</script>")
 
 
+# W10.6:職責表補「檔名 / 重要 API」(分層由 _ARCH_LAYERS 提供)。旁掛不動 _ARCH_MODULES。
+_ARCH_META = {
+    "jira_source": ("arcp_harness/jira_source.py",
+                    "search / get_comments / add_comment / transition / "
+                    "set_description / assign"),
+    "triggers": ("arcp_harness/triggers.py",
+                 "load_triggers / parse_cron / due / run_trigger"),
+    "poller": ("arcp_harness/poller.py", "OuterLoop.poll_once"),
+    "routing": ("arcp_harness/routing.py", "load_config / match"),
+    "gate": ("arcp_harness/gate.py", "select_dispatchable / engine_of"),
+    "dispatcher": ("arcp_harness/dispatcher.py", "Dispatcher.handle"),
+    "inner_runner": ("arcp_harness/inner_runner.py",
+                     "run_attempt / AttemptResult"),
+    "workspace": ("arcp_harness/workspace.py, isolation.py",
+                  "provision / health_check / isolation.resolve"),
+    "contract": ("arcp_harness/contract.py", "validate_structured / summarize"),
+    "approval": ("arcp_harness/approval.py", "ApprovalGate.gate"),
+    "scoring": ("arcp_harness/scoring.py",
+                "ScoreGate.on_poll / collect_score / write_handoff_sections"),
+    "commands": ("arcp_harness/commands.py", "CommandHandler.handle"),
+    "external": ("arcp_harness/commands.py",
+                 "ExternalChangePolicy.on_status_changed / on_assignee_changed"),
+    "sections": ("arcp_harness/sections.py",
+                 "parse / render / verify_and_restore"),
+    "store": ("arcp_harness/store.py",
+              "Store.upsert / journal / get_session / all_sessions"),
+    "control_api": ("arcp_harness/control_api.py",
+                    "ControlAPI.status (+POST /pause /resume /evict …)"),
+    "detail_server": ("detail_server.py",
+                      "render_index / render_ticket / /data / /api/v1"),
+    "transcript": ("arcp_harness/transcript.py",
+                   "finalize / engine_of_agent"),
+    "retention": ("arcp_harness/retention.py", "reclaim"),
+}
+
+
 def _arch_doc_table() -> str:
-    """W10.4:模組職責表(依 _ARCH_LAYERS 分層順序;欄=模組/職責/trigger/輸入/
-    輸出/上游/下游)。"""
-    head = ("<tr><td><b>模組</b></td><td><b>職責</b></td>"
+    """W10.4/W10.6:模組職責表(依 _ARCH_LAYERS 分層順序;欄=模組/檔名/分層/職責/
+    重要 API/trigger/輸入/輸出/上游/下游)。"""
+    head = ("<tr><td><b>模組</b></td><td><b>檔名</b></td><td><b>分層</b></td>"
+            "<td><b>職責</b></td><td><b>重要 API</b></td>"
             "<td><b>trigger 時間</b></td><td><b>輸入</b></td>"
             "<td><b>輸出</b></td><td><b>上游</b></td><td><b>下游</b></td></tr>")
     rows = []
-    for _lname, _ldesc, mods in _ARCH_LAYERS:
+    for lname, _ldesc, mods in _ARCH_LAYERS:
         for mk in mods:
             nm, job, trig, inp, outp, up, down = _ARCH_MODULES[mk]
+            fn, api = _ARCH_META.get(mk, ("", ""))
             rows.append(
                 f"<tr><td style='white-space:nowrap;color:var(--ink)'>"
                 f"<b>{esc(nm)}</b></td>"
+                f"<td class='mono' style='font-size:11px;text-align:left;"
+                f"color:var(--muted)'>{esc(fn)}</td>"
+                f"<td class='sys' style='white-space:nowrap'>{esc(lname)}</td>"
                 f"<td class='sys' style='text-align:left'>{esc(job)}</td>"
+                f"<td class='mono' style='font-size:11px;text-align:left;"
+                f"color:var(--accent-ink)'>{esc(api)}</td>"
                 f"<td class='sys' style='text-align:left'>{esc(trig)}</td>"
                 f"<td class='sys' style='text-align:left'>{esc(inp)}</td>"
                 f"<td class='sys' style='text-align:left'>{esc(outp)}</td>"
                 f"<td class='sys' style='text-align:left'>{esc(up)}</td>"
                 f"<td class='sys' style='text-align:left'>{esc(down)}</td></tr>")
-    return ("<table style='font-size:12px;min-width:900px'>" + head
+    return ("<table style='font-size:12px;min-width:1180px'>" + head
             + "".join(rows) + "</table>")
 
 
@@ -2601,7 +2644,7 @@ def render_concepts_page() -> str:
             f"{esc(db)}</td></tr>"
             for k, v, db in _STATE_DOC))
     return (
-        f"{_nav('concepts')}<header><h1>概念 · 資料流生命週期 · 狀態機</h1>"
+        f"{_nav('concepts')}<header><h1>Introduction · 資料流生命週期 · 狀態機</h1>"
         f"</header><main id='main' tabindex='-1'>"
         "<h2>一句話</h2><div class='card'><p>ARCP 讓 <code>claude -p</code> / "
         "<code>codex exec</code> 由 <b>Jira 事件驅動</b>、可觀測、可控制。搞定系統"
@@ -2617,8 +2660,10 @@ def render_concepts_page() -> str:
         "<b>HIL(Middle)</b>(過程中等人:開跑前 triage/審批,或跑到一半需人給預算/交人)。"
         "帶「原因」供徽章區分。</li>"
         "<li><b>HIL(End)</b>:跑完(成功/失敗/未定,<code>outcome</code> 三態即"
-        "「結果」屬性,不再是頂層狀態)轉人評分(0–10),再由人 <b>(A)</b> 續做後關票、"
-        "或 <b>(B)</b> 判斷 agent 可續 → native resume + 重置額度回「進行中」。</li>"
+        "「結果」屬性,不再是頂層狀態)轉人評分。<b>三訊號並列對照</b>:"
+        "<code>grader</code>(S/F/U,證據型、決定狀態)+ <b>agent 自評 0–10</b>"
+        "(自報)+ <b>人類 0–10</b>(human_score)。人評分後 <b>(A)</b> 續做關票、"
+        "或 <b>(B)</b> 判可續 → native resume + 重置額度回「進行中」。</li>"
         "<li><b>resume 觸發</b>:<code>assignee</code> 改回機器人;harness 讀 "
         "description 的 <code>[ARCP owner=human]</code> 段重評條件(審批已填/預算已放寬/"
         "純交人無條件),滿足才查排隊 + resume,否則留在 HIL(Middle)。</li>"
@@ -2634,15 +2679,18 @@ def render_concepts_page() -> str:
         "<h2>模組職責表(trigger · 輸入 · 輸出 · 上下游)</h2>"
         "<div class='card' style='overflow-x:auto'>" + _arch_doc_table()
         + "</div>"
-        "<h2>agent↔agent 交接(兩種,見 DESIGN_architecture「怎麼選」)</h2>"
+        "<h2>agent↔agent 交接(兩機制對等,人依場景選;見 DESIGN_architecture)</h2>"
         "<div class='card'><ul style='line-height:1.8'>"
-        "<li><b>同票換手</b> <code>@agent next &lt;profile&gt;</code>:就地換 "
-        "profile/引擎,不開新票、脈絡全留 —— 適合「小幅換手、同一件事繼續」。</li>"
-        "<li><b>跨票 base 繼承</b>:人自建新 Jira,宣告 <code>base:&lt;ref&gt;</code>"
-        "(description human 段 或 Control 頁登記);harness 只登記 + 注入脈絡"
-        "(複製 base 的 transcript 進新 workspace + prompt 前置 + 貼 Jira 連結),"
-        "舊票收成 <b>ABORTED(交接,非 failure)</b> —— 適合「換引擎/重開/跨專案/"
-        "人策展重啟」等泛化場景。<span class='sys'>(行為 W10.3 實作)</span></li>"
+        "<li><b>同票換手(swap)→ 回進行中</b>:<b>同一張 Jira、同一個 workspace</b>,"
+        "清掉舊 skills/hooks、copy 新 agent template 進原 workspace、重置 session → "
+        "回「進行中」。<b>保留 folder 內半成品</b>(只換 agent 大腦)—— 適合「前 agent "
+        "工作成果好、只是卡住,換(更強)agent 接手同一份半成品收尾」。</li>"
+        "<li><b>跨票 base 繼承 → 舊票撤銷</b>:人自建新 Jira,宣告 "
+        "<code>base:&lt;ref&gt;</code>;harness 登記 + 注入脈絡(複製 base transcript "
+        "進<b>全新</b> workspace + prompt 前置 + 貼 Jira 連結),舊票收成 <b>ABORTED"
+        "(交接,非 failure)</b> —— 適合「走錯路/亂了/乾淨重來/跨專案」。</li>"
+        "<li class='sys'>一句話:<b>同票=保住半成品換人接手;跨票=乾淨重來帶敘事</b>。"
+        "(行為 W10.3 / W11 實作)</li>"
         "</ul></div>"
         "<h2>狀態存在哪(重要)</h2><div class='card'>"
         "<ul style='line-height:1.8'>"
