@@ -87,37 +87,51 @@ Jira issue ─▶ rule engine(assignee/keyword JSON)─▶ workspace + skills �
                      watchdog(stall)· control(pause/kill/resume)· crash→resume
 ```
 
-## 資料流生命週期 / 狀態機(W7）
+## 資料流生命週期 / 狀態機(W10:HIL 模型)
 
-搞定系統先搞定**資料流的生命週期**。一張 Jira 票在 harness 內部走 8 個 canonical 狀態:
+搞定系統先搞定**資料流的生命週期**。一張 Jira 票在 harness 內部走 6 個 canonical 狀態
+(W10 起改 **HIL(Human In the Loop)模型**):
 
 ```
-待處理 ──路由命中·派工──▶ 進行中 ──verify 過──▶ 成功 ┐
-  (todo)                (running) ──max-attempts──▶ 失敗 ┼─▶ 人評分(0–10)→人關 Done →離開
-                          │  ▲                    (failure)┘
-              額滿 │  │ 有額度        └──cancel/外部關 Done──▶ 撤銷(aborted)
-                    ▼  │
-                  排隊(queued)
-                          │  ▲
-   UNKNOWN/預算/交人決定/審批 │  │ @agent run·retry / budget_override
-                    ▼  │
-                等待人類(pending)          進行中 ⇄ 交人(inactive):assignee 換人/換回機器人
+待處理 ─路由·派工─▶ 進行中 ⇄ 排隊
+ (todo)     │  (running)  (queued)
+            ├─ 過程中需人 ─▶ HIL(Middle) ─ assignee→機器人·條件滿足 ─▶ 回 running
+            │   (triage/審批/預算/交人)
+            ├─ 完成/用盡attempts/UNKNOWN ─▶ HIL(End)  結果={成功|失敗|未定}
+            │        │ 人評分(0–10)
+            │        ├─(A)人續做→關票(closed,概念終點)
+            │        └─(B)人判可續→native resume·重置額度→回 running
+            └─ cancel/外部關Done/交接 ─▶ 撤銷(aborted)
 ```
 
-（互動版:dashboard「📖 概念」tab 有純 SVG 狀態機圖 + 8 態說明。）
+（互動版:dashboard「概念」tab 有純 SVG 狀態機圖 + 6 態說明 + **模組架構圖/職責表**。）
 
-**8 態**:待處理 / 進行中 / 排隊 / 等待人類 / 交人(inactive) / 成功 / 失敗 / 撤銷。
+**6 態**:待處理 / 進行中 / 排隊 / **HIL(Middle)** / **HIL(End)** / 撤銷。`closed` 是
+概念終點(人關 Jira→離開 jql)。`success/failure/unknown` 是 **HIL(End) 的結果屬性**,
+不再是頂層狀態。
+
+- **HIL(Middle)**(過程中等人)= 舊「交人 inactive」+「等待人類 pending」合併;含開跑前
+  的 triage/審批。resume 觸發 = `assignee` 改回機器人,harness 讀 description `human` 段
+  重評條件(審批已填/預算已放寬/純交人無條件)滿足才續跑。
+- **HIL(End)**(終點交人)= 跑完轉人評分,再由人 (A) 續做後關票、或 (B) 判可續 → native
+  resume + 重置額度回「進行中」。
 
 **狀態存在哪(重要)**:
 - **Jira 這邊**:真正的 `status`(To Do/進行中/Done)存 Jira,harness 只讀進來鏡射到
   DB `ticket_watch.last_state`。
 - **我們系統這邊**:內部判定 `outcome`(SUCCESS/FAILURE/ABORTED/UNKNOWN)+
-  `pending_reason` 只存 DB `ticket_session`,**不寫回 Jira**;上面 8 態即由這些欄位
-  (加 queued/inactive/有無 session)推導的單一 canonical 狀態。
-- **harness 不主動 transition Jira 狀態**(只留言);關票=人做。W7 起成功/失敗後交人
+  `pending_reason` 只存 DB `ticket_session`,**不寫回 Jira**;上面 6 態即由這些欄位
+  (加 queued/inactive/有無 session)推導的單一 canonical 狀態(`canonical_state()`
+  唯讀映射)。
+- **harness 不主動 transition Jira 狀態**(只留言);關票=人做。成功/失敗後交人
   評分(人在 description 的 `human` 段填 `score: 0–10`),人填完再自己關票。
 - **生命週期事件**都記在 journal `events.jsonl`(new_issue/attempt_*/resolved/pending/
   handoff/jira_write/human_score…);ticket 詳情頁的**事件時間軸**由它繪製。
+
+> 完整分層模組架構、職責表、以及 **agent↔agent 交接(同票 `next` vs 跨票 `base` 怎麼選)**
+> 見 [harness/DESIGN_architecture.md](harness/DESIGN_architecture.md)。生命週期細節見
+> [harness/DESIGN_lifecycle.md](harness/DESIGN_lifecycle.md)。
+> ⚠️ HIL **行為**(W10.2)與 **a2a base 交接**(W10.3)為目標設計,實作暫緩、待審。
 
 ## 多實例部署(同一台機器並存多個 Control Plane)
 

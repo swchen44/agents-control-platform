@@ -468,6 +468,15 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #smsvg .st-hil_end{--nc:var(--s-success)}#smsvg .st-aborted{--nc:var(--s-aborted)}
 #smsvg .st-closed{--nc:var(--s-queued)}
 #smsvg .st-exit{--nc:var(--accent)}
+/* W10.4 模組架構圖(分層;隨明暗主題) */
+#archsvg .a-band{fill:color-mix(in srgb,var(--accent) 5%,transparent);stroke:var(--line)}
+#archsvg .a-rail{fill:color-mix(in srgb,var(--accent) 78%,var(--panel))}
+#archsvg .a-rname{fill:#fff;font-weight:700;font-size:12px}
+#archsvg .a-rdesc{fill:color-mix(in srgb,#fff 82%,transparent);font-size:10px}
+#archsvg .a-chip{fill:var(--panel);stroke:var(--line-2);stroke-width:1.3}
+#archsvg .a-name{fill:var(--ink);font-weight:600}
+#archsvg .a-flow{stroke:var(--muted);stroke-width:1.6}
+#archsvg .a-arrow{fill:var(--muted)}
 /* W8.3 可及性:全域可見焦點環(勿只靠 hover;鍵盤使用者需要) */
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,
 textarea:focus-visible,[tabindex]:focus-visible,.sortable:focus-visible{
@@ -2364,6 +2373,152 @@ def _sm_svg() -> str:
     return "".join(out)
 
 
+# ── W10.4:模組架構(分層 + 核心模組)──────────────────────────────────────── #
+# 每模組:(顯示名, 職責, trigger 時間, input, output, 上游, 下游)。
+_ARCH_MODULES = {
+    "jira_source": ("jira_source", "Jira Cloud 讀寫封裝(search/comment/"
+                    "transition/set_description,含 write_retry + on_write 回呼)",
+                    "poller 每輪 / 各政策要寫入時", "JQL、issue_id、寫入動作",
+                    "Ticket/Comment 物件、寫入結果", "poller·dispatcher·各政策",
+                    "Jira Cloud REST"),
+    "triggers": ("triggers", "內部排程觸發源(scheduled agent / script)",
+                 "poller 每輪查 due", "trigger 定義 + store 上次執行時間",
+                 "到期 trigger → 派工/跑 script", "poller", "dispatcher·script"),
+    "poller": ("poller(OuterLoop)", "外圈輪詢:diff 變更→journal→協調派工/指令/"
+               "政策/評分", "run_poller 定時迴圈(interval 秒)",
+               "JQL 搜到的票 + store watch 狀態",
+               "journal 事件流 + 派工決策", "run_poller",
+               "routing·gate·dispatcher·commands·external·scoring·store"),
+    "routing": ("routing", "票 → route/profile 比對(when 條件式)",
+                "poller 每票", "Ticket 欄位 + routes.yaml",
+                "Route(profile, on_match)", "poller", "poller·dispatcher"),
+    "gate": ("gate(F1)", "分層並發額度閘(global / per-engine / per-profile)",
+             "poller 有候選待派時", "候選清單 + in-flight 計數",
+             "selected / queued 劃分", "poller", "dispatcher"),
+    "dispatcher": ("dispatcher", "派工:審批門→provision workspace→跑 attempt→"
+                   "寫 envelope→更新 session",
+                   "poller 選中候選(create_or_resume)",
+                   "Ticket + profile + store session",
+                   "attempt 執行 + envelope + session/journal 更新",
+                   "poller·gate", "approval·workspace·inner_runner·contract·store"),
+    "inner_runner": ("inner_runner", "實跑 claude -p / codex exec 一個 attempt"
+                     "(看門狗 / killpg / native resume)",
+                     "dispatcher 呼叫", "prompt、workspace、session_id",
+                     "raw 結果 + cost + session_id", "dispatcher",
+                     "claude / codex CLI"),
+    "workspace": ("workspace / isolation", "template→workspace instance "
+                  "provision(不變 id 綁 cwd)+ 隔離",
+                  "dispatcher 首次 fork", "profile.template + issue_id",
+                  "workspace 路徑", "dispatcher", "檔案系統"),
+    "contract": ("contract", "envelope 結構化契約 + grader 三態判定"
+                 "(證據型停止)", "attempt 結束", "raw agent 輸出",
+                 "envelope + outcome(SUCCESS/FAILURE/UNKNOWN)",
+                 "dispatcher·inner_runner", "store"),
+    "approval": ("approval", "起點審批 / triage 閘(寫 plan 進 description、等 "
+                 "human 段 agent_name;可 decline)",
+                 "dispatcher fork 前(require_approval / 全域 triage)",
+                 "Ticket.description + profile",
+                 "proceed/awaiting/reprompt + description 寫入",
+                 "dispatcher", "sections·jira_source·store"),
+    "scoring": ("scoring(ScoreGate)", "HIL(End) 人評分(seed score 佔位、讀 "
+                "score、週期催評)", "poller 每輪對終態未評票",
+                "description human 段 + session",
+                "human_score + journal", "poller",
+                "sections·jira_source·store"),
+    "commands": ("commands", "@agent 留言指令(run/retry/stop/cancel/next/"
+                 "handoff)", "poller 偵測新留言", "Comment + 白名單",
+                 "指令效果(解 pending / 換手…)+ journal", "poller",
+                 "store·jira_source"),
+    "external": ("external(離手政策)", "assignee/status 政策:交人讓額度、回機器人"
+                 "resume、外部關 Done=撤銷", "poller 偵測 status/assignee 變更",
+                 "Ticket 變更 + bot_id", "inactive/abort/resume + journal",
+                 "poller", "store·jira_source"),
+    "sections": ("sections", "description 三方分段(human/control/agent:<名>)"
+                 "parse/render + hash 防篡改", "approval/scoring/commands 讀寫時",
+                 "description 文字", "Section 物件 / 組回 description",
+                 "approval·scoring·commands", "(純函式)"),
+    "store": ("store", "SQLite 狀態(ticket_watch / ticket_session)+ append-only "
+              "journal(events.jsonl)", "各模組讀寫", "watch/session upsert、"
+              "journal 事件", "持久狀態 + 事件流", "幾乎全部模組", "SQLite / 檔案"),
+    "control_api": ("control_api", "內嵌 REST 控制面(pause/resume/reload/"
+                    "shutdown/evict/gen_transcript/status)", "人經 dashboard/"
+                    "curl POST(即時)", "HTTP 請求",
+                    "poller 控制副作用 + status JSON", "人 / dashboard",
+                    "poller·store·transcript"),
+    "detail_server": ("detail_server(本檔)", "唯讀觀測 dashboard:KPI/圖/表/"
+                      "狀態機/概念/REST /api/v1", "瀏覽器請求 + 5s live 刷新",
+                      "store(runtime 目錄)", "HTML / JSON", "人",
+                      "store(唯讀)"),
+    "transcript": ("transcript", "session → final HTML / 打包(換手/交人/evict/"
+                   "close / 被動按鈕)", "finalize 事件 或 control gen_transcript",
+                   "session 原始 log", "final.html / transcript.tgz",
+                   "dispatcher·commands·control_api", "檔案系統"),
+    "retention": ("retention", "workspace 回收(過期 / 終態,釋放磁碟)",
+                  "poller 週期(約每 240 輪 ≈ 每小時)",
+                  "store session + profile 保留策略", "回收 workspace + journal",
+                  "poller", "檔案系統 / store"),
+}
+_ARCH_LAYERS = [
+    ("輸入層", "Jira / 觸發源", ["jira_source", "triggers"]),
+    ("決策層", "輪詢 · 路由 · 額度閘", ["poller", "routing", "gate"]),
+    ("執行層", "派工 · 執行 · 工作區", ["dispatcher", "inner_runner",
+                                       "workspace", "contract"]),
+    ("人機協作層", "HIL(審批·評分·指令·離手)", ["approval", "scoring",
+                                                 "commands", "external",
+                                                 "sections"]),
+    ("狀態·觀測·控制層", "持久 · 觀測 · 控制", ["store", "control_api",
+                                               "detail_server", "transcript",
+                                               "retention"]),
+]
+
+
+def _arch_svg() -> str:
+    """W10.4:分層模組架構圖(手繪 SVG,隨明暗主題;svg-pan-zoom 於 W10.5 掛上)。
+    5 個橫向分層帶,由上而下=資料流方向;左側層標籤軌,右側模組 chip。"""
+    W, bandH, top = 1040, 96, 16
+    railW, chipW, chipH, gap = 150, 156, 46, 14
+    H = top * 2 + len(_ARCH_LAYERS) * bandH
+    out = ["<svg id='archsvg' viewBox='0 0 %d %d' width='100%%' "
+           "preserveAspectRatio='xMinYMin meet' "
+           "style='max-height:%dpx;font-size:11px'>" % (W, H, H),
+           "<defs><marker id='aah' viewBox='0 0 10 10' refX='9' refY='5' "
+           "markerWidth='7' markerHeight='7' orient='auto-start-reverse'>"
+           "<path class='a-arrow' d='M0,0 L10,5 L0,10 z'/></marker></defs>"]
+    for i, (lname, ldesc, mods) in enumerate(_ARCH_LAYERS):
+        by = top + i * bandH
+        # 分層背景帶
+        out.append(f"<rect class='a-band' x='8' y='{by}' width='{W - 16}' "
+                   f"height='{bandH - 12}' rx='10'/>")
+        # 左側層標籤軌
+        out.append(
+            f"<rect class='a-rail' x='16' y='{by + 8}' width='{railW}' "
+            f"height='{bandH - 28}' rx='8'/>"
+            f"<text class='a-rname' x='{16 + railW / 2}' y='{by + 30}' "
+            f"text-anchor='middle'>{esc(lname)}</text>"
+            f"<text class='a-rdesc' x='{16 + railW / 2}' y='{by + 48}' "
+            f"text-anchor='middle'>{esc(ldesc)}</text>")
+        # 模組 chip
+        cx0 = 16 + railW + 20
+        cy = by + (bandH - 12 - chipH) / 2
+        for j, mk in enumerate(mods):
+            x = cx0 + j * (chipW + gap)
+            nm = _ARCH_MODULES[mk][0]
+            out.append(
+                f"<rect class='a-chip' x='{x}' y='{cy}' width='{chipW}' "
+                f"height='{chipH}' rx='8'/>"
+                f"<text class='a-name' x='{x + chipW / 2}' "
+                f"y='{cy + chipH / 2 + 4}' text-anchor='middle'>"
+                f"{esc(nm)}</text>")
+        # 層與層之間的資料流箭頭(左緣)
+        if i < len(_ARCH_LAYERS) - 1:
+            ax = 16 + railW / 2
+            out.append(
+                f"<line class='a-flow' x1='{ax}' y1='{by + bandH - 20}' "
+                f"x2='{ax}' y2='{by + bandH + 2}' marker-end='url(#aah)'/>")
+    out.append("</svg>")
+    return "".join(out)
+
+
 # W10.1 HIL 模型:6 態 + closed 概念終點。第三欄=此態如何由 DB 欄位推導
 # (canonical_state 唯讀映射,不改 runtime)。
 _STATE_DOC = [
@@ -2390,6 +2545,29 @@ _STATE_DOC = [
      "result+score 供稽核。",
      "(無 DB 欄位;Jira status=Done 從 jql 消失)"),
 ]
+
+
+def _arch_doc_table() -> str:
+    """W10.4:模組職責表(依 _ARCH_LAYERS 分層順序;欄=模組/職責/trigger/輸入/
+    輸出/上游/下游)。"""
+    head = ("<tr><td><b>模組</b></td><td><b>職責</b></td>"
+            "<td><b>trigger 時間</b></td><td><b>輸入</b></td>"
+            "<td><b>輸出</b></td><td><b>上游</b></td><td><b>下游</b></td></tr>")
+    rows = []
+    for _lname, _ldesc, mods in _ARCH_LAYERS:
+        for mk in mods:
+            nm, job, trig, inp, outp, up, down = _ARCH_MODULES[mk]
+            rows.append(
+                f"<tr><td style='white-space:nowrap;color:var(--ink)'>"
+                f"<b>{esc(nm)}</b></td>"
+                f"<td class='sys' style='text-align:left'>{esc(job)}</td>"
+                f"<td class='sys' style='text-align:left'>{esc(trig)}</td>"
+                f"<td class='sys' style='text-align:left'>{esc(inp)}</td>"
+                f"<td class='sys' style='text-align:left'>{esc(outp)}</td>"
+                f"<td class='sys' style='text-align:left'>{esc(up)}</td>"
+                f"<td class='sys' style='text-align:left'>{esc(down)}</td></tr>")
+    return ("<table style='font-size:12px;min-width:900px'>" + head
+            + "".join(rows) + "</table>")
 
 
 def render_concepts_page() -> str:
@@ -2425,6 +2603,15 @@ def render_concepts_page() -> str:
         "<li><b>closed</b> 是概念終點:人關 Jira(Done)→ 票離開 jql 視野(非 DB 態)。</li>"
         "</ul></div>"
         "<h2>6 態說明</h2><div class='card'><table>" + doc_rows + "</table></div>"
+        "<h2>模組架構(分層 · 資料流由上而下)</h2>"
+        f"<div class='card'>{_arch_svg()}"
+        "<p class='sys' style='text-align:left;margin-top:8px'>"
+        "<b>store</b> 是狀態主幹:幾乎所有模組都讀寫它(SQLite 狀態 + journal "
+        "事件流)。上圖只畫分層與資料流方向,逐模組的 trigger/輸入/輸出/上下游見"
+        "下表。</p></div>"
+        "<h2>模組職責表(trigger · 輸入 · 輸出 · 上下游)</h2>"
+        "<div class='card' style='overflow-x:auto'>" + _arch_doc_table()
+        + "</div>"
         "<h2>agent↔agent 交接(兩種,見 DESIGN_architecture「怎麼選」)</h2>"
         "<div class='card'><ul style='line-height:1.8'>"
         "<li><b>同票換手</b> <code>@agent next &lt;profile&gt;</code>:就地換 "
