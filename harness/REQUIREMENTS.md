@@ -289,3 +289,40 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
   實作(未來新增一個 ClearQuest 觸發源,類比現有 Jira poller)。
 - **W7 只先備資料**:`clearquest_id` 欄(見 R8);CQ 監控/建資料夾/套模板/開票**不實作**。
 - **Why**:先把資料模型留好,CQ 整合日後只加來源解析器,不動已公開的 API。
+
+## 13. W10 新需求:HIL 生命週期 / triage 閘 / agent↔agent 交接(2026-08-08 口述,12 題決策樹定案)
+
+> 使用者要求「一改全改」(文件/程式/網站)。**W10.1 模型/圖/網頁 + W10.4 架構圖 +
+> W10.5 互動 + 文件已做;W10.2 HIL 行為與 W10.3 a2a base 交接暫緩、待審**。完整設計見
+> [DESIGN_architecture.md](DESIGN_architecture.md) 與 [DESIGN_lifecycle.md](DESIGN_lifecycle.md)。
+
+### 13.1 HIL 生命週期(Model A)
+- `success/failure/unknown` **不再是頂層狀態**,收斂成 **HIL(End)** 的「結果」屬性;
+  舊 `inactive`(交人)+ 非終態 `pending` 合併成 **HIL(Middle)**(帶原因)。6 態:
+  `todo / running / queued / hil_middle / hil_end / aborted`,`closed` 為概念終點。
+- **HIL(Middle) resume**:`assignee`→機器人 為觸發;讀 description `human` 段重評條件
+  (審批已填/預算已放寬/純交人無條件)滿足才查排隊+resume,否則 re-block。不佔 F1 額度。
+- **HIL(End)**:人評分(0–10)後 (A) 續做→關票、或 (B) 判可續→**native resume + 重置
+  attempt 額度**回 running(清 outcome、score 留 journal)。UNKNOWN 歸 HIL(End) 第三結果。
+- **Why**:交人與等待人類語意一致(都=等人),合併降低心智負擔;把「結果」與「誰持有票」
+  兩維度分開,概念更乾淨;續跑重置額度是因人明確指示續做,不該一回去就撞 max-attempts。
+
+### 13.2 triage 閘(開跑前人判定 + 選 profile)
+- 把 `require_approval` **泛化**:新增 **global 開關**(+ 保留 per-profile)。狀態 =
+  HIL(Middle)·待審視,由 `todo` 進入(dispatch 前)。人在 `human` 段填 `agent_name`
+  放行(可改 profile)或標 **decline** → `aborted`(reason=unsuitable)。
+- **Why**:怕路由挑錯 profile / 這題不適合 agent;開跑前先讓人把關,復用已驗證的審批機制。
+
+### 13.3 agent↔agent 交接(兩機制並存,文件須寫清楚何時用哪個)
+- **同票** `@agent next <profile>`:就地換 profile/引擎(已存在)。適合「同一件事繼續」。
+- **跨票 base 繼承**:人**自建** Jira,宣告 `base:<3合1 ref>`(description `human` 段 或
+  Control 頁登記);harness 只**登記 + 注入脈絡**(複製 base 的 transcript/TICKET.md 進
+  新 `ws/BASE_<key>/` + prompt 前置「先讀前輪脈絡再續做」+ 貼 Jira 連結);舊票收成
+  **ABORTED(reason=handoff→新票,非 failure)**,在跑則 killpg。源票術語=**base(基底票)**。
+  適合「換引擎/重開/跨專案/人策展重啟」等泛化場景。
+- **Why**:交接方法越泛化越好,可用於任何場景;人建票+harness 登記 → harness 不新增
+  「建 Jira」寫入權責(最小、最安全);本地檔注入脈絡 → 內網/離線最可靠。
+
+### 13.4 互動式圖形(內網離線)
+- 狀態機 + 架構圖用 **svg-pan-zoom**(vendored,離線,同 vis-timeline)可拖曳/縮放。
+- **Why**:內網看,JS lib 必須預先下載 vendor,不能吃 CDN。

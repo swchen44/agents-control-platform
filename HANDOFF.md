@@ -2,7 +2,25 @@
 
 > 給「在此目錄開的新 session」的接手文件。前一段對話的 session 綁在
 > `/Users/swchen.tw/git/openhands`(改名為「headless agent 自動化」)。本檔讓
-> 零上下文的新 session 也能無縫接上。最後更新:2026-08-05。
+> 零上下文的新 session 也能無縫接上。最後更新:2026-08-08。
+
+## ★ 最新進展(2026-08-08)— W8–W10(dashboard 美化 → HIL 生命週期重設計)
+
+- **W8 dashboard 美化 ✅**:雙主題(明/暗,claude.com/blog 風)、a11y(Web Interface
+  Guidelines)、多實例 name 進標題、各頁專屬 SVG 一致化。
+- **W9 觀測強化 ✅**:UTC 存 + 瀏覽器時區在地化(`localizeTimes`)、trace 每事件補時間、
+  L3 log 內容化、`/concepts` DB 欄、`/server` 認證方式(不露金鑰)、`/control` poll 統計、
+  **事件時間軸**(W9.2 浮動抽屜 → W9.3 L3 對話+生命週期合一單軸、共用時間軸、左側分類)。
+- **W10 生命週期重設計(HIL 模型)** — 經 12 題決策樹定案(見
+  `harness/DESIGN_architecture.md`、`harness/REQUIREMENTS.md §13`、記憶
+  `w10-lifecycle-hil-a2a-redesign`):
+  - ✅ **W10.1** 狀態模型:6 態 `todo/running/queued/HIL(Middle)/HIL(End)/aborted`
+    (`canonical_state` 唯讀映射,不動 runtime);狀態機圖/`_STATE_DOC`/`/concepts` 重畫。
+  - ✅ **W10.4** 分層模組架構圖 + 職責表(trigger/IO/上下游)+ `DESIGN_architecture.md`。
+  - ✅ **W10.5** svg-pan-zoom(vendored 離線)→ 狀態機+架構圖可拖曳/縮放。
+  - ⏸ **W10.2 HIL 行為**(合併 inactive+pending、resume re-eval、End A/B、triage 閘)
+    與 **W10.3 a2a base 跨票交接** — **暫緩、待使用者審過模型/文件/網頁再接線**。
+    (使用者明確選「先模型+文件+網頁,不動 runtime 行為」。)
 
 ## ★ 最新進展(2026-08-05)— 從研究進入分波實作
 

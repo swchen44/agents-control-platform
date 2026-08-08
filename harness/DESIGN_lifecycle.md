@@ -1,5 +1,13 @@
 # DESIGN_lifecycle — profile / template→workspace / 審批門 / assignee=資源開關
 
+> **⚠️ W10 更新(2026-08-08):生命週期改 HIL 模型。** 舊「交人 inactive」+「等待人類
+> pending」合併成 **HIL(Middle)**(過程中等人:triage/審批/預算/交人);成功/失敗/未定
+> 收斂成 **HIL(End)** 的結果屬性(不再是頂層狀態);人評分後 (A) 續做關票 或 (B) native
+> resume+重置額度續跑;`closed` 為概念終點。本文件下述的審批門 / assignee=資源開關機制
+> 仍是 HIL(Middle) 的底層實作。完整新狀態機 + agent↔agent 交接(同票 `next` vs 跨票
+> `base`)見 [DESIGN_architecture.md](DESIGN_architecture.md) 與 `/concepts` 頁。
+> W10.1(模型/圖/網頁)已實作;**HIL 行為(W10.2)與 a2a base 交接(W10.3)暫緩、待審**。
+
 > 使用者 2026-08-04 提出的一套設計,逐項反問(Q1–Q7)+ assignee 生命週期釐清後定案。
 > 橫切 F1(資源閘門)/F3(換手)/G1(結構化契約)/A2(冪等)/E3(evict)/N13(killpg→resume)。
 > 現況基礎:profiles.py 已有 `workspace_template`/`workspace_folder`/`skills` 伏筆;
