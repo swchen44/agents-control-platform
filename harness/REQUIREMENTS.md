@@ -12,6 +12,16 @@
 讓 `claude -p` / `codex exec` 等 headless coding agent 由 **Jira 事件驅動**、
 長時間可靠執行、**可觀測(trace)**、**可控制(control)**。
 
+**Jira 的角色(世界觀,2026-08-08 定案)**:Jira = **對外的「工作日誌 + 系統帳本
+(System of Record)」**;**Agent 以「員工」身分**在上面接單 → 做事 → 更新進度 → 回報
+成果讓人評分關單,並像員工一樣被究責(assignee 恆掛它)。**真正的工作與完整細節在後台**
+(workspace = 工作台;dashboard/transcript = 完整飛行記錄器);Jira 只承載**經策展的
+摘要、決策、結果與連結**。「把成果報上去」= 報摘要 + 連到後台產物,不是把產物塞進 Jira。
+- **Why**:公司本來就活在 Jira。讓 agent 像員工一樣對 Jira 負責,人就能用**既有管理儀式**
+  (指派/留言/審核/關單)管一支自主 agent 大軍,不必學新工具;也解釋了 assignee 恆定、
+  受控表單、單一寫入者、hash 稽核——全是為把 Jira 維持成**可信可稽核的日誌**而非 free-text
+  聊天室(見 §14 [DESIGN_interaction.md](DESIGN_interaction.md))。
+
 | 原則 | Why |
 |---|---|
 | **證據型停止**(grader 終審,非信心) | agent 說「完成」不算數;確定性 verify 過才 SUCCESS。「loop on evidence, not confidence」——避免假完成 |

@@ -5,10 +5,16 @@
 > [DESIGN_architecture.md](DESIGN_architecture.md) 的 HIL 模型銜接。
 > **屬 runtime 行為,本文件先只寫設計,程式待實作(W11)。**
 
-## 0. 動機
+## 0. 動機 + Jira 的角色
+
+**Jira 的角色(世界觀)**:Jira = 對外的**工作日誌 + 系統帳本(System of Record)**;
+Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成果讓人評分關單。真正的工作與
+細節在後台(workspace / dashboard / transcript);Jira 承載策展後的摘要/決策/結果/連結。
+本互動服務就是讓「員工(Agent)與主管(人)」在這本工作日誌上互動的**受控介面**。
 
 用 Jira description free-text / comment 下指令給 agent **易出錯、難處理**。改成:人類所有
-輸入都經**受控表單**(一次性連結),系統再把結果回寫 description 對應區段 + comment 存證。
+輸入都經**受控表單**(一次性連結),系統再把結果回寫 description 對應區段 + comment 存證
+——正是為了把 Jira 維持成一份乾淨可稽核的日誌,而非 free-text 聊天室。
 
 ## 1. 核心原則
 
