@@ -445,6 +445,13 @@ try:
           and "Introduction ·" in cpage
           and "agent 自評" in cpage and "三訊號" in cpage
           and "同票換手" in cpage and "跨票 base" in cpage)
+    # W10.7:node+edge graph 圖 + 多選過濾器 + focus
+    check("概念頁:模組 graph(node+edge)+ 過濾器 + focus",
+          "id='graphsvg'" in cpage and "id='gfilter'" in cpage
+          and "class='gnode" in cpage and "class='gedge'" in cpage
+          and "data-from=" in cpage and "data-to=" in cpage
+          and "gFocus(" in cpage and "window.gVisible" in cpage
+          and "全不選" in cpage)
     # W10.5:svg-pan-zoom 互動(vendored 離線)
     check("概念頁:svg-pan-zoom 互動(離線 vendored)",
           "/tvendor/svg-pan-zoom.min.js" in cpage

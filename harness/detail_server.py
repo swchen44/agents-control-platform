@@ -477,6 +477,29 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #archsvg .a-name{fill:var(--ink);font-weight:600}
 #archsvg .a-flow{stroke:var(--muted);stroke-width:1.6}
 #archsvg .a-arrow{fill:var(--muted)}
+/* W10.7 模組 graph 圖(node+edge)+ 多選過濾器 + focus 高亮 */
+#graphsvg .gnode rect{fill:var(--panel);stroke:var(--line-2);stroke-width:1.4;cursor:pointer}
+#graphsvg .gnode text{fill:var(--ink);font-weight:600;pointer-events:none}
+#graphsvg .gnode.gl-0 rect{stroke:var(--s-running)}
+#graphsvg .gnode.gl-1 rect{stroke:var(--s-queued)}
+#graphsvg .gnode.gl-2 rect{stroke:var(--s-success)}
+#graphsvg .gnode.gl-3 rect{stroke:var(--s-pending)}
+#graphsvg .gnode.gl-4 rect{stroke:var(--s-inactive)}
+#graphsvg .gnode.foc rect{stroke:var(--accent);stroke-width:2.6}
+#graphsvg .gedge line{stroke:var(--muted);stroke-width:1;opacity:.65}
+#graphsvg .gedge text{fill:var(--faint);font-size:9px}
+#graphsvg .g-arrow{fill:var(--muted)}
+#graphsvg .dim{opacity:.08}
+#graphsvg .gedge.hi line{stroke:var(--accent);stroke-width:2;opacity:1}
+#graphsvg .gedge.hi text{fill:var(--accent-ink);font-weight:600}
+.gfilter{margin-bottom:10px}
+.gfilter .gbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.gfilter .glayer{display:flex;gap:8px 10px;align-items:center;flex-wrap:wrap;margin:3px 0}
+.gfilter .glname{font-weight:600;color:var(--accent-ink);background:none;
+  border:1px solid var(--line);border-radius:6px;padding:2px 8px;cursor:pointer}
+.gfilter .gchk{font-size:12px;color:var(--muted);display:inline-flex;gap:3px;align-items:center}
+.gfilter .gbtns button{cursor:pointer;border:1px solid var(--line);border-radius:6px;
+  background:var(--panel);color:var(--ink);padding:2px 10px}
 /* W8.3 可及性:全域可見焦點環(勿只靠 hover;鍵盤使用者需要) */
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,
 textarea:focus-visible,[tabindex]:focus-visible,.sortable:focus-visible{
@@ -2472,6 +2495,46 @@ _ARCH_LAYERS = [
 ]
 
 
+# W10.7:模組 graph 的邊(from, to, 資料名)。dataflow=input/output;store 為樞紐。
+_ARCH_EDGES = [
+    ("jira_source", "poller", "Ticket/Comment"),
+    ("triggers", "poller", "到期trigger"),
+    ("poller", "jira_source", "search/寫入"),
+    ("poller", "routing", "Ticket"),
+    ("routing", "gate", "Route"),
+    ("poller", "gate", "候選"),
+    ("gate", "dispatcher", "selected"),
+    ("dispatcher", "approval", "Ticket/profile"),
+    ("approval", "sections", "description"),
+    ("approval", "jira_source", "plan/comment"),
+    ("dispatcher", "workspace", "provision"),
+    ("workspace", "inner_runner", "ws 路徑"),
+    ("dispatcher", "inner_runner", "prompt/session"),
+    ("inner_runner", "contract", "raw 輸出"),
+    ("contract", "dispatcher", "envelope/outcome"),
+    ("dispatcher", "store", "session/journal"),
+    ("dispatcher", "transcript", "finalize"),
+    ("poller", "commands", "新 comment"),
+    ("commands", "jira_source", "指令回覆"),
+    ("commands", "store", "指令效果"),
+    ("commands", "transcript", "handoff"),
+    ("poller", "external", "status/assignee"),
+    ("external", "jira_source", "留言/assign"),
+    ("external", "store", "inactive/abort"),
+    ("poller", "scoring", "終態票"),
+    ("scoring", "sections", "human 段"),
+    ("scoring", "jira_source", "評分 comment"),
+    ("scoring", "store", "human_score"),
+    ("poller", "retention", "週期掃描"),
+    ("retention", "store", "回收/journal"),
+    ("control_api", "poller", "pause/evict"),
+    ("control_api", "store", "status 讀"),
+    ("control_api", "transcript", "gen_transcript"),
+    ("store", "detail_server", "唯讀狀態/journal"),
+    ("store", "control_api", "status 計數"),
+]
+
+
 def _arch_svg() -> str:
     """W10.4:分層模組架構圖(手繪 SVG,隨明暗主題;svg-pan-zoom 於 W10.5 掛上)。
     5 個橫向分層帶,由上而下=資料流方向;左側層標籤軌,右側模組 chip。"""
@@ -2519,6 +2582,103 @@ def _arch_svg() -> str:
     return "".join(out)
 
 
+def _graph_node_pos() -> dict:
+    """W10.7:graph 節點座標——依 _ARCH_LAYERS 分 5 列(rowH),每列在寬度上平均分佈。"""
+    W, rowH, top = 1300, 140, 44
+    margin = 90
+    pos = {}
+    for i, (_ln, _ld, mods) in enumerate(_ARCH_LAYERS):
+        y = top + i * rowH + rowH / 2
+        n = len(mods)
+        for j, mk in enumerate(mods):
+            x = margin + (W - 2 * margin) * (j + 0.5) / n
+            pos[mk] = (x, y, i)
+    return pos, W, top * 2 + len(_ARCH_LAYERS) * rowH
+
+
+def _graph_svg() -> str:
+    """W10.7:模組 node+edge graph(手繪 SVG)。節點依層著色;邊=input/output 並標
+    資料名;每個 node/edge 帶 data-* 供過濾器與 focus 高亮;svg-pan-zoom 於下方掛上。"""
+    pos, W, H = _graph_node_pos()
+    hw, hh = 64, 19
+    out = ["<svg id='graphsvg' viewBox='0 0 %d %d' width='100%%' "
+           "preserveAspectRatio='xMinYMin meet' "
+           "style='max-height:%dpx;font-size:11px'>" % (W, H, H),
+           "<defs><marker id='gah' viewBox='0 0 10 10' refX='9' refY='5' "
+           "markerWidth='7' markerHeight='7' orient='auto-start-reverse'>"
+           "<path class='g-arrow' d='M0,0 L10,5 L0,10 z'/></marker></defs>"]
+
+    def trim(cx, cy, tx, ty):
+        dx, dy = tx - cx, ty - cy
+        if dx == 0 and dy == 0:
+            return cx, cy
+        sx = hw / abs(dx) if dx else 9e9
+        sy = hh / abs(dy) if dy else 9e9
+        t = min(sx, sy)
+        return cx + dx * t, cy + dy * t
+
+    # 先畫邊(在節點下層),各帶 data-from/data-to;雙向偏移避免重疊
+    for a, b, label in _ARCH_EDGES:
+        if a not in pos or b not in pos:
+            continue
+        ax, ay, _ = pos[a]
+        bx, by, _ = pos[b]
+        dx, dy = bx - ax, by - ay
+        ln = (dx * dx + dy * dy) ** 0.5 or 1
+        ox, oy = -dy / ln * 5, dx / ln * 5
+        x1, y1 = trim(ax + ox, ay + oy, bx + ox, by + oy)
+        x2, y2 = trim(bx + ox, by + oy, ax + ox, ay + oy)
+        mx = x1 + (x2 - x1) * 0.5 + ox * 1.6
+        my = y1 + (y2 - y1) * 0.5 + oy * 1.6
+        out.append(
+            f"<g class='gedge' data-from='{a}' data-to='{b}'>"
+            f"<line x1='{x1:.0f}' y1='{y1:.0f}' x2='{x2:.0f}' y2='{y2:.0f}' "
+            f"marker-end='url(#gah)'/>"
+            f"<text x='{mx:.0f}' y='{my:.0f}' text-anchor='middle'>"
+            f"{esc(label)}</text></g>")
+    # 再畫節點(上層可點),data-mod + data-layer + 層色 class gl-<i>
+    for i, (_ln, _ld, mods) in enumerate(_ARCH_LAYERS):
+        for mk in mods:
+            cx, cy, _ = pos[mk]
+            out.append(
+                f"<g class='gnode gl-{i}' data-mod='{mk}' data-layer='{i}' "
+                f"onclick='gFocus(\"{mk}\")'>"
+                f"<rect x='{cx - hw:.0f}' y='{cy - hh:.0f}' width='{hw * 2}' "
+                f"height='{hh * 2}' rx='7'/>"
+                f"<text x='{cx:.0f}' y='{cy + 4:.0f}' text-anchor='middle'>"
+                f"{esc(mk)}</text></g>")
+    out.append("</svg>")
+    return "".join(out)
+
+
+def render_graph_section() -> str:
+    """W10.7:graph 圖 + 多選過濾器(依層分組)+ focus 高亮。"""
+    # 過濾器:全選/全不選 + 每層一組 checkbox(預設全開)
+    groups = []
+    for i, (lname, _ld, mods) in enumerate(_ARCH_LAYERS):
+        chips = "".join(
+            f"<label class='gchk'><input type='checkbox' checked "
+            f"data-mod='{mk}' data-layer='{i}' onchange='gVisible()'> "
+            f"{esc(mk)}</label>" for mk in mods)
+        groups.append(
+            f"<div class='glayer'><button type='button' class='glname' "
+            f"onclick='gLayer({i})'>{esc(lname)}</button>{chips}</div>")
+    fil = (
+        "<div id='gfilter' class='gfilter'>"
+        "<div class='gbtns'>"
+        "<button type='button' onclick='gAll(true)'>全選</button>"
+        "<button type='button' onclick='gAll(false)'>全不選</button>"
+        "<span class='sys'>點模組方塊 = 只亮它的 in/out 邊;取消勾選 = 隱藏該模組與其邊</span>"
+        "</div>" + "".join(groups) + "</div>")
+    return (
+        "<h2>模組 graph(node + edge · 邊=input/output)</h2>"
+        f"<div class='card'>{fil}{_graph_svg()}"
+        "<p class='sys' style='text-align:left;margin-top:6px'>"
+        "🖐 拖曳平移、角落鈕縮放;<b>很密沒關係</b>——用上面過濾器挑要看的模組,或點方塊 "
+        "focus。<b>store</b> 是樞紐(多數模組讀寫它)。</p></div>"
+        + _GRAPH_JS)
+
+
 # W10.1 HIL 模型:6 態 + closed 概念終點。第三欄=此態如何由 DB 欄位推導
 # (canonical_state 唯讀映射,不改 runtime)。
 _STATE_DOC = [
@@ -2560,9 +2720,39 @@ _SVGPZ_JS = (
     "panEnabled:true,dblClickZoomEnabled:true,mouseWheelZoomEnabled:false,"
     "fit:true,center:true,contain:true,minZoom:0.4,maxZoom:12,"
     "zoomScaleSensitivity:0.35});}catch(e){}}"
-    "function go(){pz('smsvg');pz('archsvg');}"
+    "function go(){pz('smsvg');pz('archsvg');pz('graphsvg');}"
     "if(document.readyState!=='loading')go();"
     "else document.addEventListener('DOMContentLoaded',go);"
+    "})();</script>")
+
+# W10.7:graph 過濾器(依 data-mod 顯/隱)+ focus 高亮(點節點只亮其 in/out 邊)
+_GRAPH_JS = (
+    "<script>(function(){"
+    "function q(s){return document.querySelectorAll(s);}"
+    "window.gVisible=function(){var on={};"
+    "q('#gfilter input[data-mod]').forEach(function(c){on[c.dataset.mod]=c.checked;});"
+    "q('#graphsvg .gnode').forEach(function(n){"
+    "n.style.display=on[n.dataset.mod]?'':'none';});"
+    "q('#graphsvg .gedge').forEach(function(e){"
+    "e.style.display=(on[e.dataset.from]&&on[e.dataset.to])?'':'none';});};"
+    "window.gAll=function(v){q('#gfilter input[data-mod]')"
+    ".forEach(function(c){c.checked=v;});gVisible();};"
+    "window.gLayer=function(i){var cs=q('#gfilter input[data-layer=\"'+i+'\"]');"
+    "var any=[].some.call(cs,function(c){return !c.checked;});"
+    "cs.forEach(function(c){c.checked=any;});gVisible();};"
+    "var gFoc=null;"
+    "window.gFocus=function(mod){gFoc=(gFoc===mod)?null:mod;var nb={};"
+    "if(gFoc){q('#graphsvg .gedge').forEach(function(e){"
+    "if(e.dataset.from===gFoc)nb[e.dataset.to]=1;"
+    "if(e.dataset.to===gFoc)nb[e.dataset.from]=1;});}"
+    "q('#graphsvg .gnode').forEach(function(n){"
+    "var keep=!gFoc||n.dataset.mod===gFoc||nb[n.dataset.mod];"
+    "n.classList.toggle('dim',!!gFoc&&!keep);"
+    "n.classList.toggle('foc',gFoc===n.dataset.mod);});"
+    "q('#graphsvg .gedge').forEach(function(e){"
+    "var hit=!!gFoc&&(e.dataset.from===gFoc||e.dataset.to===gFoc);"
+    "e.classList.toggle('dim',!!gFoc&&!hit);"
+    "e.classList.toggle('hi',hit);});};"
     "})();</script>")
 
 
@@ -2679,7 +2869,8 @@ def render_concepts_page() -> str:
         "<h2>模組職責表(trigger · 輸入 · 輸出 · 上下游)</h2>"
         "<div class='card' style='overflow-x:auto'>" + _arch_doc_table()
         + "</div>"
-        "<h2>agent↔agent 交接(兩機制對等,人依場景選;見 DESIGN_architecture)</h2>"
+        + render_graph_section()
+        + "<h2>agent↔agent 交接(兩機制對等,人依場景選;見 DESIGN_architecture)</h2>"
         "<div class='card'><ul style='line-height:1.8'>"
         "<li><b>同票換手(swap)→ 回進行中</b>:<b>同一張 Jira、同一個 workspace</b>,"
         "清掉舊 skills/hooks、copy 新 agent template 進原 workspace、重置 session → "
