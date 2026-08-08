@@ -129,4 +129,4 @@
 - **筆電睡眠凍結計時器**:session memory `live-experiment-sleep-hazard` + v3 §9.3-1
 - **OpenHands/ACP 陷阱**(litellm rust-wheel、90s startup timeout、批次無
   kill 窗口):`examples/openhands-acp-poc/PLAN.md` 陷阱實錄 + `COMPARISON.md`
-- **v5 設計側陷阱清單**(22 條):`research/2026-08-jira-agent-harness-design-v5.md` §6
+- **v5 設計側陷阱清單**(22 條):`docs/research/2026-08-jira-agent-harness-design-v5.md` §6

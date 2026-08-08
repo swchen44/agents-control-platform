@@ -2,7 +2,7 @@
 
 > 承 B(M1-M3 已完成)。目標:inner runner 從 SDK **in-process** 換成
 > **agent-server**(REST/WS),打通 OpenHands 視覺化;投資帶進 C(見
-> research/2026-08-abc-roadmap-analysis.md §3.5)。
+> docs/research/2026-08-abc-roadmap-analysis.md §3.5)。
 > **單線、小步、每步 commit+push。斷線 resume:讀本檔 checklist + git log。**
 > 最後更新:2026-08-03。
 

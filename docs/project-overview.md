@@ -18,9 +18,8 @@ agents-control-platform/
 ├── scripts/                # 可執行入口 + 被 spawn 的 runner + demo
 ├── tests/                  # 單元 + 端到端測試
 ├── harness/                # 設定 + vendored 資產 + runtime 資料(dev 工作區)
-├── docs/                   # 文件(本資料夾)
+├── docs/                   # 文件(本資料夾;研究報告在 docs/research/)
 ├── examples/               # PoC / 對照樣本(dev-only,不入 wheel)
-├── research/               # 研究報告(dev-only)
 └── .github/workflows/      # CI / CD
 ```
 
@@ -65,12 +64,12 @@ agents-control-platform/
 
 ## `docs/`
 
-見 [index](index.md)。`docs/design/` 是各子系統機制細節;`docs/study/` 是研究/實驗的
-「結論 + 比較」策展文章(原始長文留 `research/`);`docs/troubleshooting.md` +
-`docs/design/observability.md` + `docs/ai-debugging.md` 是離線除錯層。
+見 [index](index.md)。`docs/design/` 是各子系統機制細節;`docs/research/` 是研究/實驗的
+「結論 + 比較」策展文章 **+ 原始 deep-research 長文**(兩層同放);`docs/troubleshooting.md`
++ `docs/design/observability.md` + `docs/ai-debugging.md` 是離線除錯層。
 
-## `examples/` / `research/`(dev-only)
+## `examples/`(dev-only)
 
 `examples/jira-agent-poc/`(A 路線 PoC,`arcp_poc.*`;grader 已併入套件)、
-`examples/openhands-*`(openhands backend 選配,需 venv);`research/` 研究報告。
-**不入 wheel、CI 不跑**。
+`examples/openhands-*`(openhands backend 選配,需 venv)。**不入 wheel、CI 不跑**。
+(研究報告已移到 [`docs/research/`](research/README.md)。)

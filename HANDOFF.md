@@ -142,9 +142,9 @@ headless 啟動 agent → 監控狀態。專案暫名 **ARCP**(Agent Runtime / C
 
 ## 1. 現有交付物(都在本 repo)
 
-- **研究報告 v3**:`research/2026-08-agent-runtime-control-plane-research-v3.md`
+- **研究報告 v3**:`docs/research/2026-08-agent-runtime-control-plane-research-v3.md`
   (455 行;需求規格 + 從零寫開工級設計 + 三路線優缺點/維護成本 + 實測)
-- **前版 v2**:`research/2026-07-agent-runtime-control-plane-research.md`
+- **前版 v2**:`docs/research/2026-07-agent-runtime-control-plane-research.md`
   (市場缺口 106-agent 對抗式驗證;v3 引用不重驗)
 - **可跑 PoC**:`examples/jira-agent-poc/`(~770 行、零依賴、已實測跑通)
 - **Crash-recovery 矩陣 harness**:`examples/jira-agent-poc/recovery_test.py`
@@ -157,7 +157,7 @@ headless 啟動 agent → 監控狀態。專案暫名 **ARCP**(Agent Runtime / C
 
 | # | 決策 |
 |---|---|
-| D1 | 報告放 `research/` 出 v3;舊的 openhands 目錄評估已併入 v3 §6 並刪除 |
+| D1 | 報告放 `docs/research/` 出 v3;舊的 openhands 目錄評估已併入 v3 §6 並刪除 |
 | D2 | example 要「設計級片段 + 可跑 PoC」兩者 |
 | D3 | 「從零寫」寫到**開工級**(需求 + 架構 + 介面定義) |
 | D4 | 需求範圍**整合全部**(v2 七大能力 + Jira pipeline + trace&control) |
@@ -285,7 +285,7 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 `jira-harness-design-doc`)。**這份文件是正式實作的 requirement/design source**,
 其 §8 是下次 design/code session 的起手 prompt。
 
-- 兩份使用者研究**原文已入庫 research/**(同專案可直接看,含出處標頭):
+- 兩份使用者研究**原文已入庫 docs/research/**(同專案可直接看,含出處標頭):
   `2026-08-jira-agent-harness-design-v5.md`(v5 設計,**去識別化副本**,
   原文在 Google Docs 以其為準)與
   `2026-08-openhands-acp-claude-code-lifetime.md`(agent-server 行號級讀碼,
@@ -293,7 +293,7 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
   cwd 變更即放棄 resume、bypassPermissions 一刀切、acp_isolate_data_dir、
   改造點行號座標。「agent-server 對照」backlog 因此縮為行為驗證 spike。
   詳整合分析 §3.5。
-- 整合分析:`research/2026-08-jira-harness-integration.md` ——
+- 整合分析:`docs/research/2026-08-jira-harness-integration.md` ——
   v5 決策 × ARCP 實測證據對照(「不走 ACP」被我們的 18:1 粒度/無控制窗口/
   cwd-key 實驗證實)、該採用的設計(UNKNOWN 三態、--fork-session 第四階、
   workspace health check、issue_id 主鍵、欄位所有權、L0-L3 trace、KPI 框架)、
@@ -306,7 +306,7 @@ PoC 模組:`arcp_poc/{events,drivers,supervisor,rules,workspace,jira_watcher}.py
 **short term 用 B(OpenHands+ACP+headless CLI+Jira)先做出可執行的;
 long term 用 C(RawCLIAgent in OpenHands SDK,event 補到 A 級細粒度);
 A(jira-agent-poc)留作對照 harness 不下場。**
-完整 GAP/存活率/可行性分析:`research/2026-08-abc-roadmap-analysis.md`。
+完整 GAP/存活率/可行性分析:`docs/research/2026-08-abc-roadmap-analysis.md`。
 B 期三守則:消費端只依賴 OpenHands event stream+L2 封套、agent 設定獨立
 YAML 區塊、A 對照當品質閘。
 ✅ **C 前置 spike 已完成(2026-08-03,4/4 PASS)**:`Conversation` 接受外部

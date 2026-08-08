@@ -23,5 +23,5 @@
 
 ## 目錄
 
-- `research/` — 研究報告(v3 最新;v2 為前版)
+- `docs/research/` — 研究報告(原始長文 + 「結論比較」策展文章;v3 最新、v2 前版)
 - `examples/jira-agent-poc/` — 可跑 PoC(raw supervisor 包 claude -p / codex exec)

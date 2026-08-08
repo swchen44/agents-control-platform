@@ -4,7 +4,7 @@
 > AgentBase 子類):**直接 spawn `claude -p`/`codex exec`、解析原生 stream-json、
 > 發完整細粒度事件**進 OpenHands event-sourced 體系。事件從 B 的 ~19 回到
 > A 級 ~248;不走 ACP,故無 14-vs-248 粒度損失、無 adapter 版本鏈、有中途控制窗口。
-> 依 research/2026-08-abc-roadmap-analysis.md(C=C2 RawCLIAgent,非 fork adapter)。
+> 依 docs/research/2026-08-abc-roadmap-analysis.md(C=C2 RawCLIAgent,非 fork adapter)。
 > **單線、小步、每步 commit+push。斷線 resume:讀本檔 checklist + git log。**
 > 最後更新:2026-08-03。
 

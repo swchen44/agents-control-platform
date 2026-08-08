@@ -79,4 +79,4 @@
 
 ## 原始出處
 
-- [research/2026-08-qm-comparison.md](../../research/2026-08-qm-comparison.md) — qm(yc-software)vs ARCP harness 對比與 effort 分析,含 Explore agent 行號級附錄(2026-08-04,純開源碼分析)。
+- [research/2026-08-qm-comparison.md](2026-08-qm-comparison.md) — qm(yc-software)vs ARCP harness 對比與 effort 分析,含 Explore agent 行號級附錄(2026-08-04,純開源碼分析)。

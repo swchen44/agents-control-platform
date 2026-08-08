@@ -1,7 +1,7 @@
 # jira-agent-poc
 
 A ~600-line, zero-dependency proof-of-concept for the **cross-CLI supervisor**
-layer described in `research/2026-08-agent-runtime-control-plane-research-v3.md`.
+layer described in `docs/research/2026-08-agent-runtime-control-plane-research-v3.md`.
 
 It demonstrates the whole target pipeline end to end:
 

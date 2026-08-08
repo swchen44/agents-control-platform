@@ -1,8 +1,13 @@
-# 研究與對照(Study)
+# 研究與對照(Research)
 
-開發過程中的研究、實驗與對照,策展成**「結論 + 比較」**的文章 —— 每篇回答一個
-問題、給出結論、附對照表,並連回 `research/` 的原始長文與相關實作。原始研究報告
-留在 [`research/`](../../research/)(dev-only,不入 wheel);這裡是它們的結論層。
+開發過程中的研究、實驗與對照。本資料夾**同時收兩層**:
+
+- **結論層**(下表):策展成「結論 + 比較」的文章 —— 每篇回答一個問題、給出結論、
+  附對照表 + 「對 ARCP 的影響」,並連回同資料夾的原始長文。**先讀這層。**
+- **原始長文**:`2026-*.md` 那幾份 deep-research 報告(v2/v3/v5/整合/openhands/qm/roadmap),
+  含完整出處與推導,是結論層的依據。
+
+## 結論層(策展文章)
 
 | 主題 | 一句話結論 |
 |---|---|
@@ -18,6 +23,18 @@
 - **rawcli 主線 + envelope 契約跨 backend** 來自 [A/B/C 對照](backend-abc.md)。
 - **jira_source 單檔封裝 + statusCategory/issue-type-id + 三態** 來自 [jira 整合](jira-integration.md)。
 - **該抄的基礎設施**(Postgres leased queue、tool-output ledger)來自 [qm 對照](qm-comparison.md) → 已進 [BACKLOG](../../BACKLOG.md) A1/A2。
+
+## 原始長文(deep-research 報告)
+
+策展文章的依據;要看完整推導/出處時讀這些:
+
+- [2026-08-agent-runtime-control-plane-research-v3.md](2026-08-agent-runtime-control-plane-research-v3.md) — v3 總體研究(最新;收斂到工程可執行 + PoC 實測)
+- [2026-07-agent-runtime-control-plane-research.md](2026-07-agent-runtime-control-plane-research.md) — v2 前版(市場缺口/可行性/對抗式驗證)
+- [2026-08-jira-agent-harness-design-v5.md](2026-08-jira-agent-harness-design-v5.md) — v5 Jira harness 設計(C1-C4 / D1-D10 / KPI)
+- [2026-08-jira-harness-integration.md](2026-08-jira-harness-integration.md) — v5 × 實作整合分析
+- [2026-08-abc-roadmap-analysis.md](2026-08-abc-roadmap-analysis.md) — A/B/C 三路線策略與可行性
+- [2026-08-openhands-acp-claude-code-lifetime.md](2026-08-openhands-acp-claude-code-lifetime.md) — OpenHands × ACP × Claude Code 生命週期讀碼研究
+- [2026-08-qm-comparison.md](2026-08-qm-comparison.md) — 對 qm 平台的行號級對照
 
 > 想看「怎麼除錯」而非「怎麼設計」→ 見 [troubleshooting](../troubleshooting.md) 與
 > [observability](../design/observability.md);想看子系統機制 → 見 [docs/design/](../index.md)。

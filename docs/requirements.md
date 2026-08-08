@@ -20,7 +20,7 @@
 - **Why**:公司本來就活在 Jira。讓 agent 像員工一樣對 Jira 負責,人就能用**既有管理儀式**
   (指派/留言/審核/關單)管一支自主 agent 大軍,不必學新工具;也解釋了 assignee 恆定、
   受控表單、單一寫入者、hash 稽核——全是為把 Jira 維持成**可信可稽核的日誌**而非 free-text
-  聊天室(見 §14 [docs/design/interaction.md](docs/design/interaction.md))。
+  聊天室(見 §14 [docs/design/interaction.md](design/interaction.md))。
 
 | 原則 | Why |
 |---|---|
@@ -304,7 +304,7 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 
 > 使用者要求「一改全改」(文件/程式/網站)。**W10.1 模型/圖/網頁 + W10.4 架構圖 +
 > W10.5 互動 + 文件已做;W10.2 HIL 行為與 W10.3 a2a base 交接暫緩、待審**。完整設計見
-> [docs/design/architecture.md](docs/design/architecture.md) 與 [docs/design/lifecycle.md](docs/design/lifecycle.md)。
+> [docs/design/architecture.md](design/architecture.md) 與 [docs/design/lifecycle.md](design/lifecycle.md)。
 
 ### 13.1 HIL 生命週期(Model A)
 - `success/failure/unknown` **不再是頂層狀態**,收斂成 **HIL(End)** 的「結果」屬性;
@@ -339,7 +339,7 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 
 ## 14. W11 互動服務:HIL 人機介面(2026-08-08 口述定案,取代人編 description)
 
-> 完整設計見 [docs/design/interaction.md](docs/design/interaction.md)。**屬 runtime 行為,先只寫
+> 完整設計見 [docs/design/interaction.md](design/interaction.md)。**屬 runtime 行為,先只寫
 > 文件、程式待實作**(與 W10.2/W10.3 一併待審後排波)。
 
 ### 14.1 核心原則

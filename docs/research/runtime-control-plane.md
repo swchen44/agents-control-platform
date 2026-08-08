@@ -104,5 +104,5 @@ v3 §8 套用三層文檢查清單對照 ARCP MVP 現況:
 
 ## 原始出處
 
-- v3(主源,收斂到工程可執行 + PoC 實測):[../../research/2026-08-agent-runtime-control-plane-research-v3.md](../../research/2026-08-agent-runtime-control-plane-research-v3.md)
-- v2(前版,市場缺口/技術可行性/企業整合的對抗式驗證):[../../research/2026-07-agent-runtime-control-plane-research.md](../../research/2026-07-agent-runtime-control-plane-research.md)
+- v3(主源,收斂到工程可執行 + PoC 實測):[2026-08-agent-runtime-control-plane-research-v3.md](2026-08-agent-runtime-control-plane-research-v3.md)
+- v2(前版,市場缺口/技術可行性/企業整合的對抗式驗證):[2026-07-agent-runtime-control-plane-research.md](2026-07-agent-runtime-control-plane-research.md)

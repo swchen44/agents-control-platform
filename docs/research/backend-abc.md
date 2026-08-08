@@ -104,5 +104,5 @@ B 並非全輸 —— **併發是它相對裸跑真正買到的東西**:`demo_co
 
 - [A vs B 實跑對照 COMPARISON.md](../../examples/openhands-acp-poc/COMPARISON.md) —— 248 vs 14 事件、A/B/C 三方對照 §6、併發 §7、6 格矩陣補記
 - [路線 B 落地計畫 PLAN.md](../../examples/openhands-acp-poc/PLAN.md) —— litellm rust-wheel / 90s startup / 批次無 kill 窗口 等陷阱實錄
-- [A/B/C roadmap 策略分析](../../research/2026-08-abc-roadmap-analysis.md) —— 三案定義、GAP、B→C 存活率、可行性判定
-- [OpenHands × ACP × Claude Code 生命週期研究](../../research/2026-08-openhands-acp-claude-code-lifetime.md) —— lazy spawn、ACP 握手、Evict/resume、bypassPermissions 行號級分析
+- [A/B/C roadmap 策略分析](2026-08-abc-roadmap-analysis.md) —— 三案定義、GAP、B→C 存活率、可行性判定
+- [OpenHands × ACP × Claude Code 生命週期研究](2026-08-openhands-acp-claude-code-lifetime.md) —— lazy spawn、ACP 握手、Evict/resume、bypassPermissions 行號級分析

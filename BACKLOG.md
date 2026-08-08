@@ -7,7 +7,7 @@
 
 | # | 項目 | 做法 | effort | 價值 |
 |---|---|---|---|---|
-| **V1** | **真後端 e2e + inner_runner 路徑 bug 複驗** | W12.4b/c 修了 W12.1 遺留的 runner 定位 bug(`HERE` 曾解析到 `src/` 找不到 runner,已改 `arcp.paths`);離線測試沒覆蓋真派工。下次真 Jira/agent 整合測時,**優先用一次真實 rawcli 派工確認 runner 能被 spawn**,並一併複驗 [C3/C5 retry 計數 flaky](見 memory)。 | 低(需真 Jira/agent) | 這 bug 會炸的正是真派工路徑;離線 CI 抓不到 |
+| **V1** | **真後端 e2e + inner_runner 路徑 bug 複驗** | W12.4b/c 修了 W12.1 遺留的 runner 定位 bug(`HERE` 曾解析到 `src/` 找不到 runner,已改 `arcp.paths`);離線測試沒覆蓋真派工。下次真 Jira/agent 整合測時,**優先用一次真實 rawcli 派工確認 runner 能被 spawn**,並一併複驗 C3/C5 retry 計數 flaky(見 memory:e2e-commands-c3-c5-flaky)。 | 低(需真 Jira/agent) | 這 bug 會炸的正是真派工路徑;離線 CI 抓不到 |
 | **W13** | **離線內網文件自足性(AI 自我除錯)** | ✅**核心完成**(2026-08-08,e2418d0,CI 綠):見下方 §「主題 H」H1-H4 皆做。repo 之後會下載進內網當凍結 snapshot,文件已自足到 AI/人只靠 repo 內就能除錯分析。後續可強化見 H 表備註。 | 中 | 決定這份交付在內網到底能不能被人/AI 用起來 |
 
 ## ★ 使用者圈定優先級(2026-08-04,全 23 項逐項問過)

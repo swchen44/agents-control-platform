@@ -61,6 +61,6 @@ ARCP 的差異化價值集中在「跨 CLI 一致的 session 層級 crash recove
 
 ## 原始出處
 
-- 主源(crash recovery 實驗與矩陣、§5.2 終止語意、§6.4 ACP resume 對照、§9.3 PoC 清單):[../../research/2026-08-agent-runtime-control-plane-research-v3.md](../../research/2026-08-agent-runtime-control-plane-research-v3.md)
-- 前版(市場缺口 / rollback 文獻量化 / resume 目錄範圍與 CLI 陷阱清單):[../../research/2026-07-agent-runtime-control-plane-research.md](../../research/2026-07-agent-runtime-control-plane-research.md)
+- 主源(crash recovery 實驗與矩陣、§5.2 終止語意、§6.4 ACP resume 對照、§9.3 PoC 清單):[2026-08-agent-runtime-control-plane-research-v3.md](2026-08-agent-runtime-control-plane-research-v3.md)
+- 前版(市場缺口 / rollback 文獻量化 / resume 目錄範圍與 CLI 陷阱清單):[2026-07-agent-runtime-control-plane-research.md](2026-07-agent-runtime-control-plane-research.md)
 - 實驗 harness 設計(2×2 矩陣、C1–C4 判準、session-id 不對稱):`examples/jira-agent-poc/recovery_test.py`(docstring)、配套 `workspace_recovery_test.py` / `arcp_poc/{grader,resume_transcript,recovery_loop}.py`
