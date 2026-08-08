@@ -25,7 +25,7 @@ from arcp_poc.grader import FileChecklistGrader  # noqa: E402
 from openhands.sdk.conversation import Conversation  # noqa: E402
 from openhands.sdk.event.llm_convertible import MessageEvent  # noqa: E402
 
-from arcp_rawcli import RawCLIAgent  # noqa: E402
+from arcp.rawcli import RawCLIAgent  # noqa: E402
 
 EXPECTED = {f"step{n}.txt": "".join(str(i) for i in range(1, n + 1))
             for n in range(1, 4)}

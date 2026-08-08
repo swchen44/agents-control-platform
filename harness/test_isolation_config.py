@@ -12,13 +12,13 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.isolation import (  # noqa: E402
+from arcp.isolation import (  # noqa: E402
     PROVIDERS,
     requested_provider,
     resolve,
 )
-from arcp_harness.profiles import load_profiles  # noqa: E402
-from arcp_harness.routing import ConfigError  # noqa: E402
+from arcp.profiles import load_profiles  # noqa: E402
+from arcp.routing import ConfigError  # noqa: E402
 
 
 def _yaml(agent_extra: str) -> str:
@@ -87,7 +87,7 @@ def test_explicit_provider_overrides_legacy():
 
 def test_inner_runner_wiring():
     # job.os_sandbox 只在有效 provider=seatbelt 時為 True(darwin 上跑)
-    from arcp_harness.inner_runner import resolve_isolation
+    from arcp.inner_runner import resolve_isolation
     on = resolve_isolation({"os_sandbox": True}) == "seatbelt"
     assert on == (sys.platform == "darwin")
     assert resolve_isolation({"isolation": {"provider": "none"}}) == "none"

@@ -16,8 +16,8 @@ import sys
 import urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness import jira_source  # noqa: E402
-from arcp_harness.jira_source import JiraCloudSource  # noqa: E402
+from arcp import jira_source  # noqa: E402
+from arcp.jira_source import JiraCloudSource  # noqa: E402
 
 ok = True
 

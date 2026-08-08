@@ -19,11 +19,11 @@ import shutil
 import sys
 import time
 
-from arcp_harness.config import jira_credentials
-from arcp_harness.jira_source import JiraCloudSource
-from arcp_harness.poller import OuterLoop
-from arcp_harness.routing import load_config
-from arcp_harness.store import Store
+from arcp.config import jira_credentials
+from arcp.jira_source import JiraCloudSource
+from arcp.poller import OuterLoop
+from arcp.routing import load_config
+from arcp.store import Store
 
 
 def main() -> int:

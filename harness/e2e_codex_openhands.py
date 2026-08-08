@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp_poc.grader import FileChecklistGrader  # noqa: E402
 
-from arcp_harness.inner_runner import run_attempt  # noqa: E402
+from arcp.inner_runner import run_attempt  # noqa: E402
 
 EXPECTED = {f"step{n}.txt": "".join(str(i) for i in range(1, n + 1))
             for n in range(1, 4)}

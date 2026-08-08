@@ -15,11 +15,11 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.control_api import ControlAPI  # noqa: E402
-from arcp_harness.poller import OuterLoop  # noqa: E402
-from arcp_harness.routing import Route  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
-from arcp_harness.ticket import Ticket  # noqa: E402
+from arcp.control_api import ControlAPI  # noqa: E402
+from arcp.poller import OuterLoop  # noqa: E402
+from arcp.routing import Route  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 
 
 class FakePoller:
@@ -142,7 +142,7 @@ def test_shutdown_sets_stopping():
 def test_gen_transcript_manual():
     """W6.4 被動按鈕:POST /gen_transcript/<id> → finalize(reason=manual)。
     monkeypatch transcript.finalize 避免真渲染;驗查 engine、記 journal、404 分支。"""
-    from arcp_harness import transcript as tmod
+    from arcp import transcript as tmod
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     ws = os.path.join(root, "tickets", "1", "ws")

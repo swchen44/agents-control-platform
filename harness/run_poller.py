@@ -15,20 +15,20 @@ from __future__ import annotations
 import sys
 import time
 
-from arcp_harness.approval import ApprovalGate
-from arcp_harness.commands import CommandHandler, ExternalChangePolicy
-from arcp_harness.config import jira_credentials
-from arcp_harness.control_api import ControlAPI
-from arcp_harness.dispatcher import Dispatcher
-from arcp_harness.form_server import FormServer
-from arcp_harness.hil import apply_submission
-from arcp_harness.jira_source import JiraCloudSource
-from arcp_harness.poller import OuterLoop
-from arcp_harness.profiles import load_profiles
-from arcp_harness.routing import load_config, match
-from arcp_harness.scoring import ScoreGate
-from arcp_harness.store import Store, TicketSession, TicketWatch
-from arcp_harness.triggers import load_triggers
+from arcp.approval import ApprovalGate
+from arcp.commands import CommandHandler, ExternalChangePolicy
+from arcp.config import jira_credentials
+from arcp.control_api import ControlAPI
+from arcp.dispatcher import Dispatcher
+from arcp.form_server import FormServer
+from arcp.hil import apply_submission
+from arcp.jira_source import JiraCloudSource
+from arcp.poller import OuterLoop
+from arcp.profiles import load_profiles
+from arcp.routing import load_config, match
+from arcp.scoring import ScoreGate
+from arcp.store import Store, TicketSession, TicketWatch
+from arcp.triggers import load_triggers
 
 
 def adopt_existing(source, store, routes, jql) -> int:

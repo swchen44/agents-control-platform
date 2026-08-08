@@ -12,13 +12,13 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.scoring import (  # noqa: E402
+from arcp.scoring import (  # noqa: E402
     ScoreGate,
     collect_score,
     write_handoff_sections,
 )
-from arcp_harness.store import Store, TicketSession  # noqa: E402
-from arcp_harness.ticket import Ticket  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 
 
 class _Prof:
@@ -194,7 +194,7 @@ def test_gate_stall_after_many_reminders():
 
 def test_poller_wires_scoregate():
     """整合:OuterLoop.poll_once 對終態未評分的票會呼 ScoreGate 發表單請求。"""
-    from arcp_harness.poller import OuterLoop
+    from arcp.poller import OuterLoop
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     store.upsert_session(_sess(root))                    # 終態 SUCCESS、未評分

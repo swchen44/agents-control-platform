@@ -14,28 +14,20 @@ rule that the differentiation layer is runtime-agnostic.
 from __future__ import annotations
 
 import os
-import sys
 import uuid
 
-_A_ROUTE = os.path.join(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__)))),
-    "examples", "jira-agent-poc")
-if _A_ROUTE not in sys.path:
-    sys.path.insert(0, _A_ROUTE)
-
-from arcp_poc.grader import AllOf, CommandGrader, FileChecklistGrader  # noqa: E402
-
-from .contract import summarize  # noqa: E402
-from .inner_runner import run_attempt  # noqa: E402
-from .jira_source import JiraCloudSource  # noqa: E402
-from .logutil import get_logger  # noqa: E402
-from .profiles import Profile  # noqa: E402
-from .scoring import collect_budget_override  # noqa: E402
-from .store import Store, TicketSession  # noqa: E402
-from .ticket import Ticket  # noqa: E402
-from .transcript import engine_of_agent  # noqa: E402
-from .transcript import finalize as finalize_transcript  # noqa: E402
-from .workspace import health_check, provision  # noqa: E402
+from .contract import summarize
+from .grader import AllOf, CommandGrader, FileChecklistGrader
+from .inner_runner import run_attempt
+from .jira_source import JiraCloudSource
+from .logutil import get_logger
+from .profiles import Profile
+from .scoring import collect_budget_override
+from .store import Store, TicketSession
+from .ticket import Ticket
+from .transcript import engine_of_agent
+from .transcript import finalize as finalize_transcript
+from .workspace import health_check, provision
 
 BASE_PROMPT = ("請先閱讀工作目錄裡的 TICKET.md,完成其中「描述」段落交付的任務。"
                "完成後回覆一行 TASK_DONE。")

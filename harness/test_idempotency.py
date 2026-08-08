@@ -14,15 +14,15 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness import dispatcher as dmod  # noqa: E402
-from arcp_harness.approval import ApprovalGate  # noqa: E402
-from arcp_harness.commands import CommandHandler  # noqa: E402
-from arcp_harness.dispatcher import Dispatcher  # noqa: E402
-from arcp_harness.inner_runner import AttemptResult  # noqa: E402
-from arcp_harness.profiles import Profile  # noqa: E402
-from arcp_harness.sections import Section, render  # noqa: E402
-from arcp_harness.store import Store  # noqa: E402
-from arcp_harness.ticket import Comment, Ticket  # noqa: E402
+from arcp import dispatcher as dmod  # noqa: E402
+from arcp.approval import ApprovalGate  # noqa: E402
+from arcp.commands import CommandHandler  # noqa: E402
+from arcp.dispatcher import Dispatcher  # noqa: E402
+from arcp.inner_runner import AttemptResult  # noqa: E402
+from arcp.profiles import Profile  # noqa: E402
+from arcp.sections import Section, render  # noqa: E402
+from arcp.store import Store  # noqa: E402
+from arcp.ticket import Comment, Ticket  # noqa: E402
 
 BOT = "BOT-ACCT"
 
@@ -107,7 +107,7 @@ def test_approval_revisions_survive_crash():
     def _sess():
         s = store.get_session(1)
         if s is None:
-            from arcp_harness.store import TicketSession
+            from arcp.store import TicketSession
             s = TicketSession(issue_id=1, key="P-1", profile="p",
                               workspace="?", session_id=None, attempts=0,
                               outcome=None, pending_reason=None, cost_usd=0.0)
@@ -137,7 +137,7 @@ def test_approval_first_entry_idempotency_key():
     prof = _profile(require_approval=True, approver="APPR", max_revisions=3)
     src = MockSource()
     g = ApprovalGate(src, store, BOT)
-    from arcp_harness.store import TicketSession
+    from arcp.store import TicketSession
     sess = TicketSession(issue_id=1, key="P-1", profile="p", workspace="?",
                          session_id=None, attempts=0, outcome=None,
                          pending_reason=None, cost_usd=0.0)
@@ -153,7 +153,7 @@ def test_approval_first_entry_idempotency_key():
 # -- 盤點 #2:指令重放冪等 -------------------------------------------------- #
 def test_command_replay_idempotent():
     store = Store(tempfile.mkdtemp())
-    from arcp_harness.store import TicketSession
+    from arcp.store import TicketSession
     store.upsert_session(TicketSession(
         issue_id=1, key="P-1", profile="p", workspace="ws", session_id="s1",
         attempts=1, outcome=None, pending_reason=None, cost_usd=0.0))
@@ -196,7 +196,7 @@ def test_sid_preassigned_and_persisted_before_spawn():
 
 
 def test_crash_with_sid_refunds_and_resumes():
-    from arcp_harness.store import TicketSession
+    from arcp.store import TicketSession
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     base = os.path.join(root, "tickets", "1")
@@ -225,7 +225,7 @@ def test_crash_with_sid_refunds_and_resumes():
 
 
 def test_crash_without_sid_goes_unknown():
-    from arcp_harness.store import TicketSession
+    from arcp.store import TicketSession
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     base = os.path.join(root, "tickets", "1")

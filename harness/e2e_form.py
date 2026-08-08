@@ -15,10 +15,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from arcp_harness import hil
-from arcp_harness.form_server import FormServer
-from arcp_harness.interaction import build_request
-from arcp_harness.store import Store, TicketSession
+from arcp import hil
+from arcp.form_server import FormServer
+from arcp.interaction import build_request
+from arcp.store import Store, TicketSession
 
 _ok = True
 

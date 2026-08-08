@@ -14,10 +14,10 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.profiles import Profile  # noqa: E402
-from arcp_harness.routing import ConfigError  # noqa: E402
-from arcp_harness.store import Store  # noqa: E402
-from arcp_harness.triggers import (  # noqa: E402
+from arcp.profiles import Profile  # noqa: E402
+from arcp.routing import ConfigError  # noqa: E402
+from arcp.store import Store  # noqa: E402
+from arcp.triggers import (  # noqa: E402
     Trigger,
     due,
     load_triggers,

@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agents-control-platform"
+version = "0.1.0"
+description = "Jira 事件驅動的 headless coding-agent harness(claude -p / codex exec):長時間可靠執行、可 trace、可 control。"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Shaowei Chen" }]
+keywords = ["jira", "agent", "claude", "codex", "automation", "harness"]
+dependencies = [
+    "PyYAML>=6",
+    "certifi",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.6", "pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/swchen44/agents-control-platform"
+Repository = "https://github.com/swchen44/agents-control-platform"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arcp"]
+
+# ── lint(W12:從 harness/ruff.toml 移植,套件路徑改 src/arcp、first-party=arcp)── #
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+# 絕不碰 vendored 第三方(zero-diff)、examples(PoC,另有 sys.path 慣例)、old-ws
+extend-exclude = [
+    "**/claude_code_log/**",
+    "**/tools/vendor/**",
+    "**/old-ws/**",
+    "examples/**",
+]
+force-exclude = true
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E402"]  # sys.path.insert 後才 import 是有意的(部分腳本)
+
+[tool.ruff.lint.isort]
+known-first-party = ["arcp"]
+
+[tool.ruff.lint.per-file-ignores]
+# 核心套件 src/arcp/ 維持嚴格;測試/e2e/舊頂層腳本 print-heavy,放寬行長/分號/命名
+"tests/**" = ["E501", "E702", "E741"]
+"harness/**" = ["E501", "E702", "E741"]
+"scripts/**" = ["E501", "E702", "E741"]

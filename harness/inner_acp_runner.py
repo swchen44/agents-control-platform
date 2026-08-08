@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Inner runner, route-B implementation — RUNS INSIDE the openhands venv.
 
-Invoked by arcp_harness.inner_runner with a JSON job file:
+Invoked by arcp.inner_runner with a JSON job file:
     {"ws": ..., "prompt": ..., "acp_server": "claude-code",
      "acp_model": "haiku"|null, "resume_session_id": null|str,
      "events_path": ..., "envelope_path": ...}

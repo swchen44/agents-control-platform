@@ -22,7 +22,7 @@ import time
 
 os.environ.setdefault("OPENHANDS_SUPPRESS_BANNER", "1")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_rawcli import RawCLIAgent  # noqa: E402
+from arcp.rawcli import RawCLIAgent  # noqa: E402
 
 ok = True
 

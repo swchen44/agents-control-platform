@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import sys
 
-from arcp_harness.profiles import load_profiles
-from arcp_harness.store import Store
-from arcp_harness.triggers import load_triggers, run_trigger
+from arcp.profiles import load_profiles
+from arcp.store import Store
+from arcp.triggers import load_triggers, run_trigger
 
 
 def main() -> int:

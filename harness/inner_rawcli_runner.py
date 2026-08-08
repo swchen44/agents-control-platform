@@ -20,7 +20,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)  # arcp_rawcli lives here
+sys.path.insert(0, HERE)  # arcp.rawcli lives here
 
 
 def main() -> int:
@@ -35,7 +35,7 @@ def main() -> int:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
     try:
-        from arcp_rawcli import RawCLIAgent
+        from arcp.rawcli import RawCLIAgent
 
         raw_path = os.path.join(os.path.dirname(job["events_path"]),
                                 os.path.basename(job["events_path"])

@@ -18,14 +18,14 @@ import sys
 import threading
 import time
 
-from arcp_harness.config import jira_credentials
-from arcp_harness.dispatcher import Dispatcher
-from arcp_harness.jira_source import JiraCloudSource
-from arcp_harness.poller import OuterLoop
-from arcp_harness.profiles import load_profiles
-from arcp_harness.routing import load_config
-from arcp_harness.server_manager import ServerManager
-from arcp_harness.store import Store
+from arcp.config import jira_credentials
+from arcp.dispatcher import Dispatcher
+from arcp.jira_source import JiraCloudSource
+from arcp.poller import OuterLoop
+from arcp.profiles import load_profiles
+from arcp.routing import load_config
+from arcp.server_manager import ServerManager
+from arcp.store import Store
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VENV = os.path.join(HERE, "..", "examples", "openhands-acp-poc", ".venv",

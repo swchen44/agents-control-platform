@@ -8,7 +8,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness import logutil  # noqa: E402
+from arcp import logutil  # noqa: E402
 
 
 def test_level_from_env():

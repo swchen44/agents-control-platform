@@ -20,8 +20,8 @@ import argparse
 import sys
 import time
 
-from arcp_harness.config import jira_credentials
-from arcp_harness.jira_source import JiraCloudSource
+from arcp.config import jira_credentials
+from arcp.jira_source import JiraCloudSource
 
 _ok = True
 
@@ -46,7 +46,7 @@ def main() -> int:
     jql = a.jql
     if not jql:                                   # 預設用 poller 實際的 jql
         try:
-            from arcp_harness.routing import load_config
+            from arcp.routing import load_config
             jql = load_config("routes.yaml")[0].get("jql")
         except Exception:  # noqa: BLE001
             jql = None

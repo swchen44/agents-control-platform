@@ -15,11 +15,11 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.poller import OuterLoop  # noqa: E402
-from arcp_harness.profiles import load_profiles  # noqa: E402
-from arcp_harness.routing import load_config  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
-from arcp_harness.ticket import Ticket  # noqa: E402
+from arcp.poller import OuterLoop  # noqa: E402
+from arcp.profiles import load_profiles  # noqa: E402
+from arcp.routing import load_config  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 
 ok = True
 

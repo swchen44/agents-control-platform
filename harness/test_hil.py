@@ -5,9 +5,9 @@ from __future__ import annotations
 import sys
 import tempfile
 
-from arcp_harness.hil import apply_submission, request_human
-from arcp_harness.interaction import build_request
-from arcp_harness.store import Store, TicketSession
+from arcp.hil import apply_submission, request_human
+from arcp.interaction import build_request
+from arcp.store import Store, TicketSession
 
 
 class FakeTicket:

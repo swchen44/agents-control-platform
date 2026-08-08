@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:                                    # W6.1 系統資訊(純 stdlib);缺也不擋頁
-    from arcp_harness.sysinfo import collect as sysinfo_collect
+    from arcp.sysinfo import collect as sysinfo_collect
 except Exception:  # noqa: BLE001
     sysinfo_collect = None
 
@@ -795,7 +795,7 @@ def build_server_data() -> dict:
     # W6.2:進程 + per-workspace(只掃 active session,省成本)
     procs = []
     try:
-        from arcp_harness.sysinfo import processes
+        from arcp.sysinfo import processes
         procs = processes()
     except Exception:  # noqa: BLE001
         procs = []
@@ -2249,8 +2249,8 @@ def render_agent_page() -> str:
         _here = os.path.dirname(os.path.abspath(__file__))
         if _here not in _sys.path:
             _sys.path.insert(0, _here)
-        from arcp_harness.profiles import load_profiles
-        from arcp_harness.routing import load_config
+        from arcp.profiles import load_profiles
+        from arcp.routing import load_config
         src, routes = load_config(_CONFIG_PATH)
         profiles = load_profiles(_CONFIG_PATH)
         err = None
@@ -2762,37 +2762,37 @@ _GRAPH_JS = (
 
 # W10.6:職責表補「檔名 / 重要 API」(分層由 _ARCH_LAYERS 提供)。旁掛不動 _ARCH_MODULES。
 _ARCH_META = {
-    "jira_source": ("arcp_harness/jira_source.py",
+    "jira_source": ("arcp/jira_source.py",
                     "search / get_comments / add_comment / transition / "
                     "set_description / assign"),
-    "triggers": ("arcp_harness/triggers.py",
+    "triggers": ("arcp/triggers.py",
                  "load_triggers / parse_cron / due / run_trigger"),
-    "poller": ("arcp_harness/poller.py", "OuterLoop.poll_once"),
-    "routing": ("arcp_harness/routing.py", "load_config / match"),
-    "gate": ("arcp_harness/gate.py", "select_dispatchable / engine_of"),
-    "dispatcher": ("arcp_harness/dispatcher.py", "Dispatcher.handle"),
-    "inner_runner": ("arcp_harness/inner_runner.py",
+    "poller": ("arcp/poller.py", "OuterLoop.poll_once"),
+    "routing": ("arcp/routing.py", "load_config / match"),
+    "gate": ("arcp/gate.py", "select_dispatchable / engine_of"),
+    "dispatcher": ("arcp/dispatcher.py", "Dispatcher.handle"),
+    "inner_runner": ("arcp/inner_runner.py",
                      "run_attempt / AttemptResult"),
-    "workspace": ("arcp_harness/workspace.py, isolation.py",
+    "workspace": ("arcp/workspace.py, isolation.py",
                   "provision / health_check / isolation.resolve"),
-    "contract": ("arcp_harness/contract.py", "validate_structured / summarize"),
-    "approval": ("arcp_harness/approval.py", "ApprovalGate.gate"),
-    "scoring": ("arcp_harness/scoring.py",
+    "contract": ("arcp/contract.py", "validate_structured / summarize"),
+    "approval": ("arcp/approval.py", "ApprovalGate.gate"),
+    "scoring": ("arcp/scoring.py",
                 "ScoreGate.on_poll / collect_score / write_handoff_sections"),
-    "commands": ("arcp_harness/commands.py", "CommandHandler.handle"),
-    "external": ("arcp_harness/commands.py",
+    "commands": ("arcp/commands.py", "CommandHandler.handle"),
+    "external": ("arcp/commands.py",
                  "ExternalChangePolicy.on_status_changed / on_assignee_changed"),
-    "sections": ("arcp_harness/sections.py",
+    "sections": ("arcp/sections.py",
                  "parse / render / verify_and_restore"),
-    "store": ("arcp_harness/store.py",
+    "store": ("arcp/store.py",
               "Store.upsert / journal / get_session / all_sessions"),
-    "control_api": ("arcp_harness/control_api.py",
+    "control_api": ("arcp/control_api.py",
                     "ControlAPI.status (+POST /pause /resume /evict …)"),
     "detail_server": ("detail_server.py",
                       "render_index / render_ticket / /data / /api/v1"),
-    "transcript": ("arcp_harness/transcript.py",
+    "transcript": ("arcp/transcript.py",
                    "finalize / engine_of_agent"),
-    "retention": ("arcp_harness/retention.py", "reclaim"),
+    "retention": ("arcp/retention.py", "reclaim"),
 }
 
 
@@ -2925,7 +2925,7 @@ def _profile_engine(profile_name: str | None) -> str:
     if not profile_name:
         return "claude"
     try:
-        from arcp_harness.profiles import load_profiles
+        from arcp.profiles import load_profiles
         p = load_profiles(_CONFIG_PATH).get(profile_name)
         return (p.agent.get("engine", "claude") if p else "claude")
     except Exception:  # noqa: BLE001
@@ -2956,7 +2956,7 @@ def _api_logs_index(iid: int, s: dict) -> list[dict]:
                 if os.path.isfile(os.path.join(td, n)) and n != "meta.json":
                     _add("transcript", os.path.join(td, n))
     try:
-        from arcp_harness.transcript import source_files
+        from arcp.transcript import source_files
         for p in source_files(s.get("session_id"),
                               _profile_engine(s.get("profile"))):
             _add("source", p)
@@ -2980,7 +2980,7 @@ def _log_path(iid: int, s: dict, name: str) -> str | None:
         p = os.path.join(transcript_dir_of(ws), base)
     elif kind == "source":
         try:
-            from arcp_harness.transcript import source_files
+            from arcp.transcript import source_files
             srcs = source_files(s.get("session_id"),
                                 _profile_engine(s.get("profile")))
         except Exception:  # noqa: BLE001

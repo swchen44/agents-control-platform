@@ -16,7 +16,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.inner_runner import run_attempt  # noqa: E402
+from arcp.inner_runner import run_attempt  # noqa: E402
 
 ok = True
 

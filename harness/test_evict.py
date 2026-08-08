@@ -15,13 +15,13 @@ import tempfile
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness import dispatcher as dmod  # noqa: E402
-from arcp_harness.control_api import ControlAPI  # noqa: E402
-from arcp_harness.dispatcher import Dispatcher  # noqa: E402
-from arcp_harness.inner_runner import AttemptResult  # noqa: E402
-from arcp_harness.profiles import Profile  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
-from arcp_harness.ticket import Ticket  # noqa: E402
+from arcp import dispatcher as dmod  # noqa: E402
+from arcp.control_api import ControlAPI  # noqa: E402
+from arcp.dispatcher import Dispatcher  # noqa: E402
+from arcp.inner_runner import AttemptResult  # noqa: E402
+from arcp.profiles import Profile  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 
 
 class MockSource:
@@ -128,7 +128,7 @@ def test_dispatcher_evicted_refunds_and_resumes():
 def test_evict_file_passed_and_cleaned():
     # inner_runner 的 job 應帶 evict_file 且 spawn 前清殘留——驗邏輯層:
     # 直接檢查 run_attempt 對殘留 EVICT 的清理(用假 backend 讓 spawn 秒失敗)
-    from arcp_harness.inner_runner import run_attempt
+    from arcp.inner_runner import run_attempt
     art = tempfile.mkdtemp()
     open(os.path.join(art, "EVICT"), "w").write("stale")
     try:

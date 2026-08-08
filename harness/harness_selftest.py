@@ -10,11 +10,11 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from arcp_harness.commands import CommandHandler, parse  # noqa: E402
-from arcp_harness.profiles import load_profiles  # noqa: E402
-from arcp_harness.routing import ConfigError, load_config, match  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
-from arcp_harness.ticket import Comment, Ticket  # noqa: E402
+from arcp.commands import CommandHandler, parse  # noqa: E402
+from arcp.profiles import load_profiles  # noqa: E402
+from arcp.routing import ConfigError, load_config, match  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
+from arcp.ticket import Comment, Ticket  # noqa: E402
 
 ok = fail = 0
 
@@ -112,7 +112,7 @@ with tempfile.TemporaryDirectory() as tmp:
     store.close()
 
 print("external-change policy:")
-from arcp_harness.commands import ExternalChangePolicy  # noqa: E402
+from arcp.commands import ExternalChangePolicy  # noqa: E402
 
 with tempfile.TemporaryDirectory() as tmp:
     store = Store(tmp)

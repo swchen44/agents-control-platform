@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.sections import (  # noqa: E402
+from arcp.sections import (  # noqa: E402
     END_MARKER,
     MARKER,
     Section,

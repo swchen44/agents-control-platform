@@ -17,8 +17,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.gate import engine_of, select_dispatchable  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
+from arcp.gate import engine_of, select_dispatchable  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
 
 ok = True
 

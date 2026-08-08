@@ -14,13 +14,13 @@ import shutil
 import sys
 import time
 
-from arcp_harness.config import jira_credentials
-from arcp_harness.dispatcher import Dispatcher
-from arcp_harness.jira_source import JiraCloudSource
-from arcp_harness.poller import OuterLoop
-from arcp_harness.profiles import load_profiles
-from arcp_harness.routing import load_config
-from arcp_harness.store import Store
+from arcp.config import jira_credentials
+from arcp.dispatcher import Dispatcher
+from arcp.jira_source import JiraCloudSource
+from arcp.poller import OuterLoop
+from arcp.profiles import load_profiles
+from arcp.routing import load_config
+from arcp.store import Store
 
 N = 3
 DESC = ("在目前工作目錄依序建立三個檔案:step1.txt 內容 1、step2.txt 內容 12、"

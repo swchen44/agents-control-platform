@@ -17,3 +17,10 @@ harness/workspace/
 
 # ruff 快取(執行 ruff 時產生,非原始碼)
 .ruff_cache/
+.agents/
+.claude/
+skills-lock.json
+*.egg-info/
+.venv/
+build/
+dist/

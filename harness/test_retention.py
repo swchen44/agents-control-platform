@@ -13,9 +13,9 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.profiles import Profile  # noqa: E402
-from arcp_harness.retention import reclaim  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
+from arcp.profiles import Profile  # noqa: E402
+from arcp.retention import reclaim  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
 
 DAY = 86400
 

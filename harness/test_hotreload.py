@@ -12,8 +12,9 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.routing import ConfigError  # noqa: E402
 from run_poller import make_reload  # noqa: E402
+
+from arcp.routing import ConfigError  # noqa: E402
 
 GOOD_V1 = """
 version: 1

@@ -13,12 +13,12 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness import triggers as tmod  # noqa: E402
-from arcp_harness.inner_runner import AttemptResult  # noqa: E402
-from arcp_harness.profiles import Profile  # noqa: E402
-from arcp_harness.routing import ConfigError  # noqa: E402
-from arcp_harness.store import Store, TicketSession  # noqa: E402
-from arcp_harness.triggers import Trigger, due, load_triggers, run_trigger  # noqa: E402
+from arcp import triggers as tmod  # noqa: E402
+from arcp.inner_runner import AttemptResult  # noqa: E402
+from arcp.profiles import Profile  # noqa: E402
+from arcp.routing import ConfigError  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
+from arcp.triggers import Trigger, due, load_triggers, run_trigger  # noqa: E402
 
 
 def _profile(name="maint", **kw):
@@ -130,7 +130,7 @@ def test_run_trigger_failure_evidence_loop():
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     prof = {"maint": _profile(verify=[__import__(
-        "arcp_harness.profiles", fromlist=["VerifyStep"]).VerifyStep(
+        "arcp.profiles", fromlist=["VerifyStep"]).VerifyStep(
         name="v", files={"nope.txt": None})])}
     tr = Trigger("t", "maint", "job", "x", every_sec=None)
     ev = run_trigger(tr, prof, store, root)
@@ -152,7 +152,7 @@ def test_run_trigger_unknown_stops():
 
 # -- W4.6 cron 排程 --------------------------------------------------------- #
 def test_cron_parse_and_validate():
-    from arcp_harness.triggers import parse_cron
+    from arcp.triggers import parse_cron
     c = parse_cron("*/15 3 1,15 * 1-5")
     assert c["min"] == {0, 15, 30, 45} and c["hour"] == {3}
     assert c["dom"] == {1, 15} and c["dow"] == {1, 2, 3, 4, 5}
@@ -169,7 +169,7 @@ def test_cron_parse_and_validate():
 def test_cron_due_wall_clock():
     import datetime
 
-    from arcp_harness.triggers import _cron_due, parse_cron
+    from arcp.triggers import _cron_due, parse_cron
     c = parse_cron("0 3 * * *")                       # 每天 03:00
     day = datetime.datetime(2026, 8, 6, 3, 0)
     at_3am = day.timestamp()
@@ -188,7 +188,7 @@ def test_cron_due_wall_clock():
 def test_cron_dow_dom_vixie_or():
     import datetime
 
-    from arcp_harness.triggers import _cron_matches, parse_cron
+    from arcp.triggers import _cron_matches, parse_cron
     c = parse_cron("0 0 13 * 5")                      # 13 號「或」週五
     fri = datetime.datetime(2026, 8, 7, 0, 0)         # 週五、非 13 號
     d13 = datetime.datetime(2026, 8, 13, 0, 0)        # 13 號、週四
@@ -207,7 +207,7 @@ def test_cron_wins_over_every_with_warning():
 
 
 def test_poller_skips_when_quota_full():
-    from arcp_harness.poller import OuterLoop
+    from arcp.poller import OuterLoop
 
     class FakeSource:
         def search(self, jql, max_results=50):

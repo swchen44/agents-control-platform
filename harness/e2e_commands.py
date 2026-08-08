@@ -17,14 +17,14 @@ import shutil
 import sys
 import time
 
-from arcp_harness.commands import CommandHandler, ExternalChangePolicy
-from arcp_harness.config import jira_credentials
-from arcp_harness.dispatcher import Dispatcher
-from arcp_harness.jira_source import JiraCloudSource
-from arcp_harness.poller import OuterLoop
-from arcp_harness.profiles import load_profiles
-from arcp_harness.routing import load_config
-from arcp_harness.store import Store
+from arcp.commands import CommandHandler, ExternalChangePolicy
+from arcp.config import jira_credentials
+from arcp.dispatcher import Dispatcher
+from arcp.jira_source import JiraCloudSource
+from arcp.poller import OuterLoop
+from arcp.profiles import load_profiles
+from arcp.routing import load_config
+from arcp.store import Store
 
 
 def attempts_in_journal(path: str, issue_id: int) -> int:

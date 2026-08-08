@@ -7,13 +7,13 @@ import tempfile
 import urllib.parse
 import urllib.request
 
-from arcp_harness.form_server import (
+from arcp.form_server import (
     FormServer,
     process_submission,
     render_form_page,
 )
-from arcp_harness.interaction import SUBMITTED, build_request
-from arcp_harness.store import Store
+from arcp.interaction import SUBMITTED, build_request
+from arcp.store import Store
 
 
 def _store_with(req):

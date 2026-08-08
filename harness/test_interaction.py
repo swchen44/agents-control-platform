@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from arcp_harness.interaction import (
+from arcp.interaction import (
     FORM_SCHEMAS,
     PENDING,
     build_request,
@@ -92,8 +92,8 @@ def test_store_roundtrip_and_lookup():
     """W11.2:互動請求持久化——upsert / get_interaction(token)/ 依票查 / open。"""
     import tempfile
 
-    from arcp_harness.interaction import SUBMITTED
-    from arcp_harness.store import Store
+    from arcp.interaction import SUBMITTED
+    from arcp.store import Store
     st = Store(tempfile.mkdtemp())
     r = build_request(10024, "SCRUM-25", "score_and_close",
                       payload={"grader": "SUCCESS", "agent_score": 7},

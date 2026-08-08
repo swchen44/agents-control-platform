@@ -58,8 +58,8 @@ def route_a():
 
 
 def route_bc(profile_name, tag):
-    from arcp_harness.inner_runner import run_attempt
-    from arcp_harness.profiles import load_profiles
+    from arcp.inner_runner import run_attempt
+    from arcp.profiles import load_profiles
     prof = load_profiles("routes.yaml")[profile_name]
     d, ws = fresh(tag)
     res = run_attempt(prof.agent, ws, PROMPT, os.path.join(d, "attempts"), 1)

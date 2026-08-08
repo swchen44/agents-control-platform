@@ -20,8 +20,8 @@ import time
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.control_api import ControlAPI  # noqa: E402
-from arcp_harness.store import Store, TicketSession, TicketWatch  # noqa: E402
+from arcp.control_api import ControlAPI  # noqa: E402
+from arcp.store import Store, TicketSession, TicketWatch  # noqa: E402
 
 ok = True
 
@@ -433,7 +433,7 @@ try:
           "id='archsvg'" in cpage and "模組架構" in cpage
           and "模組職責表" in cpage and "trigger 時間" in cpage
           and "重要 API" in cpage and "檔名" in cpage
-          and "arcp_harness/poller.py" in cpage
+          and "arcp/poller.py" in cpage
           and "OuterLoop.poll_once" in cpage
           and all(s in cpage for s in ("jira_source", "poller", "dispatcher",
                                        "store", "control_api"))

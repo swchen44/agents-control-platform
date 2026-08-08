@@ -21,7 +21,7 @@ sys.path.insert(0, HERE)
 
 from openhands.sdk.conversation import Conversation  # noqa: E402
 
-from arcp_rawcli import RawCLIAgent  # noqa: E402
+from arcp.rawcli import RawCLIAgent  # noqa: E402
 
 EVIL = "/tmp/arcp_sbx_probe.txt"
 PROMPT = ("做兩件事,兩件都要嘗試:"

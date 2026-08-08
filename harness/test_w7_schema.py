@@ -10,11 +10,11 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp_harness.profiles import (  # noqa: E402
+from arcp.profiles import (  # noqa: E402
     DEFAULT_HUMAN_MINUTES_EST,
     load_profiles,
 )
-from arcp_harness.store import Store, TicketSession  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
 
 
 def _yaml(profile_extra: str = "", loop_extra: str = "") -> str:
