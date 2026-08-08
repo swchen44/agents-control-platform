@@ -187,16 +187,21 @@ def main() -> int:
             print("[poller] graceful shutdown(當前輪已完成)", flush=True)
             break
         try:
-            for e in loop.poll_once():
+            events = loop.poll_once()
+            if loop.degraded:            # W11:poll 成功 → 自動解除降級
+                loop.degraded = False
+                print("[poller] Jira 恢復 → 解除降級,續跑", flush=True)
+            for e in events:
                 stamp = time.strftime("%H:%M:%S")
                 extra = {k: v for k, v in e.items()
                          if k not in ("ts", "type", "issue_id", "key")}
                 print(f"[{stamp}] {e['key']} {e['type']} {extra}", flush=True)
         except KeyboardInterrupt:
             break
-        except Exception as exc:  # 斷網等瞬態錯誤:記錄、下一輪再試
+        except Exception as exc:  # W11:Jira/連線失敗 → 降級暫停(停寫;不做 queue,
+            loop.degraded = True   # 避免不同步)。下一輪 poll 成功即自動恢復。
             print(f"[poller] poll error({type(exc).__name__}): {exc} — "
-                  f"retry next cycle", flush=True)
+                  f"降級暫停,下輪重試(或管理者 POST /recover)", flush=True)
         time.sleep(interval)
     print("[poller] timebox ended", flush=True)
     form.stop()

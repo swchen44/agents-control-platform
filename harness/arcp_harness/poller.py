@@ -44,6 +44,8 @@ class OuterLoop:
         self.max_running = max(1, max_running)  # v5 D10 (conc.1)
         self.paused = False            # W13 graceful:只 watch 不派新工
         self.stopping = False          # W4.5 graceful shutdown:當前輪跑完就退
+        self.degraded = False          # W11:Jira 異常→降級暫停(不做 queue);
+                                       # poll 成功自動解除,或管理者 POST /recover
         self._cycles = 0               # W3.3 retention 掃描節流 / W9.1 poll 次數
         self.started_at = time.time()  # W9.1:poller 起始(control 顯示運行時間)
         self.poll_interval = 0.0       # W9.1:輪詢間隔秒(run_poller 設定)

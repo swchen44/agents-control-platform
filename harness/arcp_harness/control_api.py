@@ -9,6 +9,8 @@
   POST /resume  → poller.paused=False
   POST /reload  → reload_fn()(hot reload:範圍見 DESIGN_hotreload.md;
                   壞 config 回 400、舊設定續用、不弄死 poller)
+  POST /recover → poller.degraded=False(W11:管理者手動解除 Jira 降級;poll 成功
+                  也會自動解除)
   POST /shutdown→ poller.stopping=True(W4.5 graceful:當前 poll 輪——含正在跑
                   的 attempt / 壓縮打包——自然跑完後退出並清理;強制關閉語意
                   見 DESIGN_hotreload.md)
@@ -78,6 +80,10 @@ class ControlAPI:
                     api.poller.stopping = True
                     log.info("control: shutdown(當前輪跑完後退出)")
                     return self._json(200, {"stopping": True})
+                if self.path == "/recover":        # W11:管理者手動解除降級
+                    api.poller.degraded = False
+                    log.info("control: recover(手動解除 Jira 降級)")
+                    return self._json(200, {"degraded": False})
                 if self.path.startswith("/evict/"):  # W5.3 E3 實時 killpg
                     try:
                         iid = int(self.path.rsplit("/", 1)[1])
@@ -161,6 +167,8 @@ class ControlAPI:
         return {
             "paused": bool(getattr(self.poller, "paused", False)),
             "stopping": bool(getattr(self.poller, "stopping", False)),
+            "degraded": bool(getattr(self.poller, "degraded", False)),  # W11
+
             "in_flight": len(self.store.active_sessions()),
             "queued": sum(1 for s in sessions if s.queued),
             "inactive": sum(1 for s in sessions if s.inactive),
