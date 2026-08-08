@@ -26,12 +26,16 @@
     base→撤銷+新票,優缺點 guide 見 DESIGN_architecture);「概念」頁→**Introduction**;
     職責表加**檔名/分層/API 欄**;**再加一張 node+edge graph 圖**(全模組+多選過濾+focus)。
 
-- **W11 互動服務(HIL 人機介面)設計定案 📝(待實作)** `harness/DESIGN_interaction.md`
-  + `REQUIREMENTS §14` + 記憶 `w11-interaction-service-hil-interface`:取代「人直接編 Jira
-  description free-text」——**assignee 恆定=Agent**、一次性 **token 受控表單**、**@mention**
-  通知、**表單提交=HIL resume 觸發**、human 段系統寫+hash、`score_and_close` 系統轉 Done、
-  Jira 異常用**暫停/恢復(不做 work queue)**、催辦/異常記號、Agent Link 欄、REST API(供未來
-  人類 agent proxy)。**屬 runtime 行為,先只寫文件、程式待實作。**
+- **W11 互動服務(HIL 人機介面)程式接線完成 ✅,待真 Jira 整合測** 設計見
+  `harness/DESIGN_interaction.md` + `REQUIREMENTS §14`;進度見記憶
+  `w11-interaction-service-hil-interface`。取代「人直接編 Jira description free-text」:
+  - `interaction.py`(schema/token/驗證)、`store` interactions 表、`form_server.py`
+    (一次性 token 表單服務,UI 驗過)、`hil.py`(request_human/apply_submission)
+  - 接線:ScoreGate→score_and_close 表單、assignee 恆定(external 只告警)、dispatcher
+    棄交人 assign/描述種分、run_poller 起 FormServer+接 on_submit/健康、Jira 降級/恢復
+    (poller.degraded + control /recover)
+  - commit 2ab6b8b…d53ef98;**28 單元 + e2e_dashboard + ruff 全綠**
+  - ⏳ **唯一待辦 = 使用者用真 Jira 跑端到端整合測**(發連結/填單/回寫/轉 Done/降級恢復)
 
 ## ★ 最新進展(2026-08-05)— 從研究進入分波實作
 
