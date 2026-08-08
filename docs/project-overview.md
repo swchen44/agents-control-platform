@@ -60,7 +60,8 @@ agents-control-platform/
 - **vendored**:`tools/cclog/`(claude-code-log,MIT,transcript 渲染)、
   `tools/…/vendor/`(swagger-ui / vis-timeline / svg-pan-zoom,離線)
 - **runtime 資料**(gitignored):`runtime_live/`、`runtime_*/`
-- **歷史文件**:`PLAN_wave*.md`、`LESSONS.md`、`TEST_real_jira.md`
+- **歷史文件**:`PLAN_wave*.md`、`TEST_real_jira.md`(踩坑教訓已移到
+  [docs/lessons.md](lessons.md))
 
 ## `docs/`
 

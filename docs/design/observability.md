@@ -1,0 +1,202 @@
+# 可觀測性 — 證據地圖 + journal 事件字典
+
+> **離線除錯的地基**。ARCP 交付到內網後是凍結 snapshot,無法連外、無法問原作者 ——
+> 診斷任何問題只能靠 repo 內文件 + runtime 落地的證據。這份文件回答三個問題:
+> **證據在哪、怎麼讀、每個事件代表什麼**。實際排錯流程見 [troubleshooting](../troubleshooting.md)。
+
+## 1. 證據地圖 —— 東西在哪
+
+一個 Control Plane 實例的所有落地證據都在它的 runtime 目錄下(預設
+`harness/runtime_live/`;dashboard 的 `<runtime>` 引數指的就是它):
+
+| 路徑 | 是什麼 | 怎麼讀 |
+|---|---|---|
+| `events.jsonl` | **journal** —— append-only 事件流,**主要證據軌** | 每行一個 JSON:`{ts, type, issue_id, key, …fields}`。見 §2 |
+| `harness.db` | SQLite **狀態快照**(當下真值) | 表 `ticket_watch`(poller 水位)、`ticket_session`(每票 session/outcome/attempts/cost)、`trigger_state`(排程) |
+| `runs/<run-id>/transcript/` | 每次 attempt 的**執行證據** | `stdout.log` / `stderr.log`(runner 原始輸出)、`run.tgz`(打包)。run-id = `<profile>__<key>__<epoch>` |
+| `tickets/<id>/` | agent 的**隔離 workspace**(產出的檔案) | 任務實際改動的檔;`.arcp_sandbox.sb` = 該次的 seatbelt 設定 |
+
+> **journal vs db 的分工**:journal 是「發生過什麼」(歷史、可回放、算 KPI/月花費);
+> db 是「現在是什麼」(當下狀態、poller 水位)。兩者都在,**除錯先看 journal 還原經過,
+> 再對 db 確認當下**。db 是從 journal 事件推導出來的當前值,不衝突時以 journal 為敘事、
+> db 為現況。
+
+runtime 目錄是 **gitignored**(不進版控);要保存某次現場,整個 `runs/<run-id>/` +
+相關 journal 區段留存即可。
+
+## 2. 怎麼讀 journal
+
+格式:每行一個獨立 JSON(壞一行不毀全檔),欄位固定前綴 `ts`(epoch 秒)、`type`
+(事件名)、`issue_id`(Jira 數字 id)、`key`(Jira key,如 `SCRUM-36`),其餘是該事件
+的欄位(見 §3 字典)。
+
+離線常用查法(純 stdlib,不需裝東西):
+
+```bash
+cd harness/runtime_live
+
+# 一張票的完整時間線(照發生順序)
+python3 -c "import json,sys; [print(f\"{__import__('datetime').datetime.fromtimestamp(e['ts']):%H:%M:%S} {e['type']:24} {({k:v for k,v in e.items() if k not in ('ts','type','issue_id','key')})}\") for e in map(json.loads, open('events.jsonl')) if e['key']=='SCRUM-36']"
+
+# 只看某類事件(例:所有 pending / 錯誤)
+grep -E '"type": "(pending|dispatch_error|external_abort|workspace_unhealthy)"' events.jsonl
+
+# 統計事件分佈(哪種事件最多、有沒有異常尖峰)
+python3 -c "import json,collections; print(collections.Counter(json.loads(l)['type'] for l in open('events.jsonl')).most_common())"
+```
+
+> `ts` 是 epoch(UTC 基準的秒),dashboard 會轉成瀏覽器在地時區顯示;離線用
+> `datetime.fromtimestamp` 轉本機時區即可。⚠️ 筆電睡眠會凍結計時器 → 可能看到假的
+> 長間隔/假 stall(見 [troubleshooting](../troubleshooting.md) 與 LESSONS)。
+
+## 3. 事件字典
+
+**「有哪些事件 + 欄位」由 `scripts/gen_event_dict.py` 掃 code 自動產生(防漂移);
+「每個事件的語意」手寫在下方分組。** 更新自動表:`python3 scripts/gen_event_dict.py`
+覆蓋下方標記區塊;`--check` 可比對是否漂移(CI/pre-commit 用)。
+
+<!-- BEGIN gen_event_dict -->
+| 事件 | 欄位(kwargs) | 產生點 |
+|---|---|---|
+| `adopted` | — | `scripts/run_poller.py:57` |
+| `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py:162` |
+| `assignee_alert` | `assignee` | `src/arcp/commands.py:185` |
+| `assignee_changed` | `new`, `old` | `src/arcp/poller.py:99` |
+| `assignee_restored` | — | `src/arcp/commands.py:180` |
+| `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py:212` |
+| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `truly_resumed` | `src/arcp/dispatcher.py:260`, `src/arcp/triggers.py:297` |
+| `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py:248` |
+| `closed` | `by`, `request_id` | `src/arcp/hil.py:105` |
+| `command_accepted` | `author`, `command`, `note` | `src/arcp/commands.py:104`, `src/arcp/commands.py:144` |
+| `command_denied` | `author`, `command` | `src/arcp/commands.py:92` |
+| `command_rejected` | `command`, `target` | `src/arcp/commands.py:115` |
+| `command_unknown` | `body` | `src/arcp/commands.py:96` |
+| `comment_added` | `author`, `body`, `comment_id` | `src/arcp/poller.py:108` |
+| `dispatch_error` | `error` | `src/arcp/poller.py:162` |
+| `evicted` | `count`, `session` | `src/arcp/dispatcher.py:284` |
+| `external_abort` | `state` | `src/arcp/commands.py:166` |
+| `external_cleared` | `cause` | `src/arcp/dispatcher.py:145` |
+| `handoff` | `author`, `from_profile`, `kind`, `to` | `src/arcp/commands.py:132`, `src/arcp/dispatcher.py:341`, `src/arcp/dispatcher.py:364` |
+| `handoff_invalid` | `to` | `src/arcp/dispatcher.py:369` |
+| `hil_requested` | `request_id`, `schema` | `src/arcp/hil.py:45` |
+| `hil_resumed` | `reason`, `request_id`, `schema` | `src/arcp/hil.py:112`, `src/arcp/hil.py:97` |
+| `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py:158` |
+| `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py:115` |
+| `jira_write` | `action`, `detail` | `scripts/run_poller.py:115` |
+| `new_issue` | `state`, `summary` | `src/arcp/poller.py:83` |
+| `pending` | `cause`, `cost_usd`, `reason`, `scope` | `src/arcp/dispatcher.py:109`, `src/arcp/dispatcher.py:225`, `src/arcp/dispatcher.py:302`, `src/arcp/dispatcher.py:314`, `src/arcp/dispatcher.py:417` |
+| `queued` | `engine`, `profile` | `src/arcp/poller.py:241` |
+| `resolved` | `attempts`, `cost_usd`, `human_minutes_saved` | `src/arcp/dispatcher.py:385` |
+| `route_matched` | `on_match`, `profile`, `route` | `src/arcp/poller.py:87` |
+| `score_reminded` | `reminders` | `src/arcp/scoring.py:155` |
+| `score_requested` | `request_id` | `src/arcp/scoring.py:137` |
+| `script_run_finished` | `duration_sec`, `outcome`, `rc`, `timeout`, `trigger` | `src/arcp/triggers.py:247` |
+| `script_run_started` | `cwd`, `script`, `trigger` | `src/arcp/triggers.py:220` |
+| `session_created` | `profile`, `workspace` | `src/arcp/dispatcher.py:183` |
+| `status_changed` | `new`, `old` | `src/arcp/poller.py:92` |
+| `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py:152`, `src/arcp/dispatcher.py:74` |
+| `trigger_error` | `error` | `src/arcp/poller.py:179`, `src/arcp/poller.py:197` |
+| `trigger_finished` | `attempts`, `cost_usd`, `human_minutes_saved`, `outcome` | `src/arcp/triggers.py:304`, `src/arcp/triggers.py:311`, `src/arcp/triggers.py:323` |
+| `trigger_started` | `profile`, `trigger`, `workspace` | `src/arcp/triggers.py:279` |
+| `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py:51` |
+| `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py:191` |
+
+> 共 42 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+<!-- END gen_event_dict -->
+
+### 語意分組(手寫)
+
+**⚠️ = 除錯時的異常訊號**,看到就往該事件的「連看」證據追。
+
+**A. Poller 偵測(poller.py)** —— 外圈每輪掃 Jira 的差異:
+- `new_issue` / `comment_added` / `status_changed` / `assignee_changed`:偵測到新票/新
+  留言/狀態或 assignee 變動。正常的輸入訊號。
+- `route_matched`:票命中某 route → 決定 profile 與 `on_match`(ignore/notify_only/
+  create_or_resume)。**票沒被處理時第一個查這個**:沒有 `route_matched` = 沒命中任何
+  route(jql/routes 設定問題)。
+- `adopted`:啟動「認養 pass」把當下已存在的票標為水位(只對之後的新事件反應,不重跑
+  歷史)。啟動時大量出現屬正常。
+
+**B. 派工 + 證據迴路(dispatcher.py)** —— 內圈跑 agent:
+- `session_created`(建 workspace)→ `attempt_started` → `attempt_finished`
+  (`raw`=completed/error/unknown、`cost`、`truly_resumed`、`error_kind`)。正常一輪。
+- `attempt_crash_recovered`(`resume`):偵測到上次 attempt 崩潰,這次靠 native resume
+  續接。偶發正常;**頻繁出現** ⚠️ = 有東西一直在崩,連看該 run 的 `stderr.log`。
+- `approval`:起點審批門的決策(pass/退回)。
+- `resolved`:grader 終審通過 → 成功關閉一輪(帶 `attempts`/`cost_usd`/
+  `human_minutes_saved`)。
+- ⚠️ `pending`:進入非終態等待,`cause`/`scope`/`reason` 說明為何(預算超限、額度閘
+  QUEUED、需人、外部變更…)。**這是「卡住/沒進展」的核心線索** —— 讀 `reason`。
+- ⚠️ `workspace_unhealthy`(`reason`):workspace 檢查不過。連看 `tickets/<id>/`。
+- ⚠️ `evicted`(`count`/`session`):被強制驅逐(killpg 釋放資源)。人為(按鈕/`POST
+  /evict`)屬正常;非預期出現要查誰觸發。
+
+**C. agent↔agent 交接(dispatcher/commands)**:
+- `handoff`(`kind`/`to`/`from_profile`):換手(同票 `next` 換 template,或跨票 base)。
+- ⚠️ `handoff_invalid`(`to`):換手目標無效(profile 不存在等)→ 換手沒生效,查 `to`。
+
+**D. 指令通道(commands.py)** —— 人在 Jira 留 `@agent` 指令:
+- `command_accepted` / `command_denied`(非白名單作者)/ `command_rejected`(對象不對)/
+  `command_unknown`(認不得的指令)。**指令沒效果**時查這四個:被 denied=作者不在
+  `allowed_commenters`;unknown=指令拼錯。
+- ⚠️ `external_abort`(`state`):外部把票改成 `cancel_states`(如「完成」)→ 中止。
+  `external_cleared`(`cause`):外部變更已消化。
+- `assignee_alert` / `assignee_restored`:assignee 被改離 agent(告警留言)/ 改回
+  (安靜恢復)。W11 起 assignee 恆定=Agent,被改動是異常訊號。
+
+**E. HIL 人機互動(hil.py / scoring.py)** —— 一次性表單:
+- `hil_requested`(`request_id`/`schema`)→(人填)→ `hil_submitted` → `hil_resumed`
+  (`reason`,續跑)或 `closed`(`by`,關單)。正常的人機閉環。
+- `score_requested`(HIL(End) 評分表單發出)→ `score_reminded`(`reminders`,催)→
+  ⚠️ `hil_stalled`(`reminders` 達上限仍沒人回)。**票停在等人**時看這串:停在
+  `hil_requested`/`score_requested` 沒有後續 = 在等人填表單(正常等待,非 bug)。
+
+**F. 排程觸發(triggers.py)** —— 無票的 scheduled/oneshot 任務:
+- `trigger_started` → `script_run_started`/`script_run_finished`(script 型)或
+  `attempt_finished`(agent 型)→ `trigger_finished`(`outcome`)。
+- ⚠️ `trigger_error` / `dispatch_error`(`error`):觸發或派工時擲例外。連看 `error`
+  字串 + poller 主控台輸出。
+
+**G. 額度閘 + 觀測(poller/control_api/dispatcher/retention)**:
+- `queued`(`engine`/`profile`):F1 分層額度滿 → 排隊(FIFO)。正常的節流;**大量堆積**
+  = 併發設太低或 agent 跑太久。
+- `jira_write`(`action`/`detail`):harness→Jira 的每次寫入(留言/assign/transition),
+  供 dashboard 事件時間軸顯示。
+- `transcript_packed`(`reason`):打包 transcript(換手/交人/evict/close/按鈕觸發)。
+- `workspace_reclaimed`(`age_days`/`outcome`):保留策略回收老 workspace。
+
+## 4. 串一張票 end-to-end(典型序列)
+
+用事件序列快速判讀一張票走到哪、哪裡不對(照 `key` 篩出時間線後對照):
+
+- **正常成功**:`new_issue` → `route_matched` → `session_created` → `attempt_started`
+  → `attempt_finished(raw=completed)` → `resolved` →(HIL(End) 評分)`score_requested`
+  → `hil_submitted` → `closed`。
+- **失敗**:… → `attempt_finished(raw=error, error_kind=…)` →(retry 數輪)→ `pending
+  (reason=…)` 或 `resolved(FAILURE)`。看 `error_kind`(infra/stalled/task/no-terminal)
+  分辨基礎設施 vs 任務問題。
+- **卡住等人**:… → `hil_requested`/`score_requested` → `score_reminded`×N →
+  `hil_stalled`。停在這串沒後續 = 等人填表單(去看 Jira 那張票的 @mention + 表單連結)。
+- **crash 後續跑**:… → `attempt_started` →(崩)→ 下輪 `attempt_crash_recovered
+  (resume=true)` → `attempt_finished`。`truly_resumed=true` 代表沒重工。
+- **被驅逐後回收**:`evicted` →(下輪)`attempt_crash_recovered` 續跑。evict 不耗
+  attempt、不重花錢。
+
+## 5. dashboard 定位(有畫面時)
+
+`scripts/detail_server.py` 起唯讀 dashboard:總覽 KPI(進行中/排隊/HIL/成功/失敗率)、
+每張票詳情頁的**事件時間軸**(就是 journal 的視覺化,含 HH:MM 的 jira_write/handoff/
+評分)、狀態機圖、transcript 檢視。離線內網完全可用(所有元件 vendored、零外部依賴)。
+沒有畫面時,§2 的 journal 查法 + §4 的序列對照就足以定位。
+
+## 6. 維護:防止字典漂移
+
+事件字典的自動表對應 code；改了 `store.journal(...)` 的事件名/欄位後:
+
+```bash
+python3 scripts/gen_event_dict.py            # 看新表
+python3 scripts/gen_event_dict.py --check    # 比對本文內嵌區塊是否一致(不一致回非 0)
+```
+
+把新輸出貼回 §3 的 `BEGIN/END gen_event_dict` 標記區塊即可。語意分組(§3 手寫段)請
+一併補上新事件的一行說明。

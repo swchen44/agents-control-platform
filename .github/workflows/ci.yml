@@ -46,3 +46,5 @@ jobs:
           uv run python tests/harness_selftest.py
           uv run python tests/e2e_dashboard.py
           uv run python tests/e2e_form.py
+          # journal 事件字典未隨 code 漂移(docs/design/observability.md)
+          uv run python scripts/gen_event_dict.py --check

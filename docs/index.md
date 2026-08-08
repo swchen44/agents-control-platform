@@ -12,7 +12,20 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 | **想看全貌** | [專案檔案介紹](project-overview.md) — 目錄地圖、每個檔案在幹嘛 |
 | **想懂「為什麼這樣設計」** | [需求與理由](requirements.md) — 每個能力的 What / Why / 現狀 |
 | **想懂重大決策** | [決策記錄](decisions.md) — 關鍵取捨與理由(ADR-lite) |
+| **要除錯/分析** | [除錯 runbook](troubleshooting.md) — 症狀 → 診斷 → 處置 |
+| **在離線內網(AI/人)** | [離線除錯導引](ai-debugging.md) — 凍結 snapshot 的工作守則與起點 |
 | **有疑問** | [FAQ](faq.md) |
+
+## 除錯 / 可觀測
+
+離線內網除錯的地基(交付為凍結 snapshot,只能靠 repo 內文件 + runtime 證據):
+
+- **[離線除錯導引](ai-debugging.md)** — 給 AI/人的起點:離線守則、標準除錯路徑、關鍵不變量。
+- **[除錯 runbook](troubleshooting.md)** — 症狀導向:票沒被處理、卡住、假完成、runner
+  失敗、resume/冪等、Jira 降級、指令、花費、dashboard。
+- **[可觀測性](design/observability.md)** — 證據地圖(journal/db/transcript/dashboard)、
+  怎麼讀 journal、**42 種事件字典**、典型事件序列。
+- **[LESSONS](lessons.md)** — 歷史踩坑全紀錄(症狀 → 根因 → 對策)。
 
 ## 深入設計
 
@@ -20,6 +33,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 [生命週期](design/lifecycle.md) ·
 [模組架構](design/architecture.md) ·
 [互動服務(HIL 人機介面)](design/interaction.md) ·
+[可觀測性](design/observability.md) ·
 [執行隔離](design/isolation.md) ·
 [冪等](design/idempotency.md) ·
 [熱重載](design/hotreload.md) ·

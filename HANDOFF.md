@@ -324,7 +324,7 @@ AgentBase 子類——**C 不用 fork**;真 `claude -p` 已在 OpenHands Convers
   → A 路 grader 驗證 → 帶證據回寫 comment → 冪等不重派。三態 outcome
   (UNKNOWN=行程消失→pending:unknown 只有人解)、ticket_session 對映表、
   agent 設定獨立區塊(B→C 只換 inner runner + 該區塊)。
-計畫:`harness/PLAN_B.md`;教訓:`harness/LESSONS.md`。
+計畫:`harness/PLAN_B.md`;教訓:`docs/lessons.md`。
 環境:Atlassian Cloud swchen44,project **key=SCRUM**(名稱 AgentLifetimeBoardv1)、
 憑證 `~/.env`(不入 repo)、issue type 中文(任務)。
 - Phase 2 殘項:fault-injection E2E 6/6(retry+evidence+truly_resumed 實證、

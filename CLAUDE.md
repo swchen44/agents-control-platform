@@ -3,6 +3,11 @@
 **開始工作前,先讀 `HANDOFF.md`** — 它有專案目標、已敲定的決策(勿再問)、
 三條實作路線的真實狀態、已實測的事實、PoC 跑法、下一步清單。
 
+**要除錯或分析(尤其在離線內網的凍結 snapshot)→ 先讀 [`docs/ai-debugging.md`](docs/ai-debugging.md)**
+—— 離線工作守則、標準除錯路徑([troubleshooting](docs/troubleshooting.md) →
+[observability](docs/design/observability.md) → [lessons](docs/lessons.md))、關鍵不變量。
+文件總覽見 [`docs/index.md`](docs/index.md)。
+
 ## 專案一句話
 
 讓 `claude -p` / `codex exec` 等 headless coding agent 能長時間可靠執行、可 trace、

@@ -6,6 +6,12 @@
 ## [Unreleased]
 
 ### Added
+- **離線內網文件自足(W13)**:為「交付到內網當凍結 snapshot、只能靠 repo 內文件除錯」
+  而補的除錯層 —— `docs/ai-debugging.md`(離線工作守則 + 標準除錯路徑 + 關鍵不變量)、
+  `docs/troubleshooting.md`(症狀導向 runbook)、`docs/design/observability.md`(證據地圖 +
+  **journal 42 事件字典** + 典型事件序列);`scripts/gen_event_dict.py` 掃 code 產生事件字典
+  (混合:自動列表 + 手寫語意,`--check` 防漂移已入 CI);`harness/LESSONS.md` → `docs/lessons.md`
+  並入 index;CLAUDE.md 指向除錯導引。
 - **專業化打包(W12)**:src-layout(`src/arcp/`)、`pyproject.toml`(hatchling,
   Python ≥ 3.10)、`uv.lock`、MIT `LICENSE`;GitHub Actions **CI**(3.10–3.13 矩陣:
   ruff + build + 離線測試)與 **CD**(tag → GitHub Release);`routes.example.yaml`
