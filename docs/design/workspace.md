@@ -42,7 +42,8 @@ config/
 ```
 provision(ticket, profile):
   ws = runtime/tickets/<workspace_folder>/ws            # issue_id 命名,resume-safe
-  若 ws 已存在 → 回傳 ws(resume:下列全跳過)             ⚠️ 冪等關鍵
+  若 ws 完整(有 .arcp_provisioned 或既有 TICKET.md)→ 只跳到 step 5(resume)  ⚠️ 冪等
+  若 ws 不完整(install 中途 crash:無 marker 且無 TICKET.md)→ rmtree 重建   ⚠️ 原子性
   全新建立(依序;任一步失敗 → provisioning 失敗,該 attempt 記 infra error):
 
   1. mkdir ws
@@ -54,7 +55,8 @@ provision(ticket, profile):
         config/skills/<name>/ → <skills 目標>/<name>/      (目標解析見下)
   4. inject:profile.inject_md 為 true 且 config/templates/inject_claude_md_end.md 存在時,
         把該檔內容(marker 包住)append 到 <md 目標> 尾    (目標解析見下)
-  5. 寫 ws/TICKET.md
+  4b. 寫 .arcp_provisioned(commit marker;到這裡佈建全部成功 → 標記完整)
+  5. 寫 ws/TICKET.md(每輪刷新,見下)
   回傳 ws
 ```
 

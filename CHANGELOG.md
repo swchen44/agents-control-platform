@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- **workspace 佈建原子性(A2/#11)**:install 腳本路徑原本非原子(中途 crash → 半殘 ws
+  被下次 provision 當「已建」沿用)。改用 `.arcp_provisioned` commit marker:佈建全部成功
+  才立;不完整(無 marker 且無 TICKET.md)→ rmtree 重建;既有 ws grandfather 不動。
+  釐清後**不建 qm 式 tool-output ledger**(重工:agent 靠 native resume、harness 副作用靠
+  at-most-once、HIL 靠一次性 token,A2 目標已達成)—— 見 idempotency.md A2 結論。
+
 ### Added
 - **trace 完整性自檢(C2,v5 唯一 P1 硬 KPI)**:`scripts/trace_lint.py` 掃 runtime,確認
   每個跑過的 attempt L0–L3 四層證據齊全(completed/error 必須有 envelope+events;UNKNOWN

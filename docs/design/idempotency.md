@@ -25,6 +25,8 @@
 | 7 | provision(template 複製) | copytree→tmp→rename | 半成品目錄 | 原子 rename;殘留 tmp 重跑先清 | ✓(W1) |
 | 8 | description 分區段寫入 | 讀最新→只換區塊→寫回 | 重寫同內容 | hash 冪等(沒變不重寫);機器段 hash 防篡改 | ✓(W2.2) |
 | 9 | journal(events.jsonl append) | append-only | 重複行(見 #1) | 消費端(dashboard/detail)按 type 彙總,容忍重複 | ✓ 設計即容忍 |
+| 10 | HIL 一次性表單提交(W11:human 段/稽核 comment/transition/resume) | 提交→回寫→`upsert_interaction(status=submitted)` | 同一 token 重放 | **一次性 token**:`is_open()`=status==PENDING;提交後轉 submitted,form_server 擋二次提交(= 內建 dedup key) | at-least-once + 冪等(token 去重),可接受(稽核 comment 極端窗口可能重一則) |
+| 11 | workspace 佈建(W15:install 腳本 / copytree / skills / inject) | 佈建全成功才寫 `.arcp_provisioned` marker | install 中途 crash → 半殘 ws | **W18 修**:marker=commit;provision 進入時「不完整(無 marker 且無 TICKET.md)」→ rmtree 重建;grandfather 既有 ws(有 TICKET.md 者視為完整) | **at-most-once / all-or-nothing ✓(W18)** |
 
 ## 本波(W3.2)動作
 
@@ -39,3 +41,19 @@
 - comment 內容級冪等 key(掃舊留言防重)——每輪 poll 掃 comment 成本高,
   且 #3/#4 的寫入順序已達 at-most-once,無需求場景。
 - #5 的 sid 預派(牽動 rawcli agent 介面與三 backend,W4+ 單獨做)。
+
+## A2 結論(W18):不建 qm 式 tool-output ledger
+
+BACKLOG A2 原意 = 抄 qm 的 tool-output ledger 避免 resume 重複副作用。**釐清邊界後判定
+在 ARCP 屬重工、不建**:
+
+- **agent 工具調用**:靠 native resume(CLI 自己重放 session,已完成工具不重跑)——
+  ARCP 根本不重呼叫工具(#5/#6)。
+- **harness 副作用**:靠「先持久化 store 再外寫」的 **at-most-once**(#1–#4/#8/#9)——
+  **構造上不會重複**(只會漏,可從 journal 補看)。ARCP 本就不重試副作用,沒有 qm 那種
+  「at-least-once 需 ledger 去重」的場景。
+- **HIL 表單**:一次性 token 狀態即 dedup(#10)。
+
+qm 需要 ledger 是因為它 at-least-once + 重試;ARCP 走 at-most-once + native resume + 一次性
+token,A2 的目標(不產生重複副作用)已達成。真正的殘缺是 **#11 install 原子性**(W15 引入),
+已於 W18 用 `.arcp_provisioned` commit marker 補上。

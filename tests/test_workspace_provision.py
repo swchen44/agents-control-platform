@@ -120,5 +120,27 @@ check("TICKET.md:含驗收標準(由 verify 渲染)",
       "驗收標準" in md and "DONE.md" in md)
 check("TICKET.md:含 Jira 連結", "https://x.atlassian.net/browse/SCRUM-7" in md)
 
+# ── 佈建原子性(A2:半殘 ws 重建 / 完整 ws 保留)────────────────────── #
+root = tempfile.mkdtemp()
+prof = _P(workspace_template="empty", inject_md=False)
+ws = w.provision(root, _tk(), prof)               # 首次:完整佈建
+check("原子性:完整佈建有 .arcp_provisioned marker",
+      os.path.isfile(os.path.join(ws, ".arcp_provisioned")))
+open(os.path.join(ws, "instance_state.txt"), "w").write("half-done work")
+ws2 = w.provision(root, _tk(), prof)              # resume:完整 → 不重建
+check("原子性:完整 ws resume 保留 instance 狀態",
+      ws2 == ws and os.path.isfile(os.path.join(ws, "instance_state.txt")))
+
+# 模擬 install 中途 crash 的半殘 ws:目錄在、有殘檔、無 marker 無 TICKET.md
+half = os.path.join(tempfile.mkdtemp(), "tickets", "7", "ws")
+os.makedirs(half); open(os.path.join(half, "PARTIAL_junk"), "w").write("x")
+root2 = os.path.dirname(os.path.dirname(os.path.dirname(half)))
+prof2 = _P(workspace_folder="tickets/{issue_id}", workspace_template="empty",
+           inject_md=False)
+ws3 = w.provision(root2, _tk(), prof2)            # 應偵測不完整 → rmtree 重建
+check("原子性:半殘 ws(無 marker/TICKET.md)被清掉重建",
+      not os.path.isfile(os.path.join(ws3, "PARTIAL_junk"))
+      and os.path.isfile(os.path.join(ws3, ".arcp_provisioned")))
+
 print(f"test-workspace-provision: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

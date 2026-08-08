@@ -151,7 +151,17 @@ def provision(root: str, ticket: Ticket, profile: Profile,
         agent=_slug(profile.name), key=_slug(ticket.key), issue_id=ticket.id))
     ws = os.path.join(base, "ws")
 
-    if not os.path.isdir(ws):                           # 全新建立
+    # 佈建原子性(A2 冪等):`.arcp_provisioned` = commit marker,佈建全部成功才寫。
+    # 完整判定 grandfather 既有 workspace(有 TICKET.md 的舊 ws 視為完整,不誤刪);
+    # ws 存在但「不完整」(install 中途 crash → 無 marker 也無 TICKET.md)→ 清掉重建,
+    # 避免用半殘 workspace。resume(完整 ws)則整段跳過。
+    marker = os.path.join(ws, ".arcp_provisioned")
+    complete = os.path.isdir(ws) and (
+        os.path.isfile(marker) or os.path.isfile(os.path.join(ws, "TICKET.md")))
+
+    if not complete:
+        if os.path.isdir(ws):
+            shutil.rmtree(ws)                           # 清半殘,重建
         os.makedirs(base, exist_ok=True)
         tpl_root = templates_dir() or "."
         if profile.workspace_install:                   # 2a. install 腳本佈建
@@ -160,13 +170,9 @@ def provision(root: str, ticket: Ticket, profile: Profile,
                    if profile.workspace_template != "empty" else tpl_root)
             timeout = float(profile.agent.get("timeout_sec", 300)) + 120
             _run_install(ws, tpl, profile.workspace_install, timeout)
-        elif profile.workspace_template != "empty":     # 2b. copytree(atomic)
+        elif profile.workspace_template != "empty":     # 2b. copytree
             template = os.path.join(tpl_root, profile.workspace_template)
-            tmp = ws + ".tmp"
-            if os.path.isdir(tmp):
-                shutil.rmtree(tmp)
-            shutil.copytree(template, tmp)
-            os.rename(tmp, ws)
+            shutil.copytree(template, ws)
         else:                                           # 2c. 空 ws
             os.makedirs(ws, exist_ok=True)
         for skill_path in profile.skills:               # 3a. 舊 file-based skills(相容)
@@ -177,6 +183,8 @@ def provision(root: str, ticket: Ticket, profile: Profile,
         _copy_common_skills(ws, profile.common_skills)  # 3b. common skills(選子集)
         if profile.inject_md:                           # 4. inject md
             _apply_inject(ws)
+        with open(marker, "w") as f:                    # ← commit:全部成功才立 marker
+            f.write("ok\n")
 
     with open(os.path.join(ws, "TICKET.md"), "w") as f:  # 5. 任務簡報(每輪刷新)
         f.write(render_ticket_md(ticket, profile, base_url))

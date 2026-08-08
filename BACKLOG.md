@@ -11,6 +11,8 @@
 | **W13** | 離線內網文件自足(AI 自我除錯):ai-debugging / troubleshooting / observability(journal 事件字典,`gen_event_dict --check` 入 CI)+ docs/history + docs/lessons | ✅ 見 §主題 H |
 | **W14** | 研究策展 `docs/research/`(結論比較文 + 原始長文合併)+ **消除 harness/** → `config/` + `vendor/` + `runtime/`,路徑全走 `arcp.paths`;順修 W12.1 遺留 `_HARNESS_ROOT` bug | ✅ CI 綠 |
 | **W15** | workspace 佈建三能力:`workspace_install`(安裝命令)/ `common_skills`(選子集)/ `inject_md`;統一目標解析;TICKET.md 加 goal/驗收/Jira 連結;12 檢查測試 + config 範例 | ✅ 見 [design/workspace.md](docs/design/workspace.md) |
+| **C2** | trace 完整性自檢 `scripts/trace_lint.py`(L0–L3 齊全,UNKNOWN 依設計可缺)+ 6 情境測試 | ✅ 見 [design/observability.md](docs/design/observability.md) §6 |
+| **A2** | tool-output ledger（冪等） | ✅**釐清後不建 ledger(重工)**:agent 工具靠 native resume、harness 副作用靠 at-most-once 寫入順序、HIL 靠一次性 token,A2 目標已達成;唯一殘缺 = W15 install 原子性,已用 `.arcp_provisioned` marker 補。見 [design/idempotency.md](docs/design/idempotency.md) A2 結論 |
 
 **仍待辦(需真 Jira/agent,我不能替跑):**
 
