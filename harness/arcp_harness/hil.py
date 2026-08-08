@@ -99,7 +99,9 @@ def apply_submission(source, store, req: InteractionRequest, *,
                     request_id=req.request_id))
             else:                              # close:人授權 → 系統轉 Done
                 store.upsert_session(sess)
-                if source.transition(req.issue_id, "Done"):
+                # transition() 比對 statusCategory key(小寫 new/indeterminate/
+                # done),非狀態名——真 Jira curl 測抓到:須傳 "done" 非 "Done"
+                if source.transition(req.issue_id, "done"):
                     evs.append(store.journal(       # closed(有別於 SUCCESS 的
                         "closed", req.issue_id, req.key, by="human",  # resolved)
                         request_id=req.request_id))

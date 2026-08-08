@@ -121,7 +121,7 @@ def main() -> int:
                          {"human_score": "9", "close_decision": "close",
                           "note": "LGTM"})
         check("score close:已提交頁", st == 200 and "已提交" in html)
-        check("score close:系統轉 Jira Done", (10024, "Done") in src.transitions)
+        check("score close:系統轉 Jira Done", (10024, "done") in src.transitions)
         check("score close:稽核 comment",
               any("已收到表單回填" in c for _i, c in src.comments))
         check("score close:回寫 human 段(updated+值,區塊外原文保留)",

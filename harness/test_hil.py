@@ -93,7 +93,7 @@ def test_apply_score_close_records_score_and_transitions_done():
     st.upsert_interaction(req)
     evs = apply_submission(src, st, req, now=100.0)
     assert st.get_session(1).human_score == 8
-    assert (1, "Done") in src.transitions                 # 系統授權轉 Done
+    assert (1, "done") in src.transitions                 # 系統授權轉 Done
     assert any(e["type"] == "closed" for e in evs)
     st.close()
 
