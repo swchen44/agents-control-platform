@@ -94,37 +94,68 @@ def collect_budget_override(description: str | None) -> float | None:
     return f if f > 0 else None
 
 
-class ScoreGate:
-    """每輪對終態未評分的票:抓分數(→journal)或週期催評。"""
+STALL_REMINDERS = 10             # W11:N 次無回應 → 記異常(可設)
 
-    def __init__(self, source, store, interval_sec: float = REMIND_INTERVAL_SEC):
+
+class ScoreGate:
+    """W11:終態(SUCCESS/FAILURE/UNKNOWN)未評分的票 → 確保有一張 score_and_close
+    一次性表單(@mention+連結);逾期未回週期催辦,多次無回應記異常。評分/關單/續跑
+    由表單提交(hil.apply_submission)完成——**不再讀描述 score**(全面替換)。"""
+
+    def __init__(self, source, store, base_url: str = "", mention: str = "",
+                 interval_sec: float = REMIND_INTERVAL_SEC, ttl_sec: float = 0.0,
+                 stall_after: int = STALL_REMINDERS):
         self.source = source
         self.store = store
+        self.base_url = base_url
+        self.mention = mention
         self.interval = interval_sec
+        self.ttl = ttl_sec
+        self.stall_after = stall_after
 
     def on_poll(self, ticket, session, now: float | None = None) -> list[dict]:
-        if session is None or session.outcome not in ("SUCCESS", "FAILURE"):
+        if session is None or session.outcome not in (
+                "SUCCESS", "FAILURE", "UNKNOWN"):       # W10:UNKNOWN 也進 HIL(End)
             return []
         if session.human_score is not None:
-            return []                     # 已評分,不重抓/不催
+            return []                     # 已評分(表單提交時記入),不重發/不催
         now = time.time() if now is None else now
-        score = collect_score(ticket.description or "")
-        if score is not None:
-            session.human_score = score
-            self.store.upsert_session(session)
-            self.source.add_comment(
-                ticket.id,
-                f"[agent] 已收到完成度評分:{score}/{SCORE_MAX}"
-                f"({score * 10}%),謝謝!")
-            return [self.store.journal(
-                "human_score", ticket.id, ticket.key,
-                score=score, pct=score * 10, outcome=session.outcome)]
-        if now - (session.score_reminded_at or 0.0) >= self.interval:
-            session.score_reminded_at = now
-            self.store.upsert_session(session)
-            self.source.add_comment(ticket.id, (
-                f"[agent] 這張票已 {session.outcome},尚未評分。請在 description 的 "
-                f"[ARCP owner=human] 段填 `score: <{SCORE_MIN}–{SCORE_MAX}>`"
-                f"(對照 agent:{session.profile} 段的目標的完成度)。"))
-            return [self.store.journal("score_reminded", ticket.id, ticket.key)]
-        return []
+        from .hil import form_link, request_human
+        reqs = [r for r in self.store.interactions_for_ticket(ticket.id)
+                if r.schema_id == "score_and_close"]
+        if not reqs:                       # 首次:發 score_and_close 表單
+            req = request_human(
+                self.source, self.store, ticket.id, ticket.key,
+                "score_and_close", question="請評分並裁決:關單或續跑",
+                payload_extra={"title": (ticket.summary or "")[:120],
+                               "agent_state": "HIL(End)",
+                               "grader": session.outcome,
+                               "agent_score": getattr(session, "agent_score",
+                                                      None)},
+                base_url=self.base_url, mention=self.mention,
+                ttl_sec=self.ttl, now=now)
+            return [self.store.journal("score_requested", ticket.id,
+                                       ticket.key, request_id=req.request_id)]
+        pend = [r for r in reqs
+                if r.status == "pending" and not r.is_expired(now)]
+        if not pend:                       # 已提交 / 全逾期 → 不催
+            return []
+        r = pend[0]
+        # 首次催辦以「建立時間」起算(剛發完表單不該立刻催)
+        if now - (r.reminded_at or r.created_at) < self.interval:
+            return []
+        r.reminders += 1
+        r.reminded_at = now
+        self.store.upsert_interaction(r)
+        at = f"[~accountid:{self.mention}] " if self.mention else ""
+        self.source.add_comment(
+            ticket.id,
+            f"[agent] {at}此票已 {session.outcome},尚待評分/裁決(第 "
+            f"{r.reminders} 次提醒)。請填:{form_link(self.base_url, r.token)}")
+        evs = [self.store.journal("score_reminded", ticket.id, ticket.key,
+                                  reminders=r.reminders)]
+        if r.reminders >= self.stall_after:      # W11:多次無回應 → 異常記號
+            evs.append(self.store.journal(
+                "hil_stalled", ticket.id, ticket.key, reminders=r.reminders,
+                request_id=r.request_id))
+        return evs

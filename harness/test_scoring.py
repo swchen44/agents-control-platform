@@ -114,18 +114,26 @@ def _jrn(store):
     return [json.loads(x) for x in open(store.journal_path) if x.strip()]
 
 
-def test_gate_captures_score():
+def test_gate_requests_score_form():
+    # W11:終態未評分 + 無既有請求 → 發 score_and_close 表單(@mention+連結)
     root = tempfile.mkdtemp()
     store = Store(root)
     store.upsert_session(_sess(root))
     src = MockSource()
-    gate = ScoreGate(src, store)
-    ev = gate.on_poll(_ticket(desc=_desc_with_score(8)), store.get_session(1),
+    gate = ScoreGate(src, store, base_url="http://x:8790", mention="acc-1")
+    ev = gate.on_poll(_ticket(summary="修 login"), store.get_session(1),
                       now=1000.0)
-    assert any(e["type"] == "human_score" and e["score"] == 8
-               and e["pct"] == 80 for e in ev)
-    assert store.get_session(1).human_score == 8            # 存進 session
-    assert any("8/10" in c for _, c in src.comments)        # 回饋留言
+    assert any(e["type"] == "score_requested" for e in ev)
+    reqs = store.interactions_for_ticket(1)
+    assert len(reqs) == 1 and reqs[0].schema_id == "score_and_close"
+    assert reqs[0].payload["grader"] == "SUCCESS"           # 三訊號之一
+    _iid, body = src.comments[0]
+    assert f"http://x:8790/form/{reqs[0].token}" in body     # 一次性連結
+    assert "[~accountid:acc-1]" in body                      # @mention
+    # 再 poll:已有請求且未逾期、未達催辦間隔 → 不重發
+    ev2 = gate.on_poll(_ticket(summary="修 login"), store.get_session(1),
+                       now=1000.0)
+    assert ev2 == [] and len(store.interactions_for_ticket(1)) == 1
     store.close()
 
 
@@ -134,8 +142,7 @@ def test_gate_already_scored_noop():
     store = Store(root)
     store.upsert_session(_sess(root, human_score=5))
     gate = ScoreGate(MockSource(), store)
-    assert gate.on_poll(_ticket(desc=_desc_with_score(9)),
-                        store.get_session(1), now=1e9) == []
+    assert gate.on_poll(_ticket(), store.get_session(1), now=1e9) == []
     assert store.get_session(1).human_score == 5            # 不覆蓋
 
 
@@ -144,36 +151,54 @@ def test_gate_non_terminal_noop():
     store = Store(root)
     store.upsert_session(_sess(root, outcome=None))          # 進行中
     gate = ScoreGate(MockSource(), store)
-    assert gate.on_poll(_ticket(desc=_desc_with_score(9)),
-                        store.get_session(1), now=1e9) == []
+    assert gate.on_poll(_ticket(), store.get_session(1), now=1e9) == []
+    assert store.interactions_for_ticket(1) == []            # 不發表單
 
 
 def test_gate_reminder_rate_limited():
     root = tempfile.mkdtemp()
     store = Store(root)
-    store.upsert_session(_sess(root, score_reminded_at=0.0))
+    store.upsert_session(_sess(root))
     src = MockSource()
-    gate = ScoreGate(src, store, interval_sec=3600)
-    t = _ticket(desc="沒填 score")
-    # 首次(now 距 0 已 >1h)→ 催 + 記時間
-    ev1 = gate.on_poll(t, store.get_session(1), now=10000.0)
-    assert any(e["type"] == "score_reminded" for e in ev1)
-    # 30 分後 → 不催(未達間隔)
-    ev2 = gate.on_poll(t, store.get_session(1), now=10000.0 + 1800)
-    assert ev2 == []
-    # 再過 1 小時 → 再催
-    ev3 = gate.on_poll(t, store.get_session(1), now=10000.0 + 3700)
-    assert any(e["type"] == "score_reminded" for e in ev3)
+    gate = ScoreGate(src, store, base_url="http://x", interval_sec=3600)
+    t = _ticket(summary="s")
+    # 首輪:發表單(score_requested)
+    ev0 = gate.on_poll(t, store.get_session(1), now=10000.0)
+    assert any(e["type"] == "score_requested" for e in ev0)
+    # 距上次 <1h → 不催
+    assert gate.on_poll(t, store.get_session(1), now=10000.0 + 1800) == []
+    # 過 1 小時 → 催辦(第 1 次)
+    ev1 = gate.on_poll(t, store.get_session(1), now=10000.0 + 3700)
+    assert any(e["type"] == "score_reminded" and e["reminders"] == 1
+               for e in ev1)
+    store.close()
+
+
+def test_gate_stall_after_many_reminders():
+    root = tempfile.mkdtemp()
+    store = Store(root)
+    store.upsert_session(_sess(root))
+    src = MockSource()
+    gate = ScoreGate(src, store, base_url="http://x", interval_sec=1,
+                     stall_after=3)
+    t = _ticket(summary="s")
+    gate.on_poll(t, store.get_session(1), now=0.0)       # 發表單
+    stalled = False
+    for i in range(1, 6):
+        ev = gate.on_poll(t, store.get_session(1), now=float(i))
+        if any(e["type"] == "hil_stalled" for e in ev):
+            stalled = True
+    assert stalled                                        # 多次無回應 → 記異常
     store.close()
 
 
 def test_poller_wires_scoregate():
-    """整合:OuterLoop.poll_once 對終態未評分的票會呼 ScoreGate 抓分。"""
+    """整合:OuterLoop.poll_once 對終態未評分的票會呼 ScoreGate 發表單請求。"""
     from arcp_harness.poller import OuterLoop
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
     store.upsert_session(_sess(root))                    # 終態 SUCCESS、未評分
-    t = _ticket(desc=_desc_with_score(9), state="To Do")
+    t = _ticket(summary="s", state="To Do")
 
     class FS(MockSource):
         def search(self, jql, max_results=50):
@@ -183,10 +208,11 @@ def test_poller_wires_scoregate():
             return []
 
     src = FS()
-    loop = OuterLoop(src, store, [], "jql", scoregate=ScoreGate(src, store))
+    loop = OuterLoop(src, store, [], "jql",
+                     scoregate=ScoreGate(src, store, base_url="http://x"))
     ev = loop.poll_once()
-    assert any(e["type"] == "human_score" and e["score"] == 9 for e in ev)
-    assert store.get_session(1).human_score == 9
+    assert any(e["type"] == "score_requested" for e in ev)
+    assert len(store.interactions_for_ticket(1)) == 1
     store.close()
 
 
