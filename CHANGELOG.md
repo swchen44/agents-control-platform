@@ -41,4 +41,4 @@
 
 ---
 
-*W1–W8 的完整歷程見 `HANDOFF.md` 與 `harness/PLAN_wave*.md`。*
+*W1–W8 的完整歷程見 `HANDOFF.md` 與 `docs/history/PLAN_wave*.md`。*

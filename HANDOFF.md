@@ -42,11 +42,11 @@
 研究/PoC(§1-6)之後已進入**分波實作**。優先級與波次見 `BACKLOG.md`;橫切設計(審批門
 + assignee=資源開關 + template→workspace)見 `docs/design/lifecycle.md`。
 
-- **W1 地基 ✅(M10)** `harness/PLAN_wave1.md`:provision(template→workspace、resume-safe
+- **W1 地基 ✅(M10)** `docs/history/PLAN_wave1.md`:provision(template→workspace、resume-safe
   命名 `agent__key__issue_id`)、A3 Jira 限速退避、A4 budget 上限、G1 agent 結構化契約
   `{reason,status,next}`(claude `--json-schema`/codex `--output-schema`,真跑驗過)、
   F1 分層資源閘門(全局+per-engine+per-profile+QUEUED+inactive)。6/6 綠。
-- **W2 全部完成 ✅(M11+M12)** `harness/PLAN_wave2.md`:W2.1 logging+ruff baseline、
+- **W2 全部完成 ✅(M11+M12)** `docs/history/PLAN_wave2.md`:W2.1 logging+ruff baseline、
   W2.2 分區段+hash(**已按 2026-08-05 定案版面重構**:ARCP 區塊置頂+human 前置+結束
   標記+全掃描驗 hash 並 log+區塊外不碰)、W2.3 起點審批門(plan 寫分區段/填表放行/
   退回迴圈/escalate)、W2.4 assignee=資源開關(交人=inactive 讓出額度、回機器人=
@@ -56,7 +56,7 @@
   壞 config 不死)、W2.7 web dashboard(狀態徽章+FIFO 排隊位+C4 總覽卡+控制列+
   審批卡;獨立只讀頁 8788,control 8787,CORS 打通)。11 個 test_*.py + selftest +
   e2e_gate + e2e_dashboard 全綠,ruff clean。
-- **W3 全部完成 ✅(M13+M14,2026-08-06)** `harness/PLAN_wave3.md`:W3.1 codex
+- **W3 全部完成 ✅(M13+M14,2026-08-06)** `docs/history/PLAN_wave3.md`:W3.1 codex
   第二引擎真跑(envelope 同形+native resume+G1 雙引擎契約;揪出並修 OpenAI
   strict schema、瞬態 error 污染 envelope)、W3.2 A2 冪等分層
   (`docs/design/idempotency.md` 9 路徑盤點;approval gate 先持久化後外寫)、
@@ -66,7 +66,7 @@
   W3.5 C3 KPI(human_minutes_est→節省人時卡+時薪對比)、W3.6 D1 隔離介面
   (provider 可插拔、`docs/design/isolation.md`、介面先行不實驗)。
   16 個 test_*.py + selftest + e2e_gate/dashboard/codex/contract 全綠。
-- **W4 全部完成 ✅(M15+M16,2026-08-06)** `harness/PLAN_wave4.md`:transcript
+- **W4 全部完成 ✅(M15+M16,2026-08-06)** `docs/history/PLAN_wave4.md`:transcript
   可視化閉環 —— vendor claude-code-log(MIT,`tools/cclog/`+NOTICE;cchv 因
   export 丟 sidechain 棄用)、`render_transcript.py` wrapper(claude+**72
   sub-agent HTML** 實測+codex)、close 打包 transcript.tgz(gzip -9)+dashboard
@@ -92,7 +92,7 @@
   跑,claude/codex/e2e_evict 真跑驗過);routes.yaml 四個 rawcli profile 移除
   venv;openhands-acp/server backend 仍選配(需 venv)。live poller hot reload
   帶入零重啟。
-- **W6 全部完成 ✅(2026-08-07)** `harness/PLAN_wave6.md` + REQUIREMENTS §10:
+- **W6 全部完成 ✅(2026-08-07)** `docs/history/PLAN_wave6.md` + REQUIREMENTS §10:
   W6.1 Server tab(系統/版本/登入狀態只顯布林/資源,純 stdlib)、W6.2 per-process +
   per-workspace(best-effort ps)、W6.3 evict 正名「強制驅逐」+ 計數 + hover、
   W6.4 transcript **移定時快照**改事件觸發 + 被動按鈕(`/gen_transcript`)+ meta.json、
@@ -100,7 +100,7 @@
   W6.6 連線 IP 追蹤、W6.7 per-ticket **事件時間軸**(vendored vis-timeline;source 層
   `on_write`→`jira_write`)。另:`.githooks/pre-commit`(ruff)+ `harness/ruff.toml`
   釘 known-first-party/排除 vendored。
-- **W7 全部完成 ✅(2026-08-07)** `harness/PLAN_wave7.md` + REQUIREMENTS §12
+- **W7 全部完成 ✅(2026-08-07)** `docs/history/PLAN_wave7.md` + REQUIREMENTS §12
   (源自使用者口述 brainstorming,11 題決策樹對齊):W7.1 Profile `goal`/月預算 +
   `est_minutes` 預設 240 + DB `clearquest_id`、W7.2 **人類完成度評分**(終態交人寫
   goal 到 agent 段 + human 段 `score` 0–10,每輪抓分→journal,軟性催評;人關票不變)、
@@ -129,7 +129,7 @@
 - **真 Jira 實測 ✅(2026-08-05,SCRUM-20)**:審批門完整鏈路一次通過 —— ADF 往返
   保真(人 UI 編輯後機器段 hash 仍符)、approver/human_email email→accountId 解析、
   填表放行、fork claude($0.0544)、SUCCESS、冪等、審批中資源開關不誤標。
-  詳 `harness/TEST_real_jira.md` 結果表。未實測(單元測有蓋):退回迴圈、ghost
+  詳 `docs/history/TEST_real_jira.md` 結果表。未實測(單元測有蓋):退回迴圈、ghost
   email 退回、G1 handoff kind=human 指派。
 
 ## 0. 一句話目標
@@ -324,7 +324,7 @@ AgentBase 子類——**C 不用 fork**;真 `claude -p` 已在 OpenHands Convers
   → A 路 grader 驗證 → 帶證據回寫 comment → 冪等不重派。三態 outcome
   (UNKNOWN=行程消失→pending:unknown 只有人解)、ticket_session 對映表、
   agent 設定獨立區塊(B→C 只換 inner runner + 該區塊)。
-計畫:`harness/PLAN_B.md`;教訓:`docs/lessons.md`。
+計畫:`docs/history/PLAN_B.md`;教訓:`docs/lessons.md`。
 環境:Atlassian Cloud swchen44,project **key=SCRUM**(名稱 AgentLifetimeBoardv1)、
 憑證 `~/.env`(不入 repo)、issue type 中文(任務)。
 - Phase 2 殘項:fault-injection E2E 6/6(retry+evidence+truly_resumed 實證、

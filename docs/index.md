@@ -13,6 +13,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 | **想懂「為什麼這樣設計」** | [需求與理由](requirements.md) — 每個能力的 What / Why / 現狀 |
 | **想懂重大決策** | [決策記錄](decisions.md) — 關鍵取捨與理由(ADR-lite) |
 | **想看研究與對照** | [Research](research/README.md) — 研究/實驗的結論比較文章 + 原始長文 |
+| **想看開發歷程** | [History](history/README.md) — 各波實作計畫 + 真 Jira 實測(過程稿) |
 | **要除錯/分析** | [除錯 runbook](troubleshooting.md) — 症狀 → 診斷 → 處置 |
 | **在離線內網(AI/人)** | [離線除錯導引](ai-debugging.md) — 凍結 snapshot 的工作守則與起點 |
 | **有疑問** | [FAQ](faq.md) |

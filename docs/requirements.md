@@ -1,6 +1,6 @@
 # REQUIREMENTS — ARCP harness 需求總表(永久維護,含 Why)
 
-> **這份是「為什麼要有這些能力」的單一真相**。PLAN_wave*.md 是 how/checklist、
+> **這份是「為什麼要有這些能力」的單一真相**。docs/history/PLAN_wave*.md 是 how/checklist、
 > DESIGN_*.md 是機制細節、git log 是流水帳;本檔把它們的 **What / Why / 現狀** 收斂成一頁。
 >
 > **維護規則(務必遵守)**:任何新需求或決策變更,**先更新本檔**(尤其 Why 一定保存),
@@ -213,7 +213,7 @@ dashboard/control 記錄連線 client IP + 時間;Server 頁顯示目前連線 +
 ## 12. W7 新需求(2026-08-07 口述 brainstorming 對齊,R1–R9)
 
 > 來源:使用者口述 brainstorming,經一次一題決策樹對齊(11 題)。**盡量不動 Jira
-> 原生(workflow/權限/jql/關票流程)**,新增欄位皆 additive。實作見 `PLAN_wave7.md`。
+> 原生(workflow/權限/jql/關票流程)**,新增欄位皆 additive。實作見 `docs/history/PLAN_wave7.md`。
 
 ### 12.1 人類完成度評分(R1 / R2)
 AI 做完(SUCCESS **或** FAILURE 終態)交人時,人給 **0–10** 分(內部 ×10 = %),

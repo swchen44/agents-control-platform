@@ -71,7 +71,7 @@ Jira summary 可編輯,**不可入 path**。
 
 > ★ 2026-08-05 升級為**多方分區段**(human/control/agent:<名>各專屬段、機器段附 hash、
 > 區塊置頂 human 前置、開始+結束標記界定、全掃描驗 hash+log、區塊外不碰)。
-> 定案規格見 **PLAN_wave2「分區段 description 規格」**;實作 sections.py 已按定案版面落地
+> 定案規格見 **docs/history/PLAN_wave2「分區段 description 規格」**;實作 sections.py 已按定案版面落地
 > (`parse`→(before,sections,after)、`render` 區塊置頂+canonical 序、`verify_and_restore`
 > 全掃描+log,14 tests 全綠)。
 
