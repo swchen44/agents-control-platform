@@ -88,6 +88,37 @@ def test_summarize():
     assert "8" in s and "close" in s
 
 
+def test_store_roundtrip_and_lookup():
+    """W11.2:互動請求持久化——upsert / get_interaction(token)/ 依票查 / open。"""
+    import tempfile
+
+    from arcp_harness.interaction import SUBMITTED
+    from arcp_harness.store import Store
+    st = Store(tempfile.mkdtemp())
+    r = build_request(10024, "SCRUM-25", "score_and_close",
+                      payload={"grader": "SUCCESS", "agent_score": 7},
+                      ttl_sec=3600, now=1000.0)
+    st.upsert_interaction(r)
+    got = st.get_interaction(r.token)
+    assert got is not None and got.request_id == r.request_id
+    assert got.issue_id == 10024 and got.schema_id == "score_and_close"
+    assert got.payload["grader"] == "SUCCESS" and got.payload["agent_score"] == 7
+    assert got.status == PENDING and got.expires_at == 4600.0
+    assert st.get_interaction("no-such-token") is None
+    # 提交後狀態/內容持久
+    got.status = SUBMITTED
+    got.submission = {"human_score": 8, "close_decision": "close"}
+    got.submitted_by = "Shao-wei"
+    st.upsert_interaction(got)
+    again = st.get_interaction(r.token)
+    assert again.status == SUBMITTED and again.submission["human_score"] == 8
+    assert again.submitted_by == "Shao-wei"
+    # 依票查 + open 過濾(submitted 不算 open)
+    assert len(st.interactions_for_ticket(10024)) == 1
+    assert st.open_interactions_for_ticket(10024, now=2000.0) == []
+    st.close()
+
+
 if __name__ == "__main__":
     ok = True
     for _name, _fn in list(globals().items()):

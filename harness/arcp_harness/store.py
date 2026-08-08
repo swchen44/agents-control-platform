@@ -103,6 +103,27 @@ class Store:
                 name     TEXT PRIMARY KEY,
                 last_run REAL NOT NULL DEFAULT 0
             )""")
+        # W11.2:互動請求(一次性 token 表單)。新表,不動既有 table。
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS interactions (
+                request_id     TEXT PRIMARY KEY,
+                token          TEXT NOT NULL UNIQUE,
+                issue_id       INTEGER NOT NULL,
+                key            TEXT NOT NULL,
+                schema_id      TEXT NOT NULL,
+                schema_version INTEGER NOT NULL,
+                created_at     REAL NOT NULL,
+                expires_at     REAL NOT NULL DEFAULT 0,
+                status         TEXT NOT NULL DEFAULT 'pending',
+                payload        TEXT,
+                submission     TEXT,
+                submitted_at   REAL NOT NULL DEFAULT 0,
+                submitted_by   TEXT NOT NULL DEFAULT '',
+                reminders      INTEGER NOT NULL DEFAULT 0,
+                reminded_at    REAL NOT NULL DEFAULT 0
+            )""")
+        self._db.execute("CREATE INDEX IF NOT EXISTS ix_interactions_issue "
+                         "ON interactions(issue_id)")
         self._migrate()
         self._db.commit()
 
@@ -295,6 +316,67 @@ class Store:
                 INSERT INTO trigger_state (name, last_run) VALUES (?,?)
                 ON CONFLICT(name) DO UPDATE SET last_run=excluded.last_run
             """, (name, ts))
+
+    # -- W11.2 互動請求(一次性 token 表單)------------------------------------ #
+    _IX_COLS = ("request_id, token, issue_id, key, schema_id, schema_version,"
+                " created_at, expires_at, status, payload, submission,"
+                " submitted_at, submitted_by, reminders, reminded_at")
+
+    @staticmethod
+    def _row_to_interaction(row):
+        from .interaction import InteractionRequest
+        return InteractionRequest(
+            request_id=row[0], token=row[1], issue_id=row[2], key=row[3],
+            schema_id=row[4], schema_version=row[5], created_at=row[6],
+            expires_at=row[7], status=row[8],
+            payload=json.loads(row[9]) if row[9] else {},
+            submission=json.loads(row[10]) if row[10] else None,
+            submitted_at=row[11], submitted_by=row[12],
+            reminders=row[13], reminded_at=row[14])
+
+    def upsert_interaction(self, r) -> None:
+        with self._lock, self._db:
+            self._db.execute("BEGIN IMMEDIATE")
+            self._db.execute("""
+                INSERT INTO interactions
+                    (request_id, token, issue_id, key, schema_id,
+                     schema_version, created_at, expires_at, status, payload,
+                     submission, submitted_at, submitted_by, reminders,
+                     reminded_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(request_id) DO UPDATE SET
+                    status=excluded.status, payload=excluded.payload,
+                    submission=excluded.submission,
+                    submitted_at=excluded.submitted_at,
+                    submitted_by=excluded.submitted_by,
+                    reminders=excluded.reminders,
+                    reminded_at=excluded.reminded_at
+            """, (r.request_id, r.token, r.issue_id, r.key, r.schema_id,
+                  r.schema_version, r.created_at, r.expires_at, r.status,
+                  json.dumps(r.payload, ensure_ascii=False),
+                  json.dumps(r.submission, ensure_ascii=False)
+                  if r.submission is not None else None,
+                  r.submitted_at, r.submitted_by, r.reminders, r.reminded_at))
+
+    def get_interaction(self, token: str):
+        """依 token 取請求(表單服務入口用);查無回 None。"""
+        with self._lock:
+            row = self._db.execute(
+                f"SELECT {self._IX_COLS} FROM interactions WHERE token=?",
+                (token,)).fetchone()
+        return self._row_to_interaction(row) if row else None
+
+    def interactions_for_ticket(self, issue_id: int) -> list:
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {self._IX_COLS} FROM interactions WHERE issue_id=?"
+                " ORDER BY created_at", (int(issue_id),)).fetchall()
+        return [self._row_to_interaction(r) for r in rows]
+
+    def open_interactions_for_ticket(self, issue_id: int, now=None) -> list:
+        """該票仍 pending 且未逾期的請求(催辦 / 觸發偵測用)。"""
+        return [r for r in self.interactions_for_ticket(issue_id)
+                if r.is_open(now)]
 
     def close(self) -> None:
         self._db.close()
