@@ -129,8 +129,8 @@ Jira issue ─▶ rule engine(assignee/keyword JSON)─▶ workspace + skills �
   handoff/jira_write/human_score…);ticket 詳情頁的**事件時間軸**由它繪製。
 
 > 完整分層模組架構、職責表、以及 **agent↔agent 交接(同票 `next` vs 跨票 `base` 怎麼選)**
-> 見 [harness/DESIGN_architecture.md](harness/DESIGN_architecture.md)。生命週期細節見
-> [harness/DESIGN_lifecycle.md](harness/DESIGN_lifecycle.md)。
+> 見 [docs/design/architecture.md](docs/design/architecture.md)。生命週期細節見
+> [docs/design/lifecycle.md](docs/design/lifecycle.md)。
 > ⚠️ HIL **行為**(W10.2)與 **a2a base 交接**(W10.3)為目標設計,實作暫緩、待審。
 
 ## 多實例部署(同一台機器並存多個 Control Plane)

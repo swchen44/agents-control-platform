@@ -1,8 +1,8 @@
 # DESIGN_interaction — 互動服務(W11):HIL 人機介面
 
 > 2026-08-08 討論定案(使用者主導 + 修正一份無背景 AI 草案)。取代「人直接編 Jira
-> description free-text」的人機介面。與 [DESIGN_lifecycle.md](DESIGN_lifecycle.md)、
-> [DESIGN_architecture.md](DESIGN_architecture.md) 的 HIL 模型銜接。
+> description free-text」的人機介面。與 [lifecycle.md](lifecycle.md)、
+> [architecture.md](architecture.md) 的 HIL 模型銜接。
 > **屬 runtime 行為,本文件先只寫設計,程式待實作(W11)。**
 
 ## 0. 動機 + Jira 的角色

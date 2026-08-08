@@ -93,7 +93,7 @@ def load_profiles(path: str) -> dict[str, Profile]:
         if venv and not os.path.isdir(venv):
             raise ConfigError(f"profile {name}: agent.venv 不存在: {venv}")
         # template=class:非 "empty" 時視為 template folder path(相對 harness 根),
-        # fork 前整包複製成 workspace instance(DESIGN_lifecycle §1)。fail-fast:
+        # fork 前整包複製成 workspace instance(docs/design/lifecycle.md §1)。fail-fast:
         # 不存在的 template 死在 load,不是 dispatch。
         ws_template = ws.get("template", "empty")
         if ws_template != "empty":

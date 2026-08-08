@@ -741,7 +741,7 @@ def render_control_page() -> str:
             "<p style='color:var(--muted);font-size:12px'>"
             "Pause=只 watch 不派新工(正在跑的不中斷);Reload=熱載 routes.yaml"
             "(壞 config 不生效、舊設定續用);Graceful Shutdown=當前輪(含壓縮"
-            "打包)跑完後 poller 退出。詳見 DESIGN_hotreload.md。即時 kill 單張"
+            "打包)跑完後 poller 退出。詳見 docs/design/hotreload.md。即時 kill 單張"
             "票用 ticket 頁的 Evict。</p></main>"
             f"{_CONTROL_JS}")
 
@@ -2874,7 +2874,7 @@ def render_concepts_page() -> str:
         "<div class='card' style='overflow-x:auto'>" + _arch_doc_table()
         + "</div>"
         + render_graph_section()
-        + "<h2>agent↔agent 交接(兩機制對等,人依場景選;見 DESIGN_architecture)</h2>"
+        + "<h2>agent↔agent 交接(兩機制對等,人依場景選;見 docs/design/architecture.md)</h2>"
         "<div class='card'><ul style='line-height:1.8'>"
         "<li><b>同票換手(swap)→ 回進行中</b>:<b>同一張 Jira、同一個 workspace</b>,"
         "清掉舊 skills/hooks、copy 新 agent template 進原 workspace、重置 session → "

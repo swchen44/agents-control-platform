@@ -56,7 +56,7 @@ def _slug(s: str) -> str:
 def provision(root: str, ticket: Ticket, profile: Profile) -> str:
     """Create (or refresh) the ticket workspace; returns the ws path.
 
-    template=class → workspace=instance (DESIGN_lifecycle §1): when
+    template=class → workspace=instance (docs/design/lifecycle.md §1): when
     profile.workspace_template is a folder path (not "empty"), a fresh instance
     is a copytree of it; skills layer on top. Path is keyed by the never-changing
     issue_id tail so native resume (cwd-bound) survives even if summary/key are

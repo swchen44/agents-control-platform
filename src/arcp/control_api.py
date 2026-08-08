@@ -7,13 +7,13 @@
                   計數 + cost 彙總
   POST /pause   → poller.paused=True(graceful:只 watch 不派新工,正在跑的不中斷)
   POST /resume  → poller.paused=False
-  POST /reload  → reload_fn()(hot reload:範圍見 DESIGN_hotreload.md;
+  POST /reload  → reload_fn()(hot reload:範圍見 docs/design/hotreload.md;
                   壞 config 回 400、舊設定續用、不弄死 poller)
   POST /recover → poller.degraded=False(W11:管理者手動解除 Jira 降級;poll 成功
                   也會自動解除)
   POST /shutdown→ poller.stopping=True(W4.5 graceful:當前 poll 輪——含正在跑
                   的 attempt / 壓縮打包——自然跑完後退出並清理;強制關閉語意
-                  見 DESIGN_hotreload.md)
+                  見 docs/design/hotreload.md)
   POST /evict/<id>       → 寫 EVICT 檔,agent 看門狗 killpg(W5.3 異常處置;
                            active 才准,不耗 attempt,下輪 resume)
   POST /gen_transcript/<id> → 被動產 transcript final HTML(W6.4;完成/等人/

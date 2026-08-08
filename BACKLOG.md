@@ -52,7 +52,7 @@
 
 ### 橫切設計:agent 生命週期 + 審批門(2026-08-04,使用者提)
 
-見 **[harness/DESIGN_lifecycle.md](harness/DESIGN_lifecycle.md)** — template(class)→
+見 **[docs/design/lifecycle.md](docs/design/lifecycle.md)** — template(class)→
 workspace(instance)、命名 resume-safe、起點審批門(description YAML 參數 + assignee 放行 +
 退回迴圈)、**assignee=資源開關**(不在機器人手上就 killpg 釋放 CPU/memory)、無票定時源。
 橫切 F1/F3/G1/A2/E3/N13;profile schema 變更與波次落點見該文 §8-9。

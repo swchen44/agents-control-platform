@@ -1,6 +1,6 @@
 """W11 互動服務核心邏輯:受控表單 schema + 一次性 token + 提交驗證(純邏輯,零副作用)。
 
-取代「人直接編 Jira description free-text」的人機介面(見 DESIGN_interaction.md)。
+取代「人直接編 Jira description free-text」的人機介面(見 docs/design/interaction.md)。
 本模組只負責:版本化表單 schema、token 產生/綁定、Interaction Request 資料模型與狀態、
 提交欄位驗證、回填摘要。**不碰 Jira / HTTP / DB**——HTTP 表單服務、poller 觸發、回寫、
 持久化都在後續增量,依賴本模組的純函式。

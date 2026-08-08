@@ -36,7 +36,7 @@
       改案 vendor claude-code-log(MIT/Python/原生 sidechain/codex beta)
 - [x] sub-agent 枚舉方式確定:新版 Claude Code 子代理在
       `<proj>/<session-id>/subagents/agent-<id>.jsonl` 獨立檔(glob 即得
-      sub-agent id);列入 DESIGN_transcript.md
+      sub-agent id);列入 docs/design/transcript.md
 - [x] vendor:`claude_code_log/` **整包 zero-diff copy** → `harness/tools/cclog/`
       (內部耦合深,拆片段風險高;NOTICE.md 註明出處/v1.5.0/commit 0a3327d/MIT
       + LICENSE.upstream;2.1MB/58 檔進 git);依賴裝 `tools/cclog/.venv`
@@ -104,7 +104,7 @@
 - [x] commit+push
 
 **Phase W4.5 — hot reload / 關閉語意:專門文件 + 缺口補強(使用者 2026-08-06 追加)** ✅
-- [x] **`DESIGN_hotreload.md` 專門文件**:reload=引用替換非交易、範圍表
+- [x] **`docs/design/hotreload.md` 專門文件**:reload=引用替換非交易、範圍表
       (✅routes/jql/concurrency/profiles/triggers/白名單/cancel_states;
       ⚠️進行中 attempt 同輪混用、pin 名字不變;❌間隔/port/bot 身份/憑證/
       程式碼)、graceful(/shutdown 當輪含壓縮自然跑完)、強制關閉語意

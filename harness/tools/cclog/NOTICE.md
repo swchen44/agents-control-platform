@@ -27,7 +27,7 @@ dashboard 本地路徑 `/tvendor/...`;dashboard 另對 transcript HTML 加 CSP
   vendor 於 2026-08-07,來源 `https://unpkg.com/vis-timeline/...`。
   升級:重新 curl 兩檔覆蓋即可(URL 見 render_transcript._CDN_REWRITES)。
 
-## 為什麼選它(W4/V0 除險結論,詳 ../../DESIGN_transcript.md)
+## 為什麼選它(W4/V0 除險結論,詳 ../../docs/design/transcript.md)
 
 Python 同棧可控、**原生渲染 sidechain/agentId(sub-agent)**、
 `--provider codex` 支援 Codex(beta)。前案 cchv-server(Rust prebuilt)

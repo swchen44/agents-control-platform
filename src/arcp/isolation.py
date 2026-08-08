@@ -17,7 +17,7 @@ provider 語意:
   seatbelt     macOS sandbox-exec(已實作、已實測:workspace 可寫、外部擋)
   landlock     Linux LSM(預留,接受設定不啟用)
   appcontainer Windows(預留,接受設定不啟用)
-  docker       容器隔離(預留,接受設定不啟用;邊界見 DESIGN_isolation)
+  docker       容器隔離(預留,接受設定不啟用;邊界見 docs/design/isolation.md)
   none         不隔離(codex 有自己的 --sandbox,os 層對它本就 no-op)
 
 resolve() 回傳「有效 provider」:未實作/不適用平台 → 降級 none + WARNING log

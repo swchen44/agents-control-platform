@@ -1,7 +1,7 @@
 # DESIGN_architecture — 模組架構 · HIL 生命週期 · agent↔agent 交接
 
 > W10(2026-08-08)定案。與 `/concepts` 頁「模組架構 / 狀態機」段同源;生命週期
-> 細節見 [DESIGN_lifecycle.md](DESIGN_lifecycle.md)。**本文件描述目標設計**:
+> 細節見 [lifecycle.md](lifecycle.md)。**本文件描述目標設計**:
 > W10.1(狀態模型/圖/網頁)已實作;**W10.2(HIL 行為)與 W10.3(a2a)暫緩**,
 > 待使用者審過模型/文件/網頁再接線。
 
@@ -52,7 +52,7 @@ trigger/輸入/輸出/上下游見下表(與 `/concepts` 頁的職責表同內�
 `todo → running ⇄ queued`,人介入時進 `HIL(Middle)`(過程中等人)或 `HIL(End)`
 (終點評分),外部撤銷/交接進 `aborted`,人關 Jira 後 `closed`(概念終點,離開
 jql)。`success/failure/unknown` 是 **HIL(End) 的結果屬性**,不是頂層狀態。完整
-轉移圖與 DB 推導見 `/concepts` 頁與 [DESIGN_lifecycle.md](DESIGN_lifecycle.md)。
+轉移圖與 DB 推導見 `/concepts` 頁與 [lifecycle.md](lifecycle.md)。
 
 ## 4. agent↔agent 交接:兩種機制,怎麼選?
 

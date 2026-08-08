@@ -39,7 +39,7 @@
 - [x] commit+push
 
 **Phase W3.2 — A2 冪等分層(關一半副作用)** ✅
-- [x] **盤點文件 `DESIGN_idempotency.md`**:9 條路徑 × crash 窗口 × 防護/判定
+- [x] **盤點文件 `docs/design/idempotency.md`**:9 條路徑 × crash 窗口 × 防護/判定
       (at-most-once / at-least-once+冪等 handler);缺口只剩 #5 attempt 中途
       harness crash(sid 預派 + attempt_started → 缺 envelope 判 UNKNOWN,留 W4+)
 - [x] 盤點結論:dispatcher 全部「先 upsert 再外寫」= at-most-once **本來就對**
@@ -100,7 +100,7 @@
 - [x] inner_runner 接線:`job.os_sandbox = (resolve(agent_cfg)=="seatbelt")`
       ——runner 端欄位不變,行為對現有 profile 完全等價(darwin 上 os_sandbox
       true → seatbelt 照舊)
-- [x] `DESIGN_isolation.md`:介面、各 OS 提供方路線表、docker 邊界(resume 綁
+- [x] `docs/design/isolation.md`:介面、各 OS 提供方路線表、docker 邊界(resume 綁
       cwd→volume 穩定路徑、CLI 憑證 mount、冷啟成本)、codex 例外(自帶 --sandbox)
 - [x] `test_isolation_config.py`(8 tests):白名單拒絕、全 provider 可載、auto
       依平台、legacy 映射、未實作降級、seatbelt 限 darwin、顯式優先於 legacy、

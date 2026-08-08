@@ -12,22 +12,22 @@
   L3 log 內容化、`/concepts` DB 欄、`/server` 認證方式(不露金鑰)、`/control` poll 統計、
   **事件時間軸**(W9.2 浮動抽屜 → W9.3 L3 對話+生命週期合一單軸、共用時間軸、左側分類)。
 - **W10 生命週期重設計(HIL 模型)** — 經 12 題決策樹定案(見
-  `harness/DESIGN_architecture.md`、`harness/REQUIREMENTS.md §13`、記憶
+  `docs/design/architecture.md`、`harness/REQUIREMENTS.md §13`、記憶
   `w10-lifecycle-hil-a2a-redesign`):
   - ✅ **W10.1** 狀態模型:6 態 `todo/running/queued/HIL(Middle)/HIL(End)/aborted`
     (`canonical_state` 唯讀映射,不動 runtime);狀態機圖/`_STATE_DOC`/`/concepts` 重畫。
-  - ✅ **W10.4** 分層模組架構圖 + 職責表(trigger/IO/上下游)+ `DESIGN_architecture.md`。
+  - ✅ **W10.4** 分層模組架構圖 + 職責表(trigger/IO/上下游)+ `docs/design/architecture.md`。
   - ✅ **W10.5** svg-pan-zoom(vendored 離線)→ 狀態機+架構圖可拖曳/縮放。
   - ⏸ **W10.2 HIL 行為**(合併 inactive+pending、resume re-eval、End A/B、triage 閘)
     與 **W10.3 a2a base 跨票交接** — **暫緩、待使用者審過模型/文件/網頁再接線**。
     (使用者明確選「先模型+文件+網頁,不動 runtime 行為」。)
   - 📝 **W10 補強設計(2026-08-08 追加,待實作)**:HIL(End) 三訊號(grader + **agent
     自評 0–10** + 人類 0–10);交接**兩機制對等**(同票 workspace-swap→進行中 / 跨票
-    base→撤銷+新票,優缺點 guide 見 DESIGN_architecture);「概念」頁→**Introduction**;
+    base→撤銷+新票,優缺點 guide 見 docs/design/architecture.md);「概念」頁→**Introduction**;
     職責表加**檔名/分層/API 欄**;**再加一張 node+edge graph 圖**(全模組+多選過濾+focus)。
 
 - **W11 互動服務(HIL 人機介面)程式接線完成 ✅,待真 Jira 整合測** 設計見
-  `harness/DESIGN_interaction.md` + `REQUIREMENTS §14`;進度見記憶
+  `docs/design/interaction.md` + `REQUIREMENTS §14`;進度見記憶
   `w11-interaction-service-hil-interface`。取代「人直接編 Jira description free-text」:
   - `interaction.py`(schema/token/驗證)、`store` interactions 表、`form_server.py`
     (一次性 token 表單服務,UI 驗過)、`hil.py`(request_human/apply_submission)
@@ -40,7 +40,7 @@
 ## ★ 最新進展(2026-08-05)— 從研究進入分波實作
 
 研究/PoC(§1-6)之後已進入**分波實作**。優先級與波次見 `BACKLOG.md`;橫切設計(審批門
-+ assignee=資源開關 + template→workspace)見 `harness/DESIGN_lifecycle.md`。
++ assignee=資源開關 + template→workspace)見 `docs/design/lifecycle.md`。
 
 - **W1 地基 ✅(M10)** `harness/PLAN_wave1.md`:provision(template→workspace、resume-safe
   命名 `agent__key__issue_id`)、A3 Jira 限速退避、A4 budget 上限、G1 agent 結構化契約
@@ -59,12 +59,12 @@
 - **W3 全部完成 ✅(M13+M14,2026-08-06)** `harness/PLAN_wave3.md`:W3.1 codex
   第二引擎真跑(envelope 同形+native resume+G1 雙引擎契約;揪出並修 OpenAI
   strict schema、瞬態 error 污染 envelope)、W3.2 A2 冪等分層
-  (`DESIGN_idempotency.md` 9 路徑盤點;approval gate 先持久化後外寫)、
+  (`docs/design/idempotency.md` 9 路徑盤點;approval gate 先持久化後外寫)、
   W3.3 retention 回收(finished_at store 蓋章、270 天、poller 每小時掃)、
   W3.4 scheduled/oneshot 觸發源(pseudo-ticket 重用 provision、
   `{agent}__{run_name}__{ts}`、F1 額度共用、run_trigger.py oneshot CLI)、
   W3.5 C3 KPI(human_minutes_est→節省人時卡+時薪對比)、W3.6 D1 隔離介面
-  (provider 可插拔、`DESIGN_isolation.md`、介面先行不實驗)。
+  (provider 可插拔、`docs/design/isolation.md`、介面先行不實驗)。
   16 個 test_*.py + selftest + e2e_gate/dashboard/codex/contract 全綠。
 - **W4 全部完成 ✅(M15+M16,2026-08-06)** `harness/PLAN_wave4.md`:transcript
   可視化閉環 —— vendor claude-code-log(MIT,`tools/cclog/`+NOTICE;cchv 因
@@ -77,7 +77,7 @@
   test_*.py + selftest + e2e 全綠。
 - **W4 真 Jira 實測 ✅ + W4.5-4.7 追加 ✅ + W5.1-5.3 ✅(2026-08-06)**:
   W4 全鏈路實測 PASS(SCRUM-23/24,cron script trigger/close 打包/KPI/離手
-  定格/graceful shutdown);`DESIGN_hotreload.md`(reload 範圍表+關閉語意,
+  定格/graceful shutdown);`docs/design/hotreload.md`(reload 範圍表+關閉語意,
   缺口補強+POST /shutdown);cron 排程(W4.6);dashboard v2(W4.7:過濾器
   置頂+時間圖/金錢圖+排序,/data 單一資料源)+ 三欄(W5.2:停留時間/
   lifetime/人力$);**W5.1 sid 預派**(冪等 #5 關閉:attempt 前持久化+crash

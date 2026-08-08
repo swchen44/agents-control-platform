@@ -60,7 +60,7 @@ def adopt_existing(source, store, routes, jql) -> int:
 def make_reload(loop, disp, cmds, ext, config_path: str = "routes.yaml"):
     """W13/W4.5 hot reload(POST /reload):重讀 config、swap 引用。
 
-    範圍與限制的完整說明見 DESIGN_hotreload.md。壞 config → load_config/
+    範圍與限制的完整說明見 docs/design/hotreload.md。壞 config → load_config/
     load_profiles/load_triggers 擲 ConfigError → control API 回 400,
     **舊設定原封續用**(fail-safe)。
     """

@@ -1,4 +1,4 @@
-"""G1 — agent↔harness 結構化契約(DESIGN_lifecycle §4.2)。
+"""G1 — agent↔harness 結構化契約(docs/design/lifecycle.md §4.2)。
 
 Agent 每次結束回一個固定形狀的物件,由 CLI 的 structured-output 強制:
   claude  --json-schema '<inline json>'   → result 事件帶 structured_output
