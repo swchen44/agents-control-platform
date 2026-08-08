@@ -165,6 +165,59 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - `transcript_packed`(`reason`):打包 transcript(換手/交人/evict/close/按鈕觸發)。
 - `workspace_reclaimed`(`age_days`/`outcome`):保留策略回收老 workspace。
 
+### 3.1 高風險事件詳解(除錯常追的十個)
+
+分組概述已在 §3;這裡把最常導致「卡住/失敗/沒預期行為」的事件逐一展開,格式統一
+**何時發 / 正常樣態 / 異常訊號 / 連看哪個證據**。
+
+**`pending`** — 進入非終態等待(dispatcher)
+- 何時:一輪結束但不能收尾,要等某條件。
+- 正常:`reason` 明確(等人、額度、預算)。
+- 異常:`reason` 指向 infra 錯誤、或同一票反覆 pending 不前進。
+- 連看:`reason`/`cause`/`scope` 欄位 → 對應 §3 的 B/E 或 troubleshooting §2/§8。
+
+**`attempt_finished`** — 一次 attempt 收尾(dispatcher/triggers)
+- 何時:runner 程序結束。
+- 正常:`raw=completed` 且後續有 `resolved`(grader 過);`truly_resumed` 反映有無重工。
+- 異常:`raw=error`(看 `error_kind`:infra/stalled/task/no-terminal)、或 `completed`
+  但遲遲沒 `resolved`(grader 沒過)、或 `cost` 異常高(model 設錯,見 troubleshooting §8)。
+- 連看:同 run 的 `runs/<run-id>/transcript/stdout.log`+`stderr.log`;`envelope` 欄位。
+
+**`attempt_crash_recovered`** — 偵測上次崩潰、這次續接(dispatcher)
+- 何時:上一輪 attempt 沒正常收尾,本輪 native resume。
+- 正常:偶發;隨後 `attempt_finished(truly_resumed=true)` = 沒重工。
+- 異常:**連續多輪**出現 = 有東西一直崩。
+- 連看:前一個 run 的 `stderr.log`(崩在哪)。
+
+**`workspace_unhealthy`** — workspace 檢查不過(dispatcher)
+- 異常訊號本身。連看 `reason` + `tickets/<id>/`(workspace 實體)。
+
+**`evicted`** — killpg 強制驅逐(dispatcher)
+- 正常:人為(dashboard 按鈕 / `POST /evict/<id>`)釋放卡住的 agent,不耗 attempt。
+- 異常:沒人按卻出現 → 查誰呼叫 control API。
+- 連看:`count`(殺了幾個程序)、隨後應有 `attempt_crash_recovered` 續跑。
+
+**`external_abort`** — 外部把票改成 cancel_states(commands)
+- 正常:人主動在 Jira 取消/關掉。
+- 異常:非預期的狀態變更把跑到一半的票中止。
+- 連看:`state` 欄位 + 該票的 `status_changed`/`assignee_changed` + Jira 端操作記錄。
+
+**`handoff_invalid`** — 換手目標無效(dispatcher)
+- 異常訊號:`to` 指的 profile 不存在/不合法 → 換手沒生效。連看 `routes.yaml` profiles。
+
+**`hil_stalled`** — 評分/需人表單催了 N 次仍無人回(scoring)
+- 正常:確實在等人(非 bug)。
+- 異常:如果你以為已經填了卻還 stalled → 表單提交沒成功(Jira 降級時「不落地」?)。
+- 連看:`reminders` 次數;Jira 該票的 @mention 留言 + 表單連結;troubleshooting §2/§6。
+
+**`command_denied` / `command_rejected` / `command_unknown`** — 指令沒生效(commands)
+- 何時:有人留 `@agent …` 但沒被執行。
+- 連看:`denied`=作者不在白名單(`author`);`unknown`=拼錯(`body`);`rejected`=對象
+  /狀態不對(`target`)。對應 troubleshooting §7。
+
+**`dispatch_error` / `trigger_error`** — 派工/觸發時擲例外(poller)
+- 異常訊號本身。連看 `error` 字串 + poller 主控台輸出 + troubleshooting §4。
+
 ## 4. 串一張票 end-to-end(典型序列)
 
 用事件序列快速判讀一張票走到哪、哪裡不對(照 `key` 篩出時間線後對照):
@@ -181,6 +234,29 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   (resume=true)` → `attempt_finished`。`truly_resumed=true` 代表沒重工。
 - **被驅逐後回收**:`evicted` →(下輪)`attempt_crash_recovered` 續跑。evict 不耗
   attempt、不重花錢。
+
+### 真實範例(取自 runtime_live 的 journal)
+
+一張 filechain 任務**成功**的真實時間線(欄位已精簡):
+
+```
++ 0.0s  new_issue         {state: ToDo}
++ 0.0s  route_matched     {route: filechain-rawcli, profile: filechain-rawcli, on_match: create_or_resume}
++ 0.0s  session_created   {profile: filechain-rawcli}
++19.6s  attempt_finished  {attempt: 1, raw: completed, truly_resumed: false}
++20.3s  resolved          {attempts: 1, cost_usd: 0.0354, human_minutes_saved: 15.0}
++20.8s  transcript_packed {files: [final.html, transcript.tgz]}
++44.1s  comment_added     {comment_id: 10043, author: Shao-wei Chen}
+```
+
+判讀:命中 route → 建 session → 單次 attempt `completed` → grader 過 `resolved`
+(花 $0.035、估省 15 分人力)→ 打包 transcript → 回寫 Jira comment。**沒有 `pending`、
+`attempt_crash_recovered`、`hil_stalled`** = 一路順。
+
+> ⚠️ **舊 journal 可能含「退役事件」**:事件字典(§3)反映**當前 code**;歷史 journal
+> 可能有現在不再產生的事件。例如 W11 前的「交人 inactive」模型會寫 `inactive_set`,
+> W11 改 HIL 後已由 `hil_requested`/`hil_resumed` 取代 —— 在舊 runtime 看到字典裡沒有
+> 的事件名,先查它是不是某版本已退役的,而非資料損壞。
 
 ## 5. dashboard 定位(有畫面時)
 
