@@ -13,9 +13,8 @@ from dataclasses import dataclass, field
 
 import yaml
 
+from .paths import templates_dir
 from .routing import ConfigError
-
-_HARNESS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # W7(R3):未設 human_minutes_est 時的預設「人做同任務估時」(分鐘)。
 # 使用者 2026-08-07:預設 4 小時,好讓效益一律算得出來。
@@ -92,12 +91,12 @@ def load_profiles(path: str) -> dict[str, Profile]:
         venv = agent.get("venv")
         if venv and not os.path.isdir(venv):
             raise ConfigError(f"profile {name}: agent.venv 不存在: {venv}")
-        # template=class:非 "empty" 時視為 template folder path(相對 harness 根),
-        # fork 前整包複製成 workspace instance(docs/design/lifecycle.md §1)。fail-fast:
+        # template=class:非 "empty" 時視為 template folder path(相對 config/templates/),
+        # fork 前整包複製成 workspace instance(docs/design/workspace.md)。fail-fast:
         # 不存在的 template 死在 load,不是 dispatch。
         ws_template = ws.get("template", "empty")
         if ws_template != "empty":
-            tpath = os.path.join(_HARNESS_ROOT, ws_template)
+            tpath = os.path.join(templates_dir() or ".", ws_template)
             if not os.path.isdir(tpath):
                 raise ConfigError(
                     f"profile {name}: workspace.template 資料夾不存在: {tpath}")

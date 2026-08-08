@@ -19,11 +19,11 @@ import sys
 import tarfile
 
 from .logutil import get_logger
+from .paths import vendor_dir
 
 log = get_logger("transcript")
 
-_HARNESS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_CCLOG_DIR = os.path.join(_HARNESS_ROOT, "tools", "cclog")
+_CCLOG_DIR = os.path.join(vendor_dir() or ".", "cclog")   # vendored claude-code-log
 
 # 注入點(測試 monkeypatch;正式 = tools/cclog/render_transcript 的函數)
 _render_claude = None

@@ -35,7 +35,7 @@ caffeinate。詳 [需求與理由](requirements.md)。
 - **人機協作**:`approval`、`scoring`(HIL(End) 評分)、`commands`(@agent + 離手政策)、
   `sections`(description 三方分段 + hash)、`interaction` + `hil` + `form_server`(W11 表單)
 - **狀態·觀測·控制**:`store`(SQLite + journal)、`control_api`、`transcript`、`retention`
-  (`detail_server.py` 唯讀 dashboard 目前在 `harness/`)
+  (`detail_server.py` 唯讀 dashboard 在 `scripts/`)
 
 ## 測試
 

@@ -7,7 +7,7 @@
 ## 1. 證據地圖 —— 東西在哪
 
 一個 Control Plane 實例的所有落地證據都在它的 runtime 目錄下(預設
-`harness/runtime_live/`;dashboard 的 `<runtime>` 引數指的就是它):
+`runtime/`;dashboard 的 `<runtime>` 引數指的就是它):
 
 | 路徑 | 是什麼 | 怎麼讀 |
 |---|---|---|
@@ -33,7 +33,7 @@ runtime 目錄是 **gitignored**(不進版控);要保存某次現場,整個 `run
 離線常用查法(純 stdlib,不需裝東西):
 
 ```bash
-cd harness/runtime_live
+cd runtime
 
 # 一張票的完整時間線(照發生順序)
 python3 -c "import json,sys; [print(f\"{__import__('datetime').datetime.fromtimestamp(e['ts']):%H:%M:%S} {e['type']:24} {({k:v for k,v in e.items() if k not in ('ts','type','issue_id','key')})}\") for e in map(json.loads, open('events.jsonl')) if e['key']=='SCRUM-36']"
@@ -58,7 +58,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 <!-- BEGIN gen_event_dict -->
 | 事件 | 欄位(kwargs) | 產生點 |
 |---|---|---|
-| `adopted` | — | `scripts/run_poller.py:57` |
+| `adopted` | — | `scripts/run_poller.py:56` |
 | `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py:162` |
 | `assignee_alert` | `assignee` | `src/arcp/commands.py:185` |
 | `assignee_changed` | `new`, `old` | `src/arcp/poller.py:99` |
@@ -82,7 +82,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `hil_resumed` | `reason`, `request_id`, `schema` | `src/arcp/hil.py:112`, `src/arcp/hil.py:97` |
 | `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py:158` |
 | `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py:115` |
-| `jira_write` | `action`, `detail` | `scripts/run_poller.py:115` |
+| `jira_write` | `action`, `detail` | `scripts/run_poller.py:114` |
 | `new_issue` | `state`, `summary` | `src/arcp/poller.py:83` |
 | `pending` | `cause`, `cost_usd`, `reason`, `scope` | `src/arcp/dispatcher.py:109`, `src/arcp/dispatcher.py:225`, `src/arcp/dispatcher.py:302`, `src/arcp/dispatcher.py:314`, `src/arcp/dispatcher.py:417` |
 | `queued` | `engine`, `profile` | `src/arcp/poller.py:241` |

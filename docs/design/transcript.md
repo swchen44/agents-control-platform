@@ -7,7 +7,7 @@
 
 | 候選 | 結論 |
 |---|---|
-| **claude-code-log**(https://github.com/daaain/claude-code-log,MIT,Daniel Demmel;本機 clone `~/git/claude-code-log` v1.5.0) | ✅ **採用,vendor 進 `harness/tools/cclog/`**。Python(同棧可 refactor)、原生渲染 sidechain/agentId(sub-agent)、`--provider codex --session-id`(beta)、jinja2 模板可控 |
+| **claude-code-log**(https://github.com/daaain/claude-code-log,MIT,Daniel Demmel;本機 clone `~/git/claude-code-log` v1.5.0) | ✅ **採用,vendor 進 `vendor/cclog/`**。Python(同棧可 refactor)、原生渲染 sidechain/agentId(sub-agent)、`--provider codex --session-id`(beta)、jinja2 模板可控 |
 | cchv-server(claude-code-history-viewer prebuilt) | ✗ 棄用。實測 `--export` 可產 HTML(claude session-id、codex 絕對路徑都通),**但 source `export.rs:330` 證實 export 刻意丟 sidechain**("drop sidechains"),且 Rust binary 無法按需 refactor |
 
 vendor 原則(使用者 2026-08-06 指示):必要模組 copy 到專門資料夾、適當 refactor、

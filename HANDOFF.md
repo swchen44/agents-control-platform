@@ -119,13 +119,15 @@
   名/公開與否);(c) 異步架構(assignee 自動即時 kill + rehydrate,大工程另議);
   (d) 進一步剝離:openhands-acp/server backend 若確定不用可整個移除(六格對照
   已存證,維護價值低)。
-- **開發約定**:測試在 `harness/` 下 `test_*.py`(免 token、pytest-compatible、亦自跑);
-  venv=`examples/openhands-acp-poc/.venv/bin/python`;lint `ruff check .`(核心套件
-  `arcp_harness/` 嚴格 clean、舊腳本 per-file 放寬);每 phase 單獨 commit。
-- **pre-commit hook(W6.8)**:`.githooks/pre-commit` 對 staged `harness/*.py` 跑
-  `ruff check`(擋 import 亂序/lint;vendored 與 examples/ 不管)。**每台機器啟用一次**:
-  `git config core.hooksPath .githooks`(此設定不進版控);單次略過 `git commit --no-verify`。
-  ruff 缺席時只警告放行。`harness/ruff.toml` 已 `known-first-party` 釘死 + 排除 vendored。
+- **開發約定(W12+ 現況)**:套件在 `src/arcp/`、可執行入口/runner 在 `scripts/`、
+  測試在 `tests/`(免 token、pytest-compatible、亦自跑,從 repo root `uv run python
+  tests/<x>.py`);設定在 `config/`、vendored 在 `vendor/`、runtime 在 `runtime/`
+  (gitignore);路徑一律走 `arcp.paths`(repo-root 相對)。lint `ruff check .`(核心
+  `src/arcp/` 嚴格 clean、tests/scripts per-file 放寬;設定在 `pyproject.toml [tool.ruff]`)。
+  離線集(CI 跑)= `tests/test_*.py` + harness_selftest + e2e_dashboard/form +
+  `gen_event_dict.py --check`。openhands venv=`examples/openhands-acp-poc/.venv`(選配)。
+- **pre-commit hook**:`.githooks/pre-commit` 跑 `ruff check`(**每台機器啟用一次**:
+  `git config core.hooksPath .githooks`;單次略過 `git commit --no-verify`)。
 - **真 Jira 實測 ✅(2026-08-05,SCRUM-20)**:審批門完整鏈路一次通過 —— ADF 往返
   保真(人 UI 編輯後機器段 hash 仍符)、approver/human_email email→accountId 解析、
   填表放行、fork claude($0.0544)、SUCCESS、冪等、審批中資源開關不誤標。

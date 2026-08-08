@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+### Changed
+- **消除 harness/,改分散到專業標準位置**:`config/`(routes*.yaml + templates/ + skills/,
+  git 追蹤)、`vendor/`(離線 vendored 資產)、`runtime/`(harness.db/events/workspaces,
+  gitignore)。`arcp.paths` 改 `config_path`/`vendor_dir`/`runtime_dir`/`templates_dir`/
+  `common_skills_dir`(移除 `harness_dir`),全 consumer(detail_server/transcript/workspace/
+  profiles/inner_runner/run_poller/run_trigger)改走之;順修 W12.1 遺留的 workspace/profiles
+  `_HARNESS_ROOT` 指到 src/ 的潛在 bug。歷史文件 → `docs/history/`。
+
 ### Added
 - **研究策展(docs/research)**:把 `research/` 併入 `docs/research/`,並為每個主題加一篇
   「結論 + 比較」策展文章 —— 總體研究、後端 A/B/C 對照、Crash→Resume、Jira 整合設計、

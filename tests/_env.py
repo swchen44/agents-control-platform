@@ -10,7 +10,6 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(REPO, "scripts")
-HARNESS = os.path.join(REPO, "harness")
 
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)

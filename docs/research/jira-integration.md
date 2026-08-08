@@ -91,4 +91,4 @@ v5 的 P0/P1 已在本 repo 落地,實測反過來驗證/補強了設計:
 
 - 整合分析(× ARCP 實測對照):[2026-08-jira-harness-integration.md](2026-08-jira-harness-integration.md)
 - v5 設計(選型研究 + 起手 prompt,含 C1-C4 / D1-D10 / §10 KPI):[2026-08-jira-agent-harness-design-v5.md](2026-08-jira-agent-harness-design-v5.md)
-- 實作對照:`harness/PLAN_B.md`(開發 checklist 與環境事實)、`src/arcp/jira_source.py`(唯一碰 Cloud 的 source adapter)
+- 實作對照:`docs/history/PLAN_B.md`(開發 checklist 與環境事實)、`src/arcp/jira_source.py`(唯一碰 Cloud 的 source adapter)

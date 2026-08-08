@@ -11,7 +11,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(__file__))
 
 from arcp.commands import CommandHandler, parse  # noqa: E402
-from arcp.paths import harness_dir  # noqa: E402
+from arcp.paths import config_dir  # noqa: E402
 from arcp.profiles import load_profiles  # noqa: E402
 from arcp.routing import ConfigError, load_config, match  # noqa: E402
 from arcp.store import Store, TicketSession  # noqa: E402
@@ -38,7 +38,7 @@ def t(**kw) -> Ticket:
 print("routing (using the real routes.yaml):")
 # 這些 route 斷言綁定「真 routes.yaml」的內容,固定讀它(不跟 ARCP_CONFIG,
 # 否則 CI 的 routes.example.yaml 缺這些 route 會誤判失敗)。
-_, routes = load_config(os.path.join(harness_dir(), "routes.yaml"))
+_, routes = load_config(os.path.join(config_dir(), "routes.yaml"))
 check("label agent -> agent-labeled(notify_only)",
       (r := match(t(labels=["agent"]), routes)) is not None
       and r.name == "agent-labeled" and r.on_match == "notify_only")

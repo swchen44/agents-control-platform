@@ -13,12 +13,12 @@ ARCP 讓 headless coding agent(`claude -p` / `codex exec`)由 Jira 事件驅動�
 ## 離線工作守則
 
 1. **不要假設能連外。** 沒有 pip install 新套件、沒有查線上文件、沒有呼叫外部 API。
-   套件相依已在 `uv.lock`;dashboard 元件已全部 vendored 在 `harness/tools/`。
+   套件相依已在 `uv.lock`;dashboard 元件已全部 vendored 在 `vendor/`。
 2. **用離線測試驗證假設,而不是空想或跑真的。** 改任何東西後,先跑離線集(見下)。
    **不要**為了驗證就去跑真 Jira / 真 agent(耗成本、耗電;真依賴的測試不在離線集)。
 3. **地面真值是 runtime 證據,不是 agent 自稱。** 判讀一律以 journal + 檔案系統 +
    grader 為準(見「關鍵不變量」)。
-4. **不要 wipe runtime store**(`harness/runtime_live/harness.db`)—— 那是冪等的記憶,
+4. **不要 wipe runtime store**(`runtime/harness.db`)—— 那是冪等的記憶,
    清掉會讓 open 票被重派重跑(見 [LESSONS #9](lessons.md))。
 5. 這份 repo 的**文件就是知識庫**:除錯照下面的路徑走,別重新發明。
 

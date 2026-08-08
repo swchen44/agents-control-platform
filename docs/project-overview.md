@@ -17,7 +17,9 @@ agents-control-platform/
 ├── src/arcp/               # ← 套件本體(可安裝)
 ├── scripts/                # 可執行入口 + 被 spawn 的 runner + demo
 ├── tests/                  # 單元 + 端到端測試
-├── harness/                # 設定 + vendored 資產 + runtime 資料(dev 工作區)
+├── config/                 # 宣告式設定(git 追蹤):routes*.yaml + templates/ + skills/
+├── vendor/                 # 離線 vendored 資產(cclog / swagger-ui / vis-timeline …)
+├── runtime/                # 運行狀態(gitignore):harness.db + events.jsonl + runs/ + workspaces
 ├── docs/                   # 文件(本資料夾;研究報告在 docs/research/)
 ├── examples/               # PoC / 對照樣本(dev-only,不入 wheel)
 └── .github/workflows/      # CI / CD
@@ -53,14 +55,23 @@ agents-control-platform/
   **CI 跑**);`e2e_c*` / `e2e_codex*` / `smoke` 等需真 Jira/agent 的**不在 CI**。
 - `_env.py`:路徑啟動(把 `scripts/` 放進 `sys.path`,供少數 import 腳本的測試用)。
 
-## `harness/` — 設定 + vendored 資產 + runtime
+## `config/` — 宣告式設定(git 追蹤)
 
-- **設定**:`routes.yaml`(你的實際設定,`~/.env` 放憑證)、`routes.example.yaml`(範例/CI 用)
-- **vendored**:`tools/cclog/`(claude-code-log,MIT,transcript 渲染)、
-  `tools/…/vendor/`(swagger-ui / vis-timeline / svg-pan-zoom,離線)
-- **runtime 資料**(gitignored):`runtime_live/`、`runtime_*/`
-- **歷史文件**:已移到 [docs/history/](history/README.md)(PLAN_wave*/PLAN_B~C/
-  TEST_real_jira + 波次導讀);踩坑教訓在 [docs/lessons.md](lessons.md)
+- `routes.yaml`(你的實際設定,`~/.env` 放憑證)、`routes.example.yaml`(範例/CI 用)
+- `templates/`:workspace 模板 `<name>_template/` + 全域 `inject_claude_md_end.md`
+- `skills/`:common skills 庫(`<name>/`;profile `common_skills` 選子集)
+- 佈建流程見 [設計/workspace](design/workspace.md)。
+
+## `vendor/` — 離線 vendored 資產
+
+- `cclog/`(claude-code-log,MIT,transcript 渲染)、`swagger-ui/`(REST 文件)、
+  `cclog/vendor/`(vis-timeline)—— 內網零外部依賴,dashboard 全靠這些離線元件。
+
+## `runtime/` — 運行狀態(gitignored)
+
+- `harness.db`(SQLite:ticket_watch / ticket_session / trigger_state)、
+  `events.jsonl`(journal)、`runs/<run-id>/transcript/`、`tickets/<id>/ws/`(workspaces)。
+- **可重生、絕不追蹤、絕不 wipe**(冪等靠它)。讀法見 [設計/可觀測](design/observability.md)。
 
 ## `docs/`
 

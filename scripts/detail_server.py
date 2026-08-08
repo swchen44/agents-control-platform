@@ -38,19 +38,21 @@ try:                                    # W6.1 系統資訊(純 stdlib);缺也�
 except Exception:  # noqa: BLE001
     sysinfo_collect = None
 
-# W7.5:Agent Detail 讀 routes.yaml(harness 設定 + profiles)。憑證在 ~/.env 不在此。
-# W12.4:改走 arcp.paths(repo-root 相對),dashboard 搬到 scripts/ 後仍找得到 harness/。
+# W7.5:Agent Detail 讀 config/routes.yaml(設定 + profiles)。憑證在 ~/.env 不在此。
+# 路徑一律走 arcp.paths(repo-root 相對),dashboard 在 scripts/ 仍定位得到 config/vendor/runtime。
 try:
     from arcp.paths import config_path as _arcp_config_path
-    from arcp.paths import harness_dir as _arcp_harness_dir
+    from arcp.paths import runtime_dir as _arcp_runtime_dir
+    from arcp.paths import vendor_dir as _arcp_vendor_dir
     _CONFIG_PATH = _arcp_config_path()
-    _HARNESS = _arcp_harness_dir() or os.path.dirname(os.path.abspath(__file__))
-except Exception:  # noqa: BLE001  (arcp 缺 → 退回舊 cwd/本檔相對行為)
+    _VENDOR = _arcp_vendor_dir() or os.path.dirname(os.path.abspath(__file__))
+    _RUNTIME = _arcp_runtime_dir() or os.path.abspath("./runtime")
+except Exception:  # noqa: BLE001  (arcp 缺 → 退回 cwd 相對)
     _CONFIG_PATH = os.environ.get("ARCP_CONFIG", "routes.yaml")
-    _HARNESS = os.path.dirname(os.path.abspath(__file__))
+    _VENDOR = os.path.dirname(os.path.abspath(__file__))
+    _RUNTIME = os.path.abspath("./runtime")
 
-ROOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else \
-    os.path.abspath(os.path.join(_HARNESS, "runtime_live"))
+ROOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else _RUNTIME
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8788   # 8787 讓給 control API
 CONTROL = (sys.argv[3] if len(sys.argv) > 3
            else os.environ.get("ARCP_CONTROL_URL", "http://127.0.0.1:8787"))
@@ -79,11 +81,10 @@ _INSTANCE_NAME = _instance_name()
 _TITLE_TAIL = (" · " + _INSTANCE_NAME) if _INSTANCE_NAME else ""
 # W6.6:連線 IP 環形緩衝(記憶體,重啟清)
 _CONNS: deque = deque(maxlen=200)
-# 內網/離線:transcript(cclog)本需從 CDN 載 vis-timeline,已 vendor 到本地
-# (vendored 資產留在 harness/tools/;dashboard 本身可搬到 scripts/,靠 _HARNESS 定位)
-_VENDOR_DIR = os.path.join(_HARNESS, "tools", "cclog", "vendor")
-# W6.5:Swagger UI(REST API 文件)也 vendor 到本地(內網不外連 CDN)
-_SWAGGER_DIR = os.path.join(_HARNESS, "tools", "vendor", "swagger-ui")
+# 內網/離線:transcript(cclog)本需從 CDN 載 vis-timeline,已 vendor 到本地(vendor/cclog/vendor)
+_VENDOR_DIR = os.path.join(_VENDOR, "cclog", "vendor")
+# W6.5:Swagger UI(REST API 文件)也 vendor 到本地(內網不外連 CDN;vendor/swagger-ui)
+_SWAGGER_DIR = os.path.join(_VENDOR, "swagger-ui")
 # transcript HTML(外部工具產出)硬擋任何外部載入(只允許同源 + 內嵌 + data:)
 _CSP_TRANSCRIPT = ("default-src 'none'; script-src 'self' 'unsafe-inline'; "
                    "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "

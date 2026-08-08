@@ -37,8 +37,8 @@ jobs:
       - name: Offline tests
         env:
           # CI/fresh checkout 沒有 openhands venv;detail_server(/agent 頁)用不依賴 venv
-          # 的範例設定載入 profiles。純檔名 → arcp.paths 解析成 harness/routes.example.yaml,
-          # 不綁 cwd。harness_selftest 另固定讀 harness/routes.yaml(僅 routing,不驗 venv)。
+          # 的範例設定載入 profiles。純檔名 → arcp.paths 解析成 config/routes.example.yaml,
+          # 不綁 cwd。harness_selftest 另固定讀 config/routes.yaml(僅 routing,不驗 venv)。
           ARCP_CONFIG: routes.example.yaml
         run: |
           set -e

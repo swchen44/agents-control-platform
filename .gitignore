@@ -1,26 +1,25 @@
 __pycache__/
 *.pyc
 .DS_Store
-# 實驗執行輸出(可重生;正典事件流已提升到 fixtures/)
-examples/jira-agent-poc/runtime*/
-
-# OpenHands ACP PoC(路線 B)
-examples/openhands-acp-poc/.venv/
-examples/openhands-acp-poc/runtime*/
-
-# B 期 harness
-harness/runtime*/
-harness/tools/cclog/.venv/
-
-# OpenHands/runtime conversation 狀態(非原始碼)
-harness/workspace/
-
-# ruff 快取(執行 ruff 時產生,非原始碼)
 .ruff_cache/
-.agents/
-.claude/
-skills-lock.json
 *.egg-info/
-.venv/
 build/
 dist/
+.venv/
+
+# 運行狀態(可重生,永不追蹤):harness.db / events.jsonl / runs/ / workspaces
+runtime/
+runtime_*/
+examples/*/runtime*/
+
+# venv(非本專案原始碼)
+examples/openhands-acp-poc/.venv/
+vendor/cclog/.venv/
+
+# agent workspace conversation 狀態(OpenHands agent-server 產物)
+**/workspace/conversations/
+
+# 工具產物(僅 repo 根;勿誤傷 config/templates/*/.claude 等模板內容)
+/.agents/
+/.claude/
+skills-lock.json

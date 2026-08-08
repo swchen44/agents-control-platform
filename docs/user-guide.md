@@ -40,7 +40,7 @@ JIRA_API_TOKEN=<你的 Atlassian API token>
 複製範例、改成你的:
 
 ```bash
-cp harness/routes.example.yaml harness/routes.yaml
+cp config/routes.example.yaml config/routes.yaml
 ```
 
 重點欄位:
@@ -66,7 +66,7 @@ uv run python scripts/run_poller.py [分鐘] [間隔秒]   # 預設 30 分、15 
 ## 6. 看 dashboard(唯讀觀測)
 
 ```bash
-ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 預設 harness/runtime_live
+ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 資料預設 runtime/
 # 開 http://127.0.0.1:8788
 ```
 

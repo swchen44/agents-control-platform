@@ -30,12 +30,11 @@ packages = ["src/arcp"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
-# 絕不碰 vendored 第三方(zero-diff)、examples(PoC,另有 sys.path 慣例)、old-ws
+# 絕不碰 vendored 第三方(zero-diff)、examples(PoC,另有 sys.path 慣例)
 extend-exclude = [
-    "**/claude_code_log/**",
-    "**/tools/vendor/**",
-    "**/old-ws/**",
+    "vendor/**",
     "examples/**",
+    "config/templates/**",     # 使用者放的 install 腳本/模板,不套本專案 lint
 ]
 force-exclude = true
 
@@ -49,5 +48,4 @@ known-first-party = ["arcp"]
 [tool.ruff.lint.per-file-ignores]
 # 核心套件 src/arcp/ 維持嚴格;測試/e2e/舊頂層腳本 print-heavy,放寬行長/分號/命名
 "tests/**" = ["E501", "E702", "E741"]
-"harness/**" = ["E501", "E702", "E741"]
 "scripts/**" = ["E501", "E702", "E741"]

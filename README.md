@@ -42,17 +42,17 @@
 uv sync                                   # 裝相依 + editable 安裝 arcp(需 Python ≥ 3.10)
 # ~/.env 放 JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN(不進版控)
 
-cp harness/routes.example.yaml harness/routes.yaml   # 改 jql / project / profile
+cp config/routes.example.yaml config/routes.yaml   # 改 jql / project / profile
 uv run python scripts/smoke_jira.py       # 唯讀冒煙:驗 Jira 連線
 uv run python scripts/run_poller.py       # 起 poller(+ control 8787 + 表單服務 8790)
 
-# 另開一個 terminal 看 dashboard(runtime 預設 harness/runtime_live)
+# 另開一個 terminal 看 dashboard(runtime 資料預設 runtime/)
 ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py
 # → http://127.0.0.1:8788
 ```
 
-> 從 repo root 執行即可 —— 腳本(`scripts/`)、設定與 vendored 資產(`harness/`)、runner
-> 由 `arcp.paths` 以 repo-root 相對解析,不綁 cwd。
+> 從 repo root 執行即可 —— 腳本(`scripts/`)、設定(`config/`)、vendored 資產(`vendor/`)、
+> runtime 資料(`runtime/`)、runner 全由 `arcp.paths` 以 repo-root 相對解析,不綁 cwd。
 
 完整步驟見 **[使用者手冊](docs/user-guide.md)**。
 
@@ -131,7 +131,7 @@ Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)�
 ## 多實例部署(同一台機器並存多個 Control Plane)
 
 想同時跑多個 Control Plane(例:一個顧 SCRUM、一個顧 OPS),做法是**複製整個
-`agents-control-platform` 資料夾**成獨立一份,各自有獨立 `runtime_live/`、設定與 port。
+`agents-control-platform` 資料夾**成獨立一份,各自有獨立 `runtime/`、設定與 port。
 每個實例在 dashboard 左上角會顯示 `ARCP Control Plane · <name>` 方便分辨。
 
 **每個實例務必各自不同的(否則會互相干擾):**
@@ -165,10 +165,10 @@ Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)�
 
 ```bash
 cp -R agents-control-platform arcp-ops && cd arcp-ops
-# 編輯 harness/routes.yaml:source.name: ops、source.project/jql 改別的專案、control.port: 8797
+# 編輯 config/routes.yaml:source.name: ops、source.project/jql 改別的專案、control.port: 8797
 uv run python scripts/run_poller.py &                    # 用 routes.yaml 的 control.port
 ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py \
-  harness/runtime_live 8798 http://127.0.0.1:8797        # dashboard 8798 → 指自己的 control 8797
+  runtime 8798 http://127.0.0.1:8797        # dashboard 8798 → 指自己的 control 8797
 ```
 
 > 一句話:**分資料夾、分 name、分 Jira project/jql、分 port(control + dashboard)、
@@ -194,9 +194,9 @@ supervisor(live+replay)、rules 引擎、Jira watcher、crash→resume 基線實
 - [x] OpenHands ACP 對照(路線 B):SDK in-process headless 跑通、本機登入免 key、
       同任務同 grader 對照 A 248 vs B 14 事件(`examples/openhands-acp-poc/`)
 - [x] **Jira 驅動 harness(B):outer/inner loop、三態 outcome、指令通道、
-      agent-server + 視覺化(detail page)**(`harness/`,M1-M4;真 Jira 端到端)
-- [x] **RawCLIAgent(路線 C):OpenHands 骨架 + raw CLI,不 fork;三方對照 C 集大成
-      (保真≈A、語意乾淨勝 B、控制窗口/可視化兼得)**(`harness/arcp_rawcli/`,C.0-C.6)
+      agent-server + 視覺化(detail page)**(`src/arcp/` + `scripts/`,M1-M4;真 Jira 端到端)
+- [x] **RawCLIAgent(路線 C):raw CLI 純 stdlib,不 fork;三方對照 C 集大成
+      (保真≈A、語意乾淨勝 B、控制窗口/可視化兼得)**(`src/arcp/rawcli/`,C.0-C.6)
 - [x] waiting-permission → Jira ticket 升級迴路:denial 事件驅動開票 + 結果回寫
       (含結構化 permission_denials 與 resume 指令,`arcp_poc/escalation.py`)
 

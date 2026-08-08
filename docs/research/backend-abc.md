@@ -16,7 +16,7 @@
 |---|---|---|
 | **A — raw supervisor** | 自寫 supervisor(`examples/jira-agent-poc/`),直接 spawn CLI、解析原生 stream-json | 對照組 / 參考實作,不下場當產品 |
 | **B — OpenHands-ACP** | OpenHands SDK + ACP adapter 包 claude/codex headless;鏈為 `ACPAgent → adapter 子行程(node)→ 內嵌 Claude Code` | short term,最快可執行 |
-| **C — rawcli(RawCLIAgent)** | 在 OpenHands 骨架內寫的 Agent 實作(`harness/arcp_rawcli/`),**不走 ACP**,直接 spawn CLI、解析原生 stream-json、發完整細粒度事件 | long term 主線 |
+| **C — rawcli(RawCLIAgent)** | 在 OpenHands 骨架內寫的 Agent 實作(`src/arcp/rawcli/`),**不走 ACP**,直接 spawn CLI、解析原生 stream-json、發完整細粒度事件 | long term 主線 |
 
 C 的關鍵澄清:細粒度瓶頸實測定位在 **ACP 協定 + adapter**(細事件在 adapter 內部即丟棄,OpenHands 側橋 `_OpenHandsACPBridge` acp_agent.py:1041 只收四類通知)。fork adapter(TS)是劣路(永遠跟上游、協定無承載欄位),故 C 選擇繞開 ACP,搬運 A 期已付清的困難知識(schema/終止語意/resume 梯度/陷阱清單)。
 

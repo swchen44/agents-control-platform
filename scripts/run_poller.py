@@ -12,7 +12,6 @@ Usage: python3 run_poller.py [minutes] [interval_sec]   (預設 30 分鐘、15 �
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 
@@ -24,7 +23,7 @@ from arcp.dispatcher import Dispatcher
 from arcp.form_server import FormServer
 from arcp.hil import apply_submission
 from arcp.jira_source import JiraCloudSource
-from arcp.paths import config_path, harness_dir
+from arcp.paths import config_path, runtime_dir
 from arcp.poller import OuterLoop
 from arcp.profiles import load_profiles
 from arcp.routing import load_config, match
@@ -94,9 +93,9 @@ def main() -> int:
 
     cfg_path = config_path()                             # W12.4:repo-root 相對
     source_cfg, routes = load_config(cfg_path)
-    # W12.4:runtime 錨定 harness/runtime_live(不綁 cwd)—— 腳本搬到 scripts/ 後,
-    # 從任何目錄啟動都沿用同一份持久 store,不會產生孤兒 runtime。
-    runtime = os.path.join(harness_dir() or ".", "runtime_live")
+    # runtime 錨定 repo/runtime(不綁 cwd)—— 從任何目錄啟動都沿用同一份持久 store,
+    # 不會產生孤兒 runtime。DB/events/workspaces 都在此(gitignore)。
+    runtime = runtime_dir() or "./runtime"
     _wr = source_cfg.get("write_retry") or {}            # A3(N8)
     src = JiraCloudSource(*jira_credentials(),
                           write_retry_max=int(_wr.get("max", 5)),

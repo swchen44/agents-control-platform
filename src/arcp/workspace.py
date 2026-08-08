@@ -17,10 +17,9 @@ from __future__ import annotations
 import os
 import shutil
 
+from .paths import templates_dir
 from .profiles import Profile
 from .ticket import Ticket
-
-_HARNESS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 TICKET_TEMPLATE = """# {key}: {summary}
 
@@ -68,7 +67,7 @@ def provision(root: str, ticket: Ticket, profile: Profile) -> str:
     if not os.path.isdir(ws) and profile.workspace_template != "empty":
         # W2 atomicity: copytree to a temp sibling, then rename into place, so a
         # crash mid-copy never leaves a half-populated ws that looks healthy.
-        template = os.path.join(_HARNESS_ROOT, profile.workspace_template)
+        template = os.path.join(templates_dir() or ".", profile.workspace_template)
         os.makedirs(base, exist_ok=True)
         tmp = ws + ".tmp"
         if os.path.isdir(tmp):

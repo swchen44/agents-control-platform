@@ -147,7 +147,7 @@
 ## 9. dashboard
 
 - **打不開**:確認 `scripts/detail_server.py` 有在跑、port 沒被占、`<runtime>` 引數指到
-  對的 runtime 目錄(預設 `harness/runtime_live`)。綁定預設 `0.0.0.0`(內網開放);要鎖
+  對的 runtime 目錄(預設 `runtime`)。綁定預設 `0.0.0.0`(內網開放);要鎖
   本機設 `ARCP_DASH_HOST=127.0.0.1`。
 - **多實例數字混在一起/互相覆寫**:兩個實例 poll 了**同一 Jira project/重疊 jql** →
   互搶同批票、覆寫彼此狀態(併發 flaky 來源)。**分 project 或用不重疊的 label/JQL**;
@@ -155,7 +155,7 @@
 - **/agent 頁載入失敗**:多半是 `routes.yaml` 的 openhands profiles 依賴缺失的 venv →
   `load_profiles` 擲錯。用 `routes.example.yaml`(`ARCP_CONFIG=routes.example.yaml`)。
 - **元件/圖表沒出來**:dashboard 所有前端元件都是 **vendored**(內網零外部依賴);若
-  缺,檢查 `harness/tools/` 的 vendored 資產是否完整(不該連任何 CDN)。
+  缺,檢查 `vendor/` 的 vendored 資產是否完整(不該連任何 CDN)。
 
 ---
 
