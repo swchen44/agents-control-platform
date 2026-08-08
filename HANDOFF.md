@@ -4,7 +4,23 @@
 > `/Users/swchen.tw/git/openhands`(改名為「headless agent 自動化」)。本檔讓
 > 零上下文的新 session 也能無縫接上。最後更新:2026-08-08。
 
-## ★ 最新進展(2026-08-08)— W8–W10(dashboard 美化 → HIL 生命週期重設計)
+## ★ 最新進展(2026-08-09)— W12–W15(專業化 → 離線文件 → 結構重整 → workspace 佈建)
+
+> 完整條列見 `CHANGELOG.md`;此處只給地圖。**專案結構已大改**:
+> - **W12 專業化**:src-layout(`src/arcp/`)、可執行入口/runner 在 `scripts/`、測試在
+>   `tests/`、pyproject/uv/MIT/GitHub CI(3.10–3.13)+CD;修 W12.1 遺留的 runner 路徑 bug。
+> - **W13 離線內網文件**:`docs/ai-debugging.md` / `troubleshooting.md` /
+>   `design/observability.md`(journal 事件字典,`scripts/gen_event_dict.py --check` 入 CI)。
+> - **研究策展**:`research/` 併入 `docs/research/`(結論比較文 + 原始長文);歷史 → `docs/history/`。
+> - **消除 harness/**:改 `config/`(設定+templates+skills,git 追蹤)+ `vendor/`(離線資產)+
+>   `runtime/`(harness.db/events,gitignore);路徑全走 `arcp.paths`(repo-root 相對)。
+> - **W15 workspace 佈建**:profile `workspace_install`(安裝命令)/ `common_skills` /
+>   `inject_md`;統一目標解析;TICKET.md 加 goal/驗收/Jira 連結。設計見
+>   [docs/design/workspace.md](docs/design/workspace.md)。
+> **開發約定以本檔下方「開發約定(W12+ 現況)」為準**(測試在 tests/、設定在 config/…)。
+> 下方 W8–W11 記錄為歷史脈絡,路徑名詞可能為舊(以 docs/ 正式文件與 CHANGELOG 為準)。
+
+## ★ 進展(2026-08-08)— W8–W10(dashboard 美化 → HIL 生命週期重設計)
 
 - **W8 dashboard 美化 ✅**:雙主題(明/暗,claude.com/blog 風)、a11y(Web Interface
   Guidelines)、多實例 name 進標題、各頁專屬 SVG 一致化。
