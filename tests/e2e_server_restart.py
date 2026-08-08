@@ -21,6 +21,7 @@ import time
 from arcp.config import jira_credentials
 from arcp.dispatcher import Dispatcher
 from arcp.jira_source import JiraCloudSource
+from arcp.paths import config_path
 from arcp.poller import OuterLoop
 from arcp.profiles import load_profiles
 from arcp.routing import load_config
@@ -37,8 +38,8 @@ DESC = ("在目前工作目錄依序建立三個檔案:step1.txt 內容 1、step
 
 def main() -> int:
     src = JiraCloudSource(*jira_credentials())
-    _, routes = load_config("routes.yaml")
-    profiles = load_profiles("routes.yaml")
+    _, routes = load_config(config_path())
+    profiles = load_profiles(config_path())
     shutil.rmtree(ROOT, ignore_errors=True)
     store = Store(os.path.join(ROOT, "store"))
     mgr = ServerManager(VENV, os.path.join(ROOT, "server"), port=18040,

@@ -12,6 +12,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402,F401  (把 scripts/ 放進 sys.path)
 from run_poller import make_reload  # noqa: E402
 
 from arcp.routing import ConfigError  # noqa: E402

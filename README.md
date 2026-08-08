@@ -42,15 +42,17 @@
 uv sync                                   # 裝相依 + editable 安裝 arcp(需 Python ≥ 3.10)
 # ~/.env 放 JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN(不進版控)
 
-cd harness
-cp routes.example.yaml routes.yaml        # 改 jql / project / profile
-uv run python smoke_jira.py               # 唯讀冒煙:驗 Jira 連線
-uv run python run_poller.py               # 起 poller(+ control 8787 + 表單服務 8790)
+cp harness/routes.example.yaml harness/routes.yaml   # 改 jql / project / profile
+uv run python scripts/smoke_jira.py       # 唯讀冒煙:驗 Jira 連線
+uv run python scripts/run_poller.py       # 起 poller(+ control 8787 + 表單服務 8790)
 
-# 另開一個 terminal 看 dashboard
-ARCP_DASH_HOST=127.0.0.1 uv run python detail_server.py ./runtime_live 8788
+# 另開一個 terminal 看 dashboard(runtime 預設 harness/runtime_live)
+ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py
 # → http://127.0.0.1:8788
 ```
+
+> 從 repo root 執行即可 —— 腳本(`scripts/`)、設定與 vendored 資產(`harness/`)、runner
+> 由 `arcp.paths` 以 repo-root 相對解析,不綁 cwd。
 
 完整步驟見 **[使用者手冊](docs/user-guide.md)**。
 
@@ -162,11 +164,11 @@ Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)�
 **快速範例(起第二個實例 "ops"):**
 
 ```bash
-cp -R agents-control-platform arcp-ops && cd arcp-ops/harness
-# 編輯 routes.yaml:source.name: ops、source.project/jql 改成別的專案、control.port: 8797
-python3 run_poller.py &                                  # 用 routes.yaml 的 control.port
-ARCP_DASH_HOST=127.0.0.1 python3 detail_server.py ./runtime_live 8798 \
-  http://127.0.0.1:8797                                  # dashboard 8798 → 指向自己的 control 8797
+cp -R agents-control-platform arcp-ops && cd arcp-ops
+# 編輯 harness/routes.yaml:source.name: ops、source.project/jql 改別的專案、control.port: 8797
+uv run python scripts/run_poller.py &                    # 用 routes.yaml 的 control.port
+ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py \
+  harness/runtime_live 8798 http://127.0.0.1:8797        # dashboard 8798 → 指自己的 control 8797
 ```
 
 > 一句話:**分資料夾、分 name、分 Jira project/jql、分 port(control + dashboard)、

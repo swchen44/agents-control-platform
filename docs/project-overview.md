@@ -15,7 +15,9 @@ agents-control-platform/
 ├── HANDOFF.md              # 給接手 session 的脈絡(內部)
 ├── BACKLOG.md              # 待辦/路線(內部)
 ├── src/arcp/               # ← 套件本體(可安裝)
-├── harness/                # 執行腳本 + 測試 + 設定(dev 工作區)
+├── scripts/                # 可執行入口 + 被 spawn 的 runner + demo
+├── tests/                  # 單元 + 端到端測試
+├── harness/                # 設定 + vendored 資產 + runtime 資料(dev 工作區)
 ├── docs/                   # 文件(本資料夾)
 ├── examples/               # PoC / 對照樣本(dev-only,不入 wheel)
 ├── research/               # 研究報告(dev-only)
@@ -35,15 +37,26 @@ agents-control-platform/
 
 模組間關係(trigger/輸入/輸出/上下游)見 [設計/架構](design/architecture.md)。
 
-## `harness/` — 執行腳本 + 測試 + 設定
+## `scripts/` — 可執行入口 + runner
+
+- **主程式**:`run_poller.py`(常駐 poller)、`detail_server.py`(唯讀 dashboard)、
+  `run_trigger.py`(oneshot 觸發)、`smoke_jira.py`(真 Jira 冒煙)
+- **執行單元 runner**(被 `arcp.inner_runner` spawn):`inner_rawcli_runner.py` /
+  `inner_acp_runner.py` / `inner_agentserver_runner.py`、`c0_*`(server launcher / stub)
+- **demo/spike**:`compare_abc.py`、`demo_concurrent.py`、`spike_c0.py`
+
+> 全部從 repo root 執行即可(`uv run python scripts/<x>.py`)。設定/vendored/runtime 由
+> `arcp.paths` 以 repo-root 相對解析,不綁 cwd。
+
+## `tests/` — 測試
+
+- `test_*.py`(單元)、`harness_selftest.py`、`e2e_dashboard.py` / `e2e_form.py`(離線 e2e,
+  **CI 跑**);`e2e_c*` / `e2e_codex*` / `smoke` 等需真 Jira/agent 的**不在 CI**。
+- `_env.py`:路徑啟動(把 `scripts/` 放進 `sys.path`,供少數 import 腳本的測試用)。
+
+## `harness/` — 設定 + vendored 資產 + runtime
 
 - **設定**:`routes.yaml`(你的實際設定,`~/.env` 放憑證)、`routes.example.yaml`(範例/CI 用)
-- **主程式**:`run_poller.py`(常駐 poller)、`detail_server.py`(唯讀 dashboard)、
-  `run_trigger.py`(oneshot 觸發)
-- **執行單元 runner**:`inner_rawcli_runner.py` / `inner_acp_runner.py` /
-  `inner_agentserver_runner.py`、`c0_*`(server launcher / stub)
-- **測試**:`test_*.py`(單元)、`harness_selftest.py`、`e2e_*.py`(端到端)、
-  `smoke_jira.py`(真 Jira 冒煙)
 - **vendored**:`tools/cclog/`(claude-code-log,MIT,transcript 渲染)、
   `tools/…/vendor/`(swagger-ui / vis-timeline / svg-pan-zoom,離線)
 - **runtime 資料**(gitignored):`runtime_live/`、`runtime_*/`

@@ -39,29 +39,30 @@ caffeinate。詳 [需求與理由](requirements.md)。
 
 ## 測試
 
-測試目前在 `harness/`(自訂 runner,亦 pytest-相容):
+測試在 `tests/`(自訂 runner,亦 pytest-相容),從 repo root 執行:
 
 ```bash
-cd harness
-uv run python test_<name>.py          # 單支
-for t in test_*.py; do uv run python "$t"; done   # 全單元
-uv run python harness_selftest.py     # 路由/config/指令 冒煙
-uv run python e2e_dashboard.py        # dashboard 端到端(spawn detail_server)
-uv run python e2e_form.py             # 互動服務端到端(fake Jira + 真 HTTP)
+uv run python tests/test_<name>.py                # 單支
+for t in tests/test_*.py; do uv run python "$t"; done   # 全單元
+uv run python tests/harness_selftest.py           # 路由/config/指令 冒煙
+uv run python tests/e2e_dashboard.py              # dashboard 端到端(spawn detail_server)
+uv run python tests/e2e_form.py                   # 互動服務端到端(fake Jira + 真 HTTP)
 ```
 
-- **離線集**(CI 跑):所有 `test_*.py` + `harness_selftest` + `e2e_dashboard` +
+- **離線集**(CI 跑):所有 `tests/test_*.py` + `harness_selftest` + `e2e_dashboard` +
   `e2e_form`。免 token、免網、免真 agent。
-- **需真依賴**(CI 不跑):`smoke_jira.py`(真 Jira)、`e2e_c*` / `e2e_codex*`
-  (openhands venv / 真 agent)。
+- **需真依賴**(CI 不跑):`scripts/smoke_jira.py`(真 Jira)、`tests/e2e_c*` /
+  `e2e_codex*`(openhands venv / 真 agent)。
 - CI 用 `ARCP_CONFIG=routes.example.yaml`(避免依賴本機才有的 openhands venv)。
+- 腳本/設定/vendored/runner 由 `arcp.paths` 以 repo-root 相對解析,測試不綁 cwd;
+  少數 import 腳本的測試(`test_kpi` / `test_hotreload`)靠 `tests/_env.py` 把
+  `scripts/` 放進 `sys.path`。
 
 真 Jira 冒煙(讀寫,測後還原):
 
 ```bash
-cd harness
-uv run python smoke_jira.py                            # 唯讀
-uv run python smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改測試票再還原)
+uv run python scripts/smoke_jira.py                            # 唯讀
+uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改測試票再還原)
 ```
 
 ## 加一個 backend

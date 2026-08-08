@@ -59,8 +59,9 @@ def route_a():
 
 def route_bc(profile_name, tag):
     from arcp.inner_runner import run_attempt
+    from arcp.paths import config_path
     from arcp.profiles import load_profiles
-    prof = load_profiles("routes.yaml")[profile_name]
+    prof = load_profiles(config_path())[profile_name]
     d, ws = fresh(tag)
     res = run_attempt(prof.agent, ws, PROMPT, os.path.join(d, "attempts"), 1)
     ev = res.events_path

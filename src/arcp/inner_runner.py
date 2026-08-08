@@ -22,13 +22,17 @@ from dataclasses import dataclass
 
 from .contract import CONTRACT_SCHEMA
 from .isolation import resolve as resolve_isolation
+from .paths import find_script, harness_dir
 
-HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# backend → venv runner script (same job/envelope contract for all)
+# runner 執行的工作區基準(venv 相對路徑 + subprocess cwd);原為 dirname²(__file__)=
+# harness/,W12.1 搬進 src/arcp 後改由 arcp.paths 定位,搬檔不破。
+HERE = harness_dir() or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# backend → runner script(同 job/envelope 契約)。repo-root 相對(scripts/ 優先,
+# 退回 harness/)。W12.1 舊寫法 join(dirname²(__file__), ...) 會指到 src/ 找不到 runner。
 RUNNERS = {
-    "openhands-acp": os.path.join(HERE, "inner_acp_runner.py"),
-    "openhands-server": os.path.join(HERE, "inner_agentserver_runner.py"),
-    "rawcli": os.path.join(HERE, "inner_rawcli_runner.py"),  # route C
+    "openhands-acp": find_script("inner_acp_runner.py"),
+    "openhands-server": find_script("inner_agentserver_runner.py"),
+    "rawcli": find_script("inner_rawcli_runner.py"),  # route C
 }
 
 

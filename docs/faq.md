@@ -54,7 +54,7 @@ poller 自動解除降級。
 ## 開發
 
 **Q:怎麼跑測試?**
-A:`cd harness && uv run python <test>.py`。離線集(CI 跑)= 所有 `test_*.py` +
+A:`uv run python tests/<test>.py`(從 repo root)。離線集(CI 跑)= 所有 `test_*.py` +
 `harness_selftest` + `e2e_dashboard` + `e2e_form`。真 Jira 用 `smoke_jira.py`。詳
 [開發者手冊](developer-guide.md)。
 

@@ -12,6 +12,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402,F401  (把 scripts/ 放進 sys.path)
 from detail_server import overview_cards, saved_minutes  # noqa: E402
 
 from arcp import dispatcher as dmod  # noqa: E402

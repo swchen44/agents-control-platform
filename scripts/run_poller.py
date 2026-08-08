@@ -12,6 +12,7 @@ Usage: python3 run_poller.py [minutes] [interval_sec]   (預設 30 分鐘、15 �
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 
@@ -23,6 +24,7 @@ from arcp.dispatcher import Dispatcher
 from arcp.form_server import FormServer
 from arcp.hil import apply_submission
 from arcp.jira_source import JiraCloudSource
+from arcp.paths import config_path, harness_dir
 from arcp.poller import OuterLoop
 from arcp.profiles import load_profiles
 from arcp.routing import load_config, match
@@ -90,13 +92,17 @@ def main() -> int:
     minutes = float(sys.argv[1]) if len(sys.argv) > 1 else 30.0
     interval = float(sys.argv[2]) if len(sys.argv) > 2 else 15.0
 
-    source_cfg, routes = load_config("routes.yaml")
+    cfg_path = config_path()                             # W12.4:repo-root 相對
+    source_cfg, routes = load_config(cfg_path)
+    # W12.4:runtime 錨定 harness/runtime_live(不綁 cwd)—— 腳本搬到 scripts/ 後,
+    # 從任何目錄啟動都沿用同一份持久 store,不會產生孤兒 runtime。
+    runtime = os.path.join(harness_dir() or ".", "runtime_live")
     _wr = source_cfg.get("write_retry") or {}            # A3(N8)
     src = JiraCloudSource(*jira_credentials(),
                           write_retry_max=int(_wr.get("max", 5)),
                           write_retry_base=float(_wr.get("base_sec", 1.0)))
-    profiles = load_profiles("routes.yaml")
-    store = Store("./runtime_live")          # 持久,絕不 wipe(lesson #9)
+    profiles = load_profiles(cfg_path)
+    store = Store(runtime)                   # 持久,絕不 wipe(lesson #9)
 
     # W6.7:harness→Jira 每次寫入補記 jira_write(供 ticket 頁事件時間軸顯示
     # 「HH:MM 留言/assign/transition」)。key 由 store 反查;回呼壞不擋寫入。
@@ -114,7 +120,7 @@ def main() -> int:
     # config 可覆寫(source.bot_account_id),否則啟動時 myself() 解析一次。
     bot_id = (source_cfg.get("bot_account_id")
               or src.myself().get("accountId", ""))
-    disp = Dispatcher(src, store, profiles, root="./runtime_live",
+    disp = Dispatcher(src, store, profiles, root=runtime,
                       approval=ApprovalGate(src, store, bot_id))
     # W4.5:allowed_commenters / cancel_states 從 config 接線(原 hardcode)
     cmds = CommandHandler(
@@ -140,12 +146,12 @@ def main() -> int:
         dispatcher=disp, commands=cmds, external=ext,
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
-        triggers=load_triggers("routes.yaml", profiles),   # W3.4 scheduled
+        triggers=load_triggers(cfg_path, profiles),        # W3.4 scheduled
         scoregate=ScoreGate(src, store, base_url=form_base,  # W11:HIL(End) 表單
                             mention=mention))
     loop.poll_interval = interval                            # W9.1 control 顯示
 
-    _reload = make_reload(loop, disp, cmds, ext)       # W13/W4.5 hot reload
+    _reload = make_reload(loop, disp, cmds, ext, cfg_path)  # W13/W4.5 hot reload
 
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,

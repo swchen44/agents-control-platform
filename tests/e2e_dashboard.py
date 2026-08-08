@@ -21,6 +21,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp.control_api import ControlAPI  # noqa: E402
+from arcp.paths import find_script  # noqa: E402
 from arcp.store import Store, TicketSession, TicketWatch  # noqa: E402
 
 ok = True
@@ -108,8 +109,7 @@ ctl_url = f"http://127.0.0.1:{ctl.port}"
 # -- subprocess 起 dashboard ------------------------------------------------ #
 port = free_port()
 proc = subprocess.Popen(
-    [sys.executable, "detail_server.py", root, str(port), ctl_url],
-    cwd=os.path.dirname(os.path.abspath(__file__)),
+    [sys.executable, find_script("detail_server.py"), root, str(port), ctl_url],
     env=dict(os.environ, ARCP_DASH_HOST="127.0.0.1"),  # 測試綁本機免防火牆彈窗
     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:

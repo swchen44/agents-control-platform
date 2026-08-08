@@ -22,6 +22,7 @@ import time
 from arcp.config import jira_credentials
 from arcp.dispatcher import Dispatcher
 from arcp.jira_source import JiraCloudSource
+from arcp.paths import config_path
 from arcp.poller import OuterLoop
 from arcp.profiles import load_profiles
 from arcp.routing import load_config
@@ -34,8 +35,8 @@ F2_DESC = "在目前工作目錄建立 never.txt,內容是字串 x。"
 
 def main() -> int:
     src = JiraCloudSource(*jira_credentials())
-    source_cfg, routes = load_config("routes.yaml")
-    profiles = load_profiles("routes.yaml")
+    source_cfg, routes = load_config(config_path())
+    profiles = load_profiles(config_path())
     shutil.rmtree("./runtime_fault", ignore_errors=True)
     store = Store("./runtime_fault")
     test_jql = ("project = SCRUM AND labels in (faultretry, faultdead) "

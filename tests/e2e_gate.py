@@ -15,6 +15,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from arcp.paths import config_path
 from arcp.poller import OuterLoop  # noqa: E402
 from arcp.profiles import load_profiles  # noqa: E402
 from arcp.routing import load_config  # noqa: E402
@@ -60,8 +61,8 @@ class FakeDispatcher:
         return []
 
 
-_, routes = load_config("routes.yaml")
-profiles = load_profiles("routes.yaml")   # filechain-rawcli = engine claude
+_, routes = load_config(config_path())
+profiles = load_profiles(config_path())   # filechain-rawcli = engine claude
 tickets = [Ticket(id=i, key=f"P-{i}", summary="s", state="To Do",
                   assignee=None, assignee_id=None,
                   labels=["filechain-rawcli"]) for i in (101, 102, 103)]

@@ -46,8 +46,9 @@ def main() -> int:
     jql = a.jql
     if not jql:                                   # 預設用 poller 實際的 jql
         try:
+            from arcp.paths import config_path
             from arcp.routing import load_config
-            jql = load_config("routes.yaml")[0].get("jql")
+            jql = load_config(config_path())[0].get("jql")
         except Exception:  # noqa: BLE001
             jql = None
         jql = jql or "created >= -30d ORDER BY created DESC"  # 有界 fallback

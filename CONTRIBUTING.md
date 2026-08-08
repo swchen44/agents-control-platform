@@ -14,15 +14,16 @@ git config core.hooksPath .githooks   # 啟用 pre-commit(ruff),每台機器一�
 ```bash
 uv run ruff check .
 uv build
-cd harness && ARCP_CONFIG=routes.example.yaml sh -c '
-  for t in test_*.py; do uv run python "$t"; done
-  uv run python harness_selftest.py
-  uv run python e2e_dashboard.py
-  uv run python e2e_form.py'
+ARCP_CONFIG=routes.example.yaml sh -c '
+  for t in tests/test_*.py; do uv run python "$t"; done
+  uv run python tests/harness_selftest.py
+  uv run python tests/e2e_dashboard.py
+  uv run python tests/e2e_form.py'
 ```
 
+從 repo root 執行即可(腳本/設定/vendored 由 `arcp.paths` 以 repo-root 相對解析,不綁 cwd)。
 全綠再送。CI(`.github/workflows/ci.yml`)會在 Python 3.10–3.13 重跑一次。
-需真 Jira/agent 的測試(`smoke_jira.py`、`e2e_c*`)**不在 CI**,請本機自行驗證相關改動。
+需真 Jira/agent 的測試(`scripts/smoke_jira.py`、`tests/e2e_c*`)**不在 CI**,請本機自行驗證。
 
 ## 規範
 

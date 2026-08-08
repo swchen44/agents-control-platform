@@ -21,6 +21,7 @@ import time
 
 from arcp.config import jira_credentials
 from arcp.jira_source import JiraCloudSource
+from arcp.paths import config_path
 from arcp.poller import OuterLoop
 from arcp.routing import load_config
 from arcp.store import Store
@@ -28,7 +29,7 @@ from arcp.store import Store
 
 def main() -> int:
     src = JiraCloudSource(*jira_credentials())
-    source_cfg, routes = load_config("routes.yaml")
+    source_cfg, routes = load_config(config_path())
     shutil.rmtree("./runtime_outer", ignore_errors=True)
     store = Store("./runtime_outer")
     loop = OuterLoop(src, store, routes, source_cfg["jql"])

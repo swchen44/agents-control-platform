@@ -6,8 +6,10 @@ routes.yaml 的 outer_loop.triggers 需有該名字(every 可省略=純 oneshot)
 """
 from __future__ import annotations
 
+import os
 import sys
 
+from arcp.paths import config_path, harness_dir
 from arcp.profiles import load_profiles
 from arcp.store import Store
 from arcp.triggers import load_triggers, run_trigger
@@ -18,9 +20,11 @@ def main() -> int:
         print(__doc__)
         return 2
     name = sys.argv[1]
-    root = sys.argv[2] if len(sys.argv) > 2 else "./runtime_live"
-    profiles = load_profiles("routes.yaml")
-    triggers = {t.name: t for t in load_triggers("routes.yaml", profiles)}
+    root = (sys.argv[2] if len(sys.argv) > 2
+            else os.path.join(harness_dir() or ".", "runtime_live"))
+    cfg = config_path()                       # W12.4:repo-root 相對,不綁 cwd
+    profiles = load_profiles(cfg)
+    triggers = {t.name: t for t in load_triggers(cfg, profiles)}
     if name not in triggers:
         print(f"[trigger] 不認得 '{name}';可用:{sorted(triggers) or '(無)'}")
         return 2

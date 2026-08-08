@@ -31,18 +31,18 @@ jobs:
       - name: Build (wheel + sdist)
         run: uv build
 
-      # 只跑「離線」測試:單元 + harness_selftest + dashboard/form e2e。
-      # 排除需真 Jira/真 agent/openhands 的測試(smoke_jira、e2e_c*、e2e_codex…)
+      # 只跑「離線」測試:單元 + harness_selftest + dashboard/form e2e(全在 tests/)。
+      # 排除需真 Jira/真 agent/openhands 的測試(smoke_jira、e2e_c*、e2e_codex…)。
+      # 從 repo root 執行;腳本/設定/vendored 由 arcp.paths 以 repo-root 相對解析。
       - name: Offline tests
-        working-directory: harness
         env:
-          # CI/fresh checkout 沒有 openhands venv;detail_server(/agent 頁)用不依賴
-          # venv 的範例設定載入 profiles。harness_selftest 另硬編 routes.yaml(僅 routing,
-          # load_config 不驗 venv,故不受影響)。
+          # CI/fresh checkout 沒有 openhands venv;detail_server(/agent 頁)用不依賴 venv
+          # 的範例設定載入 profiles。純檔名 → arcp.paths 解析成 harness/routes.example.yaml,
+          # 不綁 cwd。harness_selftest 另固定讀 harness/routes.yaml(僅 routing,不驗 venv)。
           ARCP_CONFIG: routes.example.yaml
         run: |
           set -e
-          for t in test_*.py; do echo "== $t =="; uv run python "$t"; done
-          uv run python harness_selftest.py
-          uv run python e2e_dashboard.py
-          uv run python e2e_form.py
+          for t in tests/test_*.py; do echo "== $t =="; uv run python "$t"; done
+          uv run python tests/harness_selftest.py
+          uv run python tests/e2e_dashboard.py
+          uv run python tests/e2e_form.py

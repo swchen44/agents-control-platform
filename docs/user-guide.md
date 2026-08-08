@@ -33,15 +33,14 @@ JIRA_EMAIL=you@example.com
 JIRA_API_TOKEN=<你的 Atlassian API token>
 ```
 
-驗證連線:`cd harness && uv run python smoke_jira.py`(唯讀:auth + search)。
+驗證連線:`uv run python scripts/smoke_jira.py`(唯讀:auth + search;從 repo root)。
 
 ## 4. 設定 routes.yaml
 
 複製範例、改成你的:
 
 ```bash
-cd harness
-cp routes.example.yaml routes.yaml
+cp harness/routes.example.yaml harness/routes.yaml
 ```
 
 重點欄位:
@@ -56,8 +55,7 @@ cp routes.example.yaml routes.yaml
 ## 5. 跑起來
 
 ```bash
-cd harness
-uv run python run_poller.py [分鐘] [間隔秒]      # 預設 30 分、15 秒;時間盒到自動退
+uv run python scripts/run_poller.py [分鐘] [間隔秒]   # 預設 30 分、15 秒;時間盒到自動退
 ```
 
 啟動時會「認養」當下已存在的票(只對之後的新票/新留言反應,不重跑歷史)。同時起:
@@ -68,7 +66,7 @@ uv run python run_poller.py [分鐘] [間隔秒]      # 預設 30 分、15 秒;�
 ## 6. 看 dashboard(唯讀觀測)
 
 ```bash
-ARCP_DASH_HOST=127.0.0.1 uv run python detail_server.py ./runtime_live 8788
+ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 預設 harness/runtime_live
 # 開 http://127.0.0.1:8788
 ```
 
