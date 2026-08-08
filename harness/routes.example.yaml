@@ -1,0 +1,60 @@
+# ARCP 範例設定(可直接跑;rawcli-only、無 openhands venv 依賴)。
+# 新使用者從這份起步:複製成 routes.yaml、改 jql/project/profile 即可。
+# CI 也用這份(ARCP_CONFIG=routes.example.yaml)——不依賴本機才有的 venv。
+version: 1
+
+outer_loop:
+  source:
+    name: example
+    project: SCRUM
+    poll_interval_sec: 30
+    jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
+    write_retry: {max: 5, base_sec: 1}
+
+  concurrency:
+    max_running: 2
+    per_engine: {claude: 2, codex: 1}
+    per_profile: {}
+
+  control:
+    host: 127.0.0.1
+    port: 8787
+
+  form:
+    host: 127.0.0.1
+    port: 8790
+
+  routes:
+    - name: hands-off
+      when: {labels: ['no-agent']}
+      on_match: ignore
+    - name: agent-labeled
+      when: {labels: ['agent']}
+      profile: default
+      on_match: create_or_resume
+
+inner_loop:
+  profiles:
+    default:
+      goal: '完成 ticket 描述交付的任務並通過驗證'
+      max_budget_usd: 1.0
+      max_budget_monthly_usd: 50.0
+      human_minutes_est: 30          # KPI 節省人時估算
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli              # 純 stdlib,無需 openhands venv
+        engine: claude               # claude | codex
+        model: haiku                 # 測試省成本;真實任務可改 sonnet/opus
+        os_sandbox: true
+        sandbox: workspace-write
+        timeout_sec: 300
+      verify:
+        - name: task-done
+          files:
+            DONE.md:                 # 確定性檢查:產出 DONE.md(任何內容)才算 SUCCESS
+      loop:
+        max_attempts: 3
+        on_unknown: pending

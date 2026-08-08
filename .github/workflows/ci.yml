@@ -35,6 +35,11 @@ jobs:
       # 排除需真 Jira/真 agent/openhands 的測試(smoke_jira、e2e_c*、e2e_codex…)
       - name: Offline tests
         working-directory: harness
+        env:
+          # CI/fresh checkout 沒有 openhands venv;detail_server(/agent 頁)用不依賴
+          # venv 的範例設定載入 profiles。harness_selftest 另硬編 routes.yaml(僅 routing,
+          # load_config 不驗 venv,故不受影響)。
+          ARCP_CONFIG: routes.example.yaml
         run: |
           set -e
           for t in test_*.py; do echo "== $t =="; uv run python "$t"; done
