@@ -2547,6 +2547,25 @@ _STATE_DOC = [
 ]
 
 
+# W10.5:svg-pan-zoom(vendored,離線)掛上狀態機 + 架構圖 → 可拖曳平移 / 按鈕縮放。
+# mouseWheelZoomEnabled:false 避免劫持頁面滾動;控制圖示(+/-/reset)由 lib 內建。
+_SVGPZ_JS = (
+    "<script src='/tvendor/svg-pan-zoom.min.js'></script>"
+    "<script>(function(){"
+    "function pz(id){var el=document.getElementById(id);"
+    "if(!el||!window.svgPanZoom)return;"
+    "var mh=getComputedStyle(el).maxHeight;"
+    "if(mh&&mh!=='none')el.style.height=mh;el.style.width='100%';"
+    "try{svgPanZoom(el,{zoomEnabled:true,controlIconsEnabled:true,"
+    "panEnabled:true,dblClickZoomEnabled:true,mouseWheelZoomEnabled:false,"
+    "fit:true,center:true,contain:true,minZoom:0.4,maxZoom:12,"
+    "zoomScaleSensitivity:0.35});}catch(e){}}"
+    "function go(){pz('smsvg');pz('archsvg');}"
+    "if(document.readyState!=='loading')go();"
+    "else document.addEventListener('DOMContentLoaded',go);"
+    "})();</script>")
+
+
 def _arch_doc_table() -> str:
     """W10.4:模組職責表(依 _ARCH_LAYERS 分層順序;欄=模組/職責/trigger/輸入/
     輸出/上游/下游)。"""
@@ -2588,7 +2607,10 @@ def render_concepts_page() -> str:
         "<code>codex exec</code> 由 <b>Jira 事件驅動</b>、可觀測、可控制。搞定系統"
         "先搞定<b>資料流的生命週期</b>——下面是一張票從進來到離開的狀態流動。</p></div>"
         "<h2>Jira ticket 狀態機(harness 內部 · HIL 模型 6 態 + 概念終點)</h2>"
-        f"<div class='card'>{_sm_svg()}</div>"
+        f"<div class='card'>{_sm_svg()}"
+        "<p class='sys' style='text-align:left;margin-top:6px'>"
+        "🖐 拖曳平移、角落 <b>+ / − / ⟳</b> 鈕縮放/重置(離線 svg-pan-zoom)。</p>"
+        "</div>"
         "<h2>HIL(Human In the Loop)模型</h2><div class='card'>"
         "<ul style='line-height:1.8'>"
         "<li><b>合併</b>:舊「交人 inactive」與「等待人類 pending」語意一致,合併成 "
@@ -2637,7 +2659,8 @@ def render_concepts_page() -> str:
         "ticket 詳情頁的<b>事件時間軸</b>即由它繪製。</li>"
         "</ul></div>"
         "<p class='sys' style='text-align:left'>同內容見 repo 根 "
-        "<code>README.md</code>「資料流生命週期 / 狀態機」段。</p></main>")
+        "<code>README.md</code>「資料流生命週期 / 狀態機」段。</p></main>"
+        + _SVGPZ_JS)
 
 
 # ── W7.7:REST /api/v1(唯讀,給 LLM 監控)────────────────────────────────── #

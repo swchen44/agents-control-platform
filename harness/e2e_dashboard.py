@@ -436,6 +436,15 @@ try:
                                        "store", "control_api"))
           and all(s in cpage for s in ("輸入層", "決策層", "執行層",
                                        "人機協作層")))
+    # W10.5:svg-pan-zoom 互動(vendored 離線)
+    check("概念頁:svg-pan-zoom 互動(離線 vendored)",
+          "/tvendor/svg-pan-zoom.min.js" in cpage
+          and "svgPanZoom(" in cpage)
+    spz = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/tvendor/svg-pan-zoom.min.js", timeout=5)
+    check("svg-pan-zoom 資產可離線取(200 + 非空)",
+          spz.status == 200
+          and int(spz.headers.get("Content-Length") or 0) > 10000)
 
     # W7.7:REST /api/v1(給 LLM 監控;三合一 ref 解析 + 狀態/事件/log)
     def _api(path):
