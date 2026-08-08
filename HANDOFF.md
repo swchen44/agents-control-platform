@@ -12,7 +12,7 @@
   L3 log 內容化、`/concepts` DB 欄、`/server` 認證方式(不露金鑰)、`/control` poll 統計、
   **事件時間軸**(W9.2 浮動抽屜 → W9.3 L3 對話+生命週期合一單軸、共用時間軸、左側分類)。
 - **W10 生命週期重設計(HIL 模型)** — 經 12 題決策樹定案(見
-  `docs/design/architecture.md`、`harness/REQUIREMENTS.md §13`、記憶
+  `docs/design/architecture.md`、`docs/requirements.md §13`、記憶
   `w10-lifecycle-hil-a2a-redesign`):
   - ✅ **W10.1** 狀態模型:6 態 `todo/running/queued/HIL(Middle)/HIL(End)/aborted`
     (`canonical_state` 唯讀映射,不動 runtime);狀態機圖/`_STATE_DOC`/`/concepts` 重畫。

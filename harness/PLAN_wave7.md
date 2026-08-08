@@ -43,7 +43,7 @@
 ## Checklist
 
 **W7.0 — REQUIREMENTS §12 + PLAN_wave7**
-- [x] REQUIREMENTS.md §12(R1–R9,含 Why + 決策脈絡)
+- [x] requirements.md §12(R1–R9,含 Why + 決策脈絡)
 - [x] PLAN_wave7.md(本檔)
 - [ ] commit+push
 

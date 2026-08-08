@@ -155,7 +155,7 @@ def main() -> int:
     api.start()
     # W6.4:移除定時快照器(耗資源)。transcript 改純事件觸發(換手/交人/
     # evict/close 由 dispatcher·commands 呼 finalize)+ 被動按鈕(control
-    # POST /gen_transcript/<id>)。決策見 REQUIREMENTS.md §10.3。
+    # POST /gen_transcript/<id>)。決策見 requirements.md §10.3。
     print(f"[poller] control API on http://{ctl.get('host', '127.0.0.1')}:"
           f"{api.port} (/status /health /pause /resume /reload)", flush=True)
 

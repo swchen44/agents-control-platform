@@ -1,0 +1,66 @@
+# FAQ
+
+## 一般
+
+**Q:ARCP 跟直接跑 `claude -p` 差在哪?**
+A:ARCP 讓它**長時間可靠執行、可觀測、可控制、由 Jira 驅動**:證據型停止(不信 agent
+自稱)、三態 outcome、bounded retry、預算閘、並發資源閘、事件 trace、transcript、REST
+控制面、人機協作(HIL)。你管的是一支 agent 大軍,不是單次呼叫。
+
+**Q:為什麼用 Jira?**
+A:公司本來就活在 Jira。讓 agent 像員工一樣對 Jira 負責 → 人用既有儀式(指派/留言/審核/
+關單)就能管 agent,不必學新工具。Jira 是工作日誌;真工作在後台。見 [決策 D1](decisions.md)。
+
+**Q:一定要 Jira 嗎?**
+A:目前來源是 Jira Cloud(`jira_source.py` 是唯一碰 Cloud 細節的檔,換 Server/DC 只改一檔)。
+另有內部觸發源(scheduled/oneshot/script)可不經 Jira 跑任務。
+
+## 執行
+
+**Q:一定要 OpenHands / venv 嗎?**
+A:**不用**。主線 `rawcli` backend 純 stdlib(直接 spawn `claude -p` / `codex exec`),
+系統 python 即可跑。openhands-acp / openhands-server backend 是選配(需 venv)。
+`routes.example.yaml` 就是 rawcli-only。
+
+**Q:claude 還是 codex?**
+A:都支援(profile 的 `agent.engine`)。共用同一 envelope 契約,換引擎不改 dispatcher。
+
+**Q:agent 卡住了怎麼辦?**
+A:「強制驅逐」(ticket 頁按鈕或 `POST /evict/<id>`)→ killpg 釋放資源、不耗 attempt、
+下輪自動 native resume 續跑(不重花錢)。
+
+**Q:會不會燒錢?**
+A:有預算閘:profile `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月),達上限交人;
+人可在表單放寬。model 也可選(haiku 省、opus 強)。
+
+## 人機協作(HIL)
+
+**Q:agent 需要我時怎麼通知?**
+A:在票上留言 `@mention` 你 + 附一次性表單連結(不改 assignee)。填完系統回寫 Jira 並讓
+agent 續跑。詳 [使用者手冊 §7](user-guide.md)。
+
+**Q:為什麼不讓我直接編 Jira description?**
+A:free-text 易錯難處理。改用受控表單(前後端雙驗、schema 版本化)+ 系統單一寫入者 +
+hash 稽核 → 乾淨可稽核。見 [決策 D8](decisions.md)。
+
+**Q:grader 說成功,但我覺得沒完成?**
+A:HIL(End) 有三訊號並列(grader / agent 自評 / 你的評分)。你可選「續跑」(解終態+重置
+額度回進行中)或「關單」。
+
+**Q:Jira 掛了我還能填表單嗎?**
+A:能看能填,但送出會提示「稍後再試」且不落地(不做 queue,避免不同步)。Jira 恢復後
+poller 自動解除降級。
+
+## 開發
+
+**Q:怎麼跑測試?**
+A:`cd harness && uv run python <test>.py`。離線集(CI 跑)= 所有 `test_*.py` +
+`harness_selftest` + `e2e_dashboard` + `e2e_form`。真 Jira 用 `smoke_jira.py`。詳
+[開發者手冊](developer-guide.md)。
+
+**Q:CI 為什麼用 `routes.example.yaml`?**
+A:`routes.yaml` 的 openhands profiles 依賴 gitignored 的 venv,fresh checkout 沒有 →
+`load_profiles` 會失敗。`routes.example.yaml` 是 rawcli-only、無 venv 依賴。
+
+**Q:怎麼加一個 backend / profile?**
+A:見 [開發者手冊](developer-guide.md)「加一個 backend / profile」。

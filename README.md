@@ -12,85 +12,71 @@
 > controllable, and Jira-event-driven — with every claim pinned by real experiments,
 > not documentation folklore.
 
-## 這個專案解決什麼
+## 這是什麼
 
-headless 模式下的 coding agent CLI 有共同缺口:
+你在 Jira 開票(或貼標籤)→ ARCP 的 poller 看到 → 派一個 headless coding agent
+(`claude -p` / `codex exec`)去做 → 在隔離 workspace 執行、產出證據 → 確定性驗證
+(grader)過才算成功 → 需要人時 agent 在票上 `@mention` 你並附**一次性表單連結**;你填完,
+系統回寫 Jira 並讓 agent 續跑或關單。**你用既有的 Jira 操作就能指揮一支 agent 大軍。**
 
-- 跑一半掛了(crash、SSH 斷線、機器重啟)→ 進度全失,**沒有跨 CLI 一致的 recovery**
-- 事件流各說各話(schema、終止語意都不同)→ **沒有統一的 trace / 狀態機**
-- 卡住(等 permission、API hang)沒人知道 → **沒有 stall 偵測與升級迴路**
-- agent 說「做完了」不可信 → **需要證據型停止**,不是自稱完成
+> Make headless coding agents (Claude Code / Codex CLI) long-running, traceable,
+> controllable, and Jira-event-driven — every claim pinned by real experiments.
 
-ARCP 的路線:**自寫輕量 supervisor(raw subprocess)為一級公民**,OpenHands ACP
-留作可插拔對照後端,只在差異化層(跨 CLI recovery、git checkpoint 語意)投入原創。
+## 特色
 
-## 內容物
-
-| 路徑 | 內容 |
-|---|---|
-| `research/` | 研究報告(v3 最新):需求規格、開工級設計、三路線對照、**全部實測釘死的事實** |
-| `examples/jira-agent-poc/` | **可跑 PoC**(~800 行、零依賴):Jira watcher → rule 引擎 → workspace+skills → 監督 CLI → 統一 trace |
-| `examples/jira-agent-poc/recovery_test.py` | **crash→resume 矩陣實驗 harness**:受控 kill × 信號矩陣 + 確定性判準 |
-| `examples/openhands-acp-poc/` | **路線 B PoC**:OpenHands SDK 包 claude/codex headless(ACP adapter),含 A/B 實跑對照 `COMPARISON.md` |
-| `examples/jira-agent-poc/fixtures/` | claude / codex 的**真實事件流**(含 crash+resume 黃金樣本對),協定回歸測試用 |
-| `HANDOFF.md` | 零上下文接手文件:已敲定決策、實測事實、下一步清單 |
-
-## 已用實測釘死的事實(精選)
-
-**Crash recovery 可行,且兩家 CLI 的路徑不同:**
-
-- `claude -p --session-id <uuid>` 可**預先指定** session id → crash 後
-  `--resume <id>` 重接。2×2 矩陣(思考中/工具執行中 × SIGTERM/SIGKILL)**4/4 PASS**:
-  同 session、記得進度、**不重工**(crash 前檔案 mtime 不變)、任務補完。
-- codex **不能預指定**,但從 `thread.started` 事件**事後擷取** thread id 來得及 →
-  `codex exec resume <id>` 重接成功(2×2 矩陣全時機實證,含最嚴苛的「工具執行中 SIGKILL」)。
-
-**過程踩出來的陷阱(每一條都有事件流佐證):**
-
-1. codex 收 SIGTERM **優雅退場 rc=0** → 「事件 OR exit code」判據會把砍到一半的
-   run 誤判成完成。**exit code 只證明程序結束,不證明任務完成** → 證據型 grader 是必要品。
-2. `codex exec resume` **不接受 `--sandbox`**(rc=2),要 `-c sandbox_mode="..."`。
-3. kill 必須殺 **process group**:只殺 CLI pid,codex 的 shell 子程序會孤兒續跑,
-   在 supervisor 背後把任務偷偷做完。
-4. codex 工具粒度不可預期(同 prompt 有時單指令打包、有時逐步)→
-   **事件流不能當進度真值,要以檔案系統真值判讀**。
-5. 兩家終止語意不對稱:claude 有明確 `result` 事件;codex 靠 `turn.completed` + exit。
-6. 筆電**系統睡眠會凍結 supervisor 計時器**,產生假 stall / 假 hang —— live 監督
-   要防睡或跑在 server 上。
-
-**ACP 對照(原始碼查證):** ACP 有 `session/load` resume 語意,但底層耐久性與
-raw 同源(adapter 委託 CLI 自家 session 檔);OpenHands 另有「事件史注入新 session」
-的 bootstrap-prompt resume 設計,值得抄作 raw 路徑的降級層。詳見 research v3 §6.4。
+- **證據型停止**:agent 自稱「完成」不算數,確定性 `verify` 過才 SUCCESS;三態 outcome
+  (SUCCESS / FAILURE / **UNKNOWN**)。
+- **跨 backend/引擎統一契約**:rawcli(純 stdlib,免 venv)/ openhands-acp /
+  openhands-server × claude / codex,共用同一 envelope,換執行單元零改動。
+- **韌性**:native resume(crash 不重工)、bounded retry、stall 看門狗、killpg evict、
+  預算閘(單次/月)。
+- **HIL 人機介面**:一次性 token 受控表單(補資訊/決策/評分關單)取代人手編 Jira;
+  全程可稽核(hash + journal)。
+- **可觀測**:唯讀 dashboard(KPI/trace/事件時間軸/狀態機/架構圖)+ transcript,
+  **內網零外部依賴**(所有元件 vendored)。
+- **可控制**:REST 控制面(pause/resume/reload/shutdown/evict/recover)。
 
 ## 快速開始
 
 ```bash
-cd examples/jira-agent-poc
+uv sync                                   # 裝相依 + editable 安裝 arcp(需 Python ≥ 3.10)
+# ~/.env 放 JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN(不進版控)
 
-# 離線、免 token:真實事件流跑過 normalize → 狀態機 → trace
-python3 replay_demo.py
+cd harness
+cp routes.example.yaml routes.yaml        # 改 jql / project / profile
+uv run python smoke_jira.py               # 唯讀冒煙:驗 Jira 連線
+uv run python run_poller.py               # 起 poller(+ control 8787 + 表單服務 8790)
 
-# 免 token:7 項 self-test(rule 引擎 + 事件正規化 + 狀態機)
-python3 selftest.py
-
-# live(花 token):真實 claude -p / codex exec 全流程
-python3 run_demo.py claude
-python3 run_demo.py codex "Reply with exactly the word: pong"
-
-# live(~$0.2):crash→resume 2×2 矩陣 + 確定性判分(建議 caffeinate 防睡眠)
-python3 recovery_test.py            # claude
-python3 recovery_test.py --agent codex
+# 另開一個 terminal 看 dashboard
+ARCP_DASH_HOST=127.0.0.1 uv run python detail_server.py ./runtime_live 8788
+# → http://127.0.0.1:8788
 ```
+
+完整步驟見 **[使用者手冊](docs/user-guide.md)**。
+
+## 文件
+
+| 對象 | 文件 |
+|---|---|
+| 使用者 | [使用者手冊](docs/user-guide.md) |
+| 開發者 | [開發者手冊](docs/developer-guide.md) · [專案檔案介紹](docs/project-overview.md) |
+| 想懂為什麼 | [需求與理由](docs/requirements.md) · [決策記錄](docs/decisions.md) · [FAQ](docs/faq.md) |
+| 設計細節 | [生命週期](docs/design/lifecycle.md) · [架構](docs/design/architecture.md) · [互動服務](docs/design/interaction.md) · [其餘](docs/index.md) |
+
+文件總覽:[docs/index.md](docs/index.md)。
 
 ## 架構一眼看
 
 ```
-Jira issue ─▶ rule engine(assignee/keyword JSON)─▶ workspace + skills 裝配
-        ─▶ supervisor spawn(claude -p | codex exec)
-        ─▶ driver 正規化 ─▶ 統一 AgentEvent ─▶ 狀態機 ─▶ journal(events.jsonl + snapshot)
-                                   │
-                     watchdog(stall)· control(pause/kill/resume)· crash→resume
+Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)─▶ dispatcher
+        ─▶ workspace+skills ─▶ 執行單元(claude -p | codex exec)─▶ envelope 契約
+        ─▶ grader 終審 ─▶ SUCCESS/FAILURE/UNKNOWN
+                              │  需要人 → @mention + 一次性表單 → 回寫 Jira → resume/關單
+        觀測: dashboard + transcript      控制: REST(pause/evict/…)
 ```
+
+分層模組圖 + 職責表 + node/edge graph 見 [架構](docs/design/architecture.md)
+與 dashboard 的 **Introduction** 頁。
 
 ## 資料流生命週期 / 狀態機(W10:HIL 模型)
 
@@ -128,15 +114,17 @@ Jira issue ─▶ rule engine(assignee/keyword JSON)─▶ workspace + skills �
   `pending_reason` 只存 DB `ticket_session`,**不寫回 Jira**;上面 6 態即由這些欄位
   (加 queued/inactive/有無 session)推導的單一 canonical 狀態(`canonical_state()`
   唯讀映射)。
-- **harness 不主動 transition Jira 狀態**(只留言);關票=人做。成功/失敗後交人
-  評分(人在 description 的 `human` 段填 `score: 0–10`),人填完再自己關票。
+- **關票=人授權、系統執行**:成功/失敗後 agent 發 `score_and_close` 一次性表單,人評分
+  (0–10)+ 裁決;選「關單」系統幫忙轉 Jira Done,選「續跑」解終態重置額度回進行中。
+  (W11 起改表單化,取代人手編 description;見 [互動服務](docs/design/interaction.md)。)
 - **生命週期事件**都記在 journal `events.jsonl`(new_issue/attempt_*/resolved/pending/
   handoff/jira_write/human_score…);ticket 詳情頁的**事件時間軸**由它繪製。
 
 > 完整分層模組架構、職責表、以及 **agent↔agent 交接(同票 `next` vs 跨票 `base` 怎麼選)**
 > 見 [docs/design/architecture.md](docs/design/architecture.md)。生命週期細節見
 > [docs/design/lifecycle.md](docs/design/lifecycle.md)。
-> ⚠️ HIL **行為**(W10.2)與 **a2a base 交接**(W10.3)為目標設計,實作暫緩、待審。
+> ℹ️ HIL **行為**與**互動服務**(W11)程式已接線,真 Jira 端到端整合測進行中;跨票
+> `base` a2a 交接為目標設計、待實作。
 
 ## 多實例部署(同一台機器並存多個 Control Plane)
 

@@ -7,7 +7,7 @@
 > - transcript = **純事件+按鈕,移除 60s 定時快照**
 > - dashboard 綁 **0.0.0.0 無認證**(內網信任;金鑰只顯示狀態不顯值)
 > - process 對應 = **best-effort ps**(cwd→workspace→Jira,純 stdlib)
-> - 需求文件 = **單一 REQUIREMENTS.md**
+> - 需求文件 = **單一 requirements.md**
 
 ## W6 決策表(新標 W)
 
@@ -25,8 +25,8 @@
 
 ## Checklist
 
-**W6.0 — REQUIREMENTS.md + PLAN_wave6** ✅
-- [x] REQUIREMENTS.md(需求總表,含 Why,永久維護規則)
+**W6.0 — requirements.md + PLAN_wave6** ✅
+- [x] requirements.md(需求總表,含 Why,永久維護規則)
 - [x] PLAN_wave6.md(本檔)
 - [ ] commit+push
 
