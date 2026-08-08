@@ -1,5 +1,10 @@
 # ARCP — Agent Runtime / Control Plane
 
+[![CI](https://github.com/swchen44/agents-control-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/swchen44/agents-control-platform/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%E2%80%933.13-blue)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![uv](https://img.shields.io/badge/packaging-uv-de5fe9)](https://github.com/astral-sh/uv)
+
 讓 `claude -p`、`codex exec` 這類 **headless coding agent** 能長時間可靠執行、
 **可觀測(trace)**、**可控制(control)**,並由 **Jira 事件驅動**。
 

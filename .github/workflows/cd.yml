@@ -1,0 +1,27 @@
+name: CD
+
+# 打 tag(v0.1.0 之類)→ build wheel/sdist → 發 GitHub Release 附產物。
+# 尚未發 PyPI(套件名/token/對外維護承諾未定;之後要對外再加 publish job)。
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # 建 Release 需要
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv + Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Sync deps (editable arcp + dev)
+        run: uv sync --extra dev
+
+      - name: Ruff (lint + import order)
+        run: uv run ruff check .
+
+      - name: Build (wheel + sdist)
+        run: uv build
+
+      # 只跑「離線」測試:單元 + harness_selftest + dashboard/form e2e。
+      # 排除需真 Jira/真 agent/openhands 的測試(smoke_jira、e2e_c*、e2e_codex…)
+      - name: Offline tests
+        working-directory: harness
+        run: |
+          set -e
+          for t in test_*.py; do echo "== $t =="; uv run python "$t"; done
+          uv run python harness_selftest.py
+          uv run python e2e_dashboard.py
+          uv run python e2e_form.py
