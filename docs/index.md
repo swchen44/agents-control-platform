@@ -44,6 +44,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 `docs/design/` 有各子系統的機制細節:
 [生命週期](design/lifecycle.md) ·
 [模組架構](design/architecture.md) ·
+[Workspace 佈建](design/workspace.md) ·
 [互動服務(HIL 人機介面)](design/interaction.md) ·
 [可觀測性](design/observability.md) ·
 [執行隔離](design/isolation.md) ·
