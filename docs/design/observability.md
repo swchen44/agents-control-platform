@@ -265,7 +265,21 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 評分)、狀態機圖、transcript 檢視。離線內網完全可用(所有元件 vendored、零外部依賴)。
 沒有畫面時,§2 的 journal 查法 + §4 的序列對照就足以定位。
 
-## 6. 維護:防止字典漂移
+## 6. trace 完整性自檢(C2)
+
+`scripts/trace_lint.py` 掃 runtime,確認每個「有跑過 attempt」的票四層證據齊全:
+completed/error 的 attempt **必須**有 L2(`attempts/aN.envelope.json`,合法 JSON、帶
+completed|error)+ L3(`attempts/aN.events.jsonl`,非空);UNKNOWN(runner 死/無 envelope)
+**依設計可缺**,不算失敗。缺任一該有的層 → 列出 + rc!=0(供審計)。
+
+```bash
+python3 scripts/trace_lint.py [runtime_dir]   # 預設 runtime/;無資料視為通過
+```
+
+邏輯由 `tests/test_trace_lint.py` 在 CI 驗證(合成 runtime 六情境)。這是 v5 唯一的 P1
+硬 KPI —— 每個結束的 attempt 都要留得下可稽核的四層證據。
+
+## 7. 維護:防止字典漂移
 
 事件字典的自動表對應 code；改了 `store.journal(...)` 的事件名/欄位後:
 

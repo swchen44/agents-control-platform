@@ -6,6 +6,9 @@
 ## [Unreleased]
 
 ### Added
+- **trace 完整性自檢(C2,v5 唯一 P1 硬 KPI)**:`scripts/trace_lint.py` 掃 runtime,確認
+  每個跑過的 attempt L0–L3 四層證據齊全(completed/error 必須有 envelope+events;UNKNOWN
+  依設計可缺不算失敗);缺 → 列出 + rc!=0(審計)。`tests/test_trace_lint.py` 六情境在 CI 驗證。
 - **workspace 佈建三能力(docs/design/workspace.md)**:profile `workspace_install`
   (安裝命令 argv,ARCP 附 `<ws> <template>` 兩絕對路徑、cwd=template、stdout/stderr→logger、
   rc 判定)、`common_skills`(從 `config/skills/` 選子集,整包複製)、`inject_md`
