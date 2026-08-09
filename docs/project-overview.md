@@ -62,6 +62,7 @@ agents-control-platform/
   inline + 這裡,同名 fail-fast)—— 命名精準、分檔 owner(Q15,見 [設計/選擇](design/selection.md))
 - `templates/`:workspace 模板 `<name>_template/` + 全域 `inject_claude_md_end.md`
 - `skills/`:common skills 庫(`<name>/`;profile `common_skills` 選子集)
+- `hooks/`:common hooks 庫(`<name>/`;profile `common_hooks` 選子集;機制同 skills)
 - 佈建流程見 [設計/workspace](design/workspace.md)。
 
 ## `vendor/` — 離線 vendored 資產

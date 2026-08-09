@@ -46,6 +46,7 @@ inner_loop:
         # --- 進階佈建(docs/design/workspace.md;預設都關/空)---
         # install: 'uv run install.py'   # 設了就用命令佈建(不 copytree);ARCP 附 <ws> <template> 兩參數
         # common_skills: [example-skill] # 從 config/skills/ 選子集,複製到 ws 的 skills 目錄
+        # common_hooks: [example-hook]   # 從 config/hooks/ 選子集,複製到 ws 的 hooks 目錄
         # inject_md: true                # 是否把 config/templates/inject_claude_md_end.md 貼到 CLAUDE.md/AGENTS.md 尾
       skills: []                    # 舊式逐檔 SKILL.md(相容;新專案用 common_skills)
       # --- Q16 profile 選擇(A/B 測試 / 泛化 triage;首次派工選一次、pin 進 session)---

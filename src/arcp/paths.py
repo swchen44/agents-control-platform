@@ -55,6 +55,11 @@ def common_skills_dir() -> str | None:
     return _under_root("config", "skills")
 
 
+def common_hooks_dir() -> str | None:
+    """common hooks 庫(config/hooks/<name>/;profile.common_hooks 選子集)。"""
+    return _under_root("config", "hooks")
+
+
 def scripts_dir() -> str | None:
     """可執行腳本 + 被 spawn 的 runner(scripts/)。"""
     return _under_root("scripts")

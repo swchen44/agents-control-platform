@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | **TICKET.md** | 「**要做什麼**」 | 動態、**每票** | 每次 provision 寫 + 過期自動刷新 | code 從 Jira 票渲染 |
 | **CLAUDE.md / AGENTS.md**(+ `inject_claude_md_end.md`) | 「**怎麼做/行為守則**」 | 靜態、profile 層 | 建立時貼一次(冪等 marker) | 模板 + 全域 inject 檔 |
-| **`.claude/skills` / `.agents/skills`** | 「**有什麼能力**」 | 靜態、profile 層 | 建立時 copy 一次 | `config/skills/`(profile 選子集) |
+| **`.claude/skills` / `.agents/skills`**(+ `hooks`) | 「**有什麼能力 / hook**」 | 靜態、profile 層 | 建立時 copy 一次 | `config/skills/` + `config/hooks/`(profile 選子集) |
 | **workspace 模板骨架** | 「**起手長什麼樣**」 | 靜態、profile 層 | 建立時 copytree / install 一次 | `config/templates/<name>_template` |
 
 **關鍵區別**:除 TICKET.md 外,其餘三樣都**只在 workspace 全新建立時做一次**;resume 時
@@ -51,8 +51,9 @@ provision(ticket, profile):
      a. workspace_install 有設 → 當「命令」跑(見下方契約)
      b. 否則 workspace_template != "empty" → atomic copytree(.tmp → rename)
      c. 否則 → 空 ws
-  3. common skills:for name in profile.common_skills → copytree
-        config/skills/<name>/ → <skills 目標>/<name>/      (目標解析見下)
+  3. common skills / hooks:for name in profile.common_skills / common_hooks → copytree
+        config/skills/<name>/ → <.claude|.agents/skills>/<name>/;
+        config/hooks/<name>/  → <.claude|.agents/hooks>/<name>/  (目標解析見下,共用規則)
   4. inject:profile.inject_md 為 true 且 config/templates/inject_claude_md_end.md 存在時,
         把該檔內容(marker 包住)append 到 <md 目標> 尾    (目標解析見下)
   4b. 寫 .arcp_provisioned(commit marker;到這裡佈建全部成功 → 標記完整)
@@ -140,6 +141,7 @@ agent prompt(dispatcher `BASE_PROMPT`)第一句就是「請先閱讀工作目錄
 | `workspace_template` | str | 模板夾(相對 `config/templates/`),如 `myagent_template`;或 `empty` |
 | `workspace_install` | str? | 安裝命令(argv);設了就用它佈建、不自動 copytree |
 | `common_skills` | list[str] | 從 `config/skills/` 選的資料夾名;預設 `[]` |
+| `common_hooks` | list[str] | 從 `config/hooks/` 選的資料夾名;預設 `[]`(機制同 skills) |
 | `inject_md` | bool | 是否注入 `inject_claude_md_end.md`;預設 `true`(檔不存在則自然跳過) |
 | `goal` | str? | profile 層總目標;渲染進 TICKET.md「目標」段 |
 | `verify` | list | 確定性驗收步驟(files/cmd);渲染進 TICKET.md「驗收標準」段,亦是 grader 的依據 |

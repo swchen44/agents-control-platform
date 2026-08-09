@@ -19,7 +19,7 @@ import subprocess
 import time
 
 from .logutil import get_logger
-from .paths import common_skills_dir, templates_dir
+from .paths import common_hooks_dir, common_skills_dir, templates_dir
 from .profiles import Profile
 from .ticket import Ticket
 
@@ -130,19 +130,19 @@ def _run_install(ws: str, template: str, install_cmd: str, timeout: float) -> No
         raise RuntimeError(f"install 失敗 rc={proc.returncode}:{install_cmd}")
 
 
-def _copy_common_skills(ws: str, names: list[str]) -> None:
-    """config/skills/<name>/ 整包 → <skills目標>/<name>/(profile 選子集)。"""
+def _copy_bundle(ws: str, names: list[str], lib_dir: str,
+                 claude_rel: str, agents_rel: str, what: str) -> None:
+    """config/<lib>/<name>/ 整包 → <目標>/<name>/(profile 選子集)。skills/hooks 共用。
+    目標解析:.claude/* 或 .agents/*(統一規則,見 _resolve_targets)。"""
     if not names:
         return
-    base = common_skills_dir() or "."
-    targets = _resolve_targets(ws, ".claude/skills", ".agents/skills",
-                               create_default=True)
+    targets = _resolve_targets(ws, claude_rel, agents_rel, create_default=True)
     for t in targets:
         os.makedirs(t, exist_ok=True)
     for name in names:
-        src = os.path.join(base, name)
+        src = os.path.join(lib_dir or ".", name)
         if not os.path.isdir(src):
-            raise FileNotFoundError(f"common skill 不存在: {src}")
+            raise FileNotFoundError(f"common {what} 不存在: {src}")
         for t in targets:
             dst = os.path.join(t, name)
             if os.path.isdir(dst):
@@ -202,7 +202,10 @@ def provision(root: str, ticket: Ticket, profile: Profile,
             dst = os.path.join(ws, ".claude", "skills", name)
             os.makedirs(dst, exist_ok=True)
             shutil.copy(skill_path, os.path.join(dst, "SKILL.md"))
-        _copy_common_skills(ws, profile.common_skills)  # 3b. common skills(選子集)
+        _copy_bundle(ws, profile.common_skills, common_skills_dir() or ".",
+                     ".claude/skills", ".agents/skills", "skill")  # 3b. common skills
+        _copy_bundle(ws, profile.common_hooks, common_hooks_dir() or ".",
+                     ".claude/hooks", ".agents/hooks", "hook")     # 3c. hooks(Q8)
         if profile.inject_md:                           # 4. inject md
             _apply_inject(ws)
         with open(marker, "w") as f:                    # ← commit:全部成功才立 marker

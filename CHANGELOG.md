@@ -6,6 +6,9 @@
 ## [Unreleased]
 
 ### Added
+- **workspace common hooks(Q8)**:比照 common_skills —— `config/hooks/<名>/` 庫 + profile
+  `common_hooks` 選子集,佈建時整包複製到 `.claude/hooks` / `.agents/hooks`(統一目標解析,
+  與 skills 共用 `_copy_bundle`)。加 `config/hooks/`(README + example-hook)、`common_hooks_dir`。
 - **效能監控(Q5)**:整合進 dashboard `/server` 頁 —— 8 個紅黃綠燈指標(attempt 失敗率 /
   排隊深度 / 最舊未終態票等待 / evict 次數 / 花費速率 / 錯誤事件 / 系統資源 / journal 大小,
   門檻見 `perf_metrics`)+ per-profile 細節表(attempts/失敗率/平均時長/累計$/最後活動)+

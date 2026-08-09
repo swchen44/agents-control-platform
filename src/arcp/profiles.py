@@ -54,6 +54,7 @@ class Profile:
     # common_skills=從 config/skills/ 選的資料夾名;inject_md=是否注入 inject 檔
     workspace_install: str | None = None
     common_skills: list[str] = field(default_factory=list)
+    common_hooks: list[str] = field(default_factory=list)  # Q8:config/hooks/ 選子集
     inject_md: bool = True
     # Q16:首次派工選 profile(A/B 測試 / 泛化 triage)。None=不選、直接用本 profile。
     # {candidates:[名], method:"random"|"script", script:"argv(method=script)"}
@@ -164,6 +165,7 @@ def load_profiles(path: str) -> dict[str, Profile]:
             workspace_install=(str(ws["install"])
                                if ws.get("install") else None),
             common_skills=list(ws.get("common_skills") or []),
+            common_hooks=list(ws.get("common_hooks") or []),
             inject_md=bool(ws.get("inject_md", True)),
             select=_parse_select(name, p.get("select")),
             source_yaml=_source)

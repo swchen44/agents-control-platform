@@ -40,6 +40,7 @@ class _P:
         self.workspace_install = kw.get("workspace_install")
         self.skills = kw.get("skills", [])
         self.common_skills = kw.get("common_skills", [])
+        self.common_hooks = kw.get("common_hooks", [])
         self.inject_md = kw.get("inject_md", True)
         self.goal = kw.get("goal")
         self.verify = kw.get("verify", [])
@@ -69,17 +70,25 @@ os.symlink(os.path.join(ws, ".claude/skills"), os.path.join(ws, ".agents/skills"
 t = w._resolve_targets(ws, ".claude/skills", ".agents/skills", create_default=True)
 check("目標:symlink 同檔 → 只一個", len(t) == 1)
 
-# ── common skills 複製(monkeypatch common_skills_dir)──────────────── #
+# ── common skills 複製(_copy_bundle,選子集 + 既有 .agents/skills)──── #
 skroot = tempfile.mkdtemp()
 os.makedirs(os.path.join(skroot, "aflow")); os.makedirs(os.path.join(skroot, "bflow"))
 open(os.path.join(skroot, "aflow", "SKILL.md"), "w").write("a")
 open(os.path.join(skroot, "bflow", "SKILL.md"), "w").write("b")
-w.common_skills_dir = lambda: skroot          # patch module-level name
 ws = _mkws(); os.makedirs(os.path.join(ws, ".agents/skills"))  # 已有 .agents → 進去
-w._copy_common_skills(ws, ["aflow"])
+w._copy_bundle(ws, ["aflow"], skroot, ".claude/skills", ".agents/skills", "skill")
 check("common skill:選子集複製到既有 .agents/skills",
       os.path.isfile(os.path.join(ws, ".agents/skills/aflow/SKILL.md"))
       and not os.path.isdir(os.path.join(ws, ".agents/skills/bflow")))
+
+# ── Q8 common hooks 複製(都無 → 建 .claude/hooks)───────────────────── #
+hkroot = tempfile.mkdtemp()
+os.makedirs(os.path.join(hkroot, "ahook"))
+open(os.path.join(hkroot, "ahook", "hook.sh"), "w").write("#!/bin/sh\n")
+ws = _mkws()                                   # 無 .claude/.agents → 建 .claude/hooks
+w._copy_bundle(ws, ["ahook"], hkroot, ".claude/hooks", ".agents/hooks", "hook")
+check("Q8 hooks:都無 → 建 .claude/hooks 並複製",
+      os.path.isfile(os.path.join(ws, ".claude/hooks/ahook/hook.sh")))
 
 # ── inject 冪等 + symlink 只貼一次(monkeypatch templates_dir)──────── #
 tpl = tempfile.mkdtemp()
