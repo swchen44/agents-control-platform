@@ -179,3 +179,19 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
   預建 pinned session(`base_ref`)+ 本票 ABORTED;dispatcher 於新票首次佈建後注入 base 脈絡。
 - **人的選擇全寫回**:human_score / 裁決 / handoff 參數都經 `_write_human_section` 寫進 Jira
   description human 段(hash 保護)+ 稽核 comment;journal `handoff(via=hil)` / `base_injected`。
+
+## 15. Agent 產出 + 兩個人機表面(2026-08-09,agent-output.md)
+
+完整設計見 [agent-output.md](agent-output.md)。重點:agent 完成時**結構化回傳產出**,harness
+貼回 Jira、並在 HIL 評分頁自足呈現,人才判斷得了完成度。
+
+- **兩層產出**:①structured-output 加 `summary`(100–200 字 完成/未完成,CLI 強制,進 comment
+  開頭)②workspace `OUTPUT.json`(`summary_md` / `code[]` Gerrit / `attachments[]` / `references[]`)。
+- **Jira comment(結構化 ADF)**:`arcp/adf.py` 自建(粗體小標+清單+連結);由
+  `deliverables.post_deliverables` 於終態貼(有 OUTPUT.json 才多貼)。附件 <6MB 附到 issue、
+  ≥6MB 走下載頁。
+- **HIL 表單頁(自足評分駕駛艙)**:score_and_close payload 快照交付物(ScoreGate),
+  `form_server._deliverables_html` 渲染 summary_md(安全 md→html)+ code + 附件下載 +
+  references + cost/attempts + Jira/transcript/CQ 連結。檔案由 `/files/<token>` 服務
+  (只服務 OUTPUT.json 宣告且在 workspace 內的檔;路徑穿越防護)。
+- **降級**:無 OUTPUT.json → comment 只有 structured summary、表單頁仍可評分。不擋流程。

@@ -204,6 +204,22 @@ retry 情境下 attempt 計數。
 
 ---
 
+## Step 10 — Agent 產出 / 交付物(OUTPUT.json → Jira + 表單頁)
+
+**做什麼**:讓測試 profile 的任務**產出檔案**(在 workspace 寫 `OUTPUT.json` + 幾個檔;
+inject 守則已教格式)。跑到終態。試兩種:小檔(總和 <6MB)與大檔(≥6MB)各一張票。
+
+**預期 journal**:`deliverables_posted`(`has_output=true`、`mode=attach`(小)/`link`(大)、
+`n_attachments`);structured 的 `summary` 進 comment 開頭。
+
+- ☐ structured `summary`(100–200 字 完成/未完成)出現在 Jira comment 開頭
+- ☐ 有 OUTPUT.json → 多一則**結構化 comment**(自報 + Gerrit 連結 + 附件段)
+- ☐ 小檔:附件**直接出現在 Jira 票的附件區**(mode=attach)
+- ☐ 大檔:comment/表單頁有**下載連結**;開表單頁 `/form/<token>` → 交付物駕駛艙可下載
+  (`/files/<token>?f=…`);越界/不存在的附件被跳過(`skipped`>0)
+- ☐ 表單頁渲染 `summary_md`(markdown→HTML)+ code + 附件 + cost/attempts + Jira 連結
+- ☐ 沒寫 OUTPUT.json 的票 → 降級只有 structured summary(`has_output=false`),流程不擋
+
 ## 收尾
 
 - 全部打勾 → V1 付費路徑在真 agent 下如預期。把有疑點的步驟的 journal 片段留存

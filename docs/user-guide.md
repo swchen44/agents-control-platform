@@ -89,6 +89,10 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # runtime 資料預設
   (評分 0–10 + 裁決:關單 / 續跑 / **改派下一棒**)。
 - 你填完送出 → 系統回寫 Jira description 的 human 段 + 貼稽核 comment,並讓 agent
   resume;`score_and_close` 選「關單」→ 系統幫你把 Jira 轉 Done。
+- **看得到 agent 產了什麼**:agent 完成時回傳結構化產出 —— Jira comment 有「完成/未完成」
+  自報 + 程式碼(Gerrit)連結 + 附件(小檔直接附到票、大檔給下載連結);**評分表單頁**更是
+  自足駕駛艙:渲染成果敘事 + 可下載附件 + 花費/attempts + Jira/transcript 連結,不用離開就評分。
+  (產出契約見 [design/agent-output.md](design/agent-output.md)。)
 - **改派下一棒(handoff,W10.3)**:裁決選 `handoff` 後,再選**換手種類** + 下一棒 profile
   (下拉,候選=系統載入的全部 profile)+ 交接指示:
   - **同票換手(next)**:同一張票換一個 profile/引擎在**這張票**接手 —— 重置 session

@@ -59,6 +59,10 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   無效正則該框標紅、暫不過濾;過濾狀態寫進 URL(可分享深連結)。對應 REST:
   `GET /api/v1/tickets?q=<關鍵字或正則>&field=<key|summary|profile|desc|all>&mode=<match|regex>`
   (match=不分大小寫子字串;regex=正則亦不分大小寫);回傳含 `filter`,無效正則時另含 `filter_error`。
+- **agent 交付物**:終態時 agent 的 `OUTPUT.json` 會貼回 Jira —— comment(自報 + Gerrit
+  連結 + 附件)+ 評分表單頁駕駛艙。附件**總和 <6MB 直接附到 Jira 票**、**≥6MB 走表單服務的
+  `/files/<token>` 下載頁**(TTL 綁票)。看 journal `deliverables_posted`(mode=attach/link/none、
+  n_attachments、skipped);設計見 [design/agent-output.md](design/agent-output.md)。
 - 除錯用 journal:見 [可觀測性](design/observability.md) + [troubleshooting](troubleshooting.md)。
 
 ## 4. 調設定(不重啟)

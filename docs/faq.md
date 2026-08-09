@@ -77,6 +77,13 @@ template 重新佈建 workspace,**非 native resume**,脈絡全留在 Jira 票)�
 交接非失敗)。也可留言 `@agent next <profile>` 做同票換手。沒填全換手種類 / profile →
 fail-safe 降級續跑原 agent。見 [使用者手冊 §7](user-guide.md)、[design/architecture.md §4](design/architecture.md)。
 
+**Q:我怎麼知道 agent 到底產了什麼?能拿到它的檔案嗎?**
+A:agent 完成時回傳結構化產出。Jira comment 有「完成/未完成」自報 + 程式碼(Gerrit)連結 +
+附件:**小檔(總和 <6MB)直接附到 Jira 票**、**大檔(≥6MB)給一次性下載連結**。評分表單頁更
+完整(渲染成果敘事 + 可下載附件 + 花費 + Jira/transcript 連結)。實作靠 agent 在 workspace
+寫 `OUTPUT.json`(格式由注入的守則指示);沒寫也會降級只顯示自報。見
+[design/agent-output.md](design/agent-output.md)。
+
 ## 開發
 
 **Q:怎麼跑測試?**

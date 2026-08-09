@@ -33,7 +33,9 @@ caffeinate。詳 [需求與理由](requirements.md)。
 - **執行**:`dispatcher`(派工/審批/證據迴路)、`inner_runner`、`workspace`+`isolation`、
   `contract`(envelope 契約)、`grader`
 - **人機協作**:`approval`、`scoring`(HIL(End) 評分)、`commands`(@agent + 離手政策)、
-  `sections`(description 三方分段 + hash)、`interaction` + `hil` + `form_server`(W11 表單)
+  `sections`(description 三方分段 + hash)、`interaction` + `hil` + `form_server`(W11 表單)、
+  `output`(讀 agent 的 OUTPUT.json)+ `deliverables`(組交付物 ADF comment + 附件)+
+  `adf`(精簡 ADF builder)—— agent 產出契約,見 [design/agent-output.md](design/agent-output.md)
 - **狀態·觀測·控制**:`store`(SQLite + journal)、`control_api`、`transcript`、`retention`
   (`detail_server.py` 唯讀 dashboard 在 `scripts/`)
 

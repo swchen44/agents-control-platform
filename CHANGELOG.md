@@ -5,6 +5,22 @@
 
 ## [Unreleased]
 
+### Added
+- **Agent 產出契約 + 人機介面(agent-output,Q1–Q6 決策樹定案)**:agent 完成時**結構化
+  回傳產出**,harness 貼回 Jira + HIL 評分頁自足呈現。設計見
+  [design/agent-output.md](docs/design/agent-output.md)。
+  - **兩層**:structured-output 加 `summary`(100–200 字 完成/未完成,CLI `--json-schema`/
+    `--output-schema` 強制)+ workspace `OUTPUT.json`(`summary_md`/`code[]` Gerrit/
+    `attachments[]`/`references[]`)。`arcp/output.py` 讀取 + 附件路徑穿越防護 + 6MB 分類。
+  - **Jira comment**:`arcp/adf.py` 精簡 ADF builder;`arcp/deliverables.py` 於終態
+    (SUCCESS/FAILURE/UNKNOWN)貼結構化 comment,附件 <6MB 附到 issue、≥6MB 走下載頁;
+    `jira_source.add_attachment`(multipart)+ `add_comment_adf`。
+  - **HIL 表單頁自足駕駛艙**:ScoreGate 快照交付物進 payload;`form_server` 安全 md→html
+    渲染 summary_md + code + 附件下載 + references + cost/attempts + Jira/transcript/CQ 連結;
+    `/files/<token>` 服務附件(只服務 OUTPUT.json 宣告且在 workspace 內的檔、TTL 綁票)。
+  - 新事件 `deliverables_posted`(共 45);inject_claude_md_end.md 教兩層格式。
+    tests:test_output(13)/test_deliverables(11)/test_form_output(15);降級不擋流程。
+
 ### Changed
 - **CLI 全 flag 化 + 一律 `uv run`**:`run_poller.py` 的 minutes/interval 位置參數改成
   `-m/--minutes`、`-i/--interval`(`-m 0` = 無限常駐);`detail_server.py` **移除位置參數與
