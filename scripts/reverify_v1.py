@@ -99,8 +99,9 @@ def jira_read_check() -> None:
 
 
 _CHECKLIST = """
-== 付費部分:真派一次工才驗得到(需你在充電 + 願花 ~$0.03–0.05 haiku)==
-建議用一個便宜(model=haiku)、帶 select 的測試 profile 跑一張測試票,然後看
+== 付費部分:真派一次工才驗得到(需你在充電 + 願花 ~$0.1–0.3 haiku)==
+★ 一步步照著跑:docs/v1-reverify-checklist.md(每步:做什麼→預期 journal→在哪看→打勾)。
+下面是速覽;建議用便宜(model=haiku)、帶 select 的測試 profile 跑測試票,看
 dashboard ticket 頁 trace + runtime/events.jsonl,逐項確認新路徑:
 
   [ ] runner spawn:出現 session_created → attempt_started → attempt_finished

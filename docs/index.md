@@ -31,6 +31,8 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 - **[可觀測性](design/observability.md)** — 證據地圖(journal/db/transcript/dashboard)、
   怎麼讀 journal、**44 種事件字典**、典型事件序列。
 - **[LESSONS](lessons.md)** — 歷史踩坑全紀錄(症狀 → 根因 → 對策)。
+- **[V1 付費複驗 checklist](v1-reverify-checklist.md)** — 有真 agent + 充電時,一步步驗
+  「真派工」路徑(runner spawn / select / install / hold / 自評 / human-prompt / handoff)。
 
 ## 研究與對照(Research)
 

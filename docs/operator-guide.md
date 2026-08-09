@@ -128,7 +128,11 @@ uv run python scripts/reverify_v1.py             # 再加 Jira 唯讀連線(需 
 ```
 
 它會印出**付費部分**(真派一次工才驗得到:runner spawn / select / install / hold / 自評 /
-human-prompt)的逐項清單,你在有 agent/充電時對照 dashboard trace + `runtime/events.jsonl` 打勾。
+human-prompt / handoff)的逐項清單,你在有 agent/充電時對照 dashboard trace +
+`runtime/events.jsonl` 打勾。
+
+**付費部分請照** [V1 付費複驗 checklist](v1-reverify-checklist.md) **一步步跑**(每步:做什麼 →
+預期 journal 事件 → 在哪看 → 打勾框;約 $0.1–0.3 haiku、需充電)。
 
 ## 10. 互動表單(HIL)一次性連結:設計、持久化與重啟
 
