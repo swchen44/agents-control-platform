@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import uuid
 
-from .contract import summarize
+from .contract import agent_score, summarize
 from .deliverables import post_deliverables
 from .grader import AllOf, CommandGrader, FileChecklistGrader, JsonGrader
 from .inner_runner import run_attempt
@@ -70,10 +70,15 @@ class Dispatcher:
 
     def _post_deliverables(self, sess: TicketSession, ticket: Ticket,
                            outcome: str, res, events: list[dict]) -> None:
-        """終態貼交付物(OUTPUT.json → ADF comment + 附件)。best-effort,不擋流程。
-        download_url(≥6MB 下載頁)由 Phase 3 form_server 接;此處先 None。"""
-        self_summary = ((res.structured or {}).get("summary", "")
-                        if res is not None else "")
+        """終態:記 agent 自評分(contract.score)+ 貼交付物(OUTPUT.json → ADF + 附件)。
+        交付物 best-effort;agent_score 一定記(auto_close 要用)。
+        """
+        structured = res.structured if res is not None else None
+        sc = agent_score(structured) if structured else None
+        if sc != sess.agent_score:               # agent 數字自評 → auto_close/三訊號
+            sess.agent_score = sc
+            self.store.upsert_session(sess)
+        self_summary = (structured or {}).get("summary", "") if structured else ""
         try:
             events.extend(post_deliverables(
                 self.source, self.store, ticket, sess, outcome=outcome,

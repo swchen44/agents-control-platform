@@ -41,7 +41,11 @@ class Profile:
     max_attempts: int
     on_unknown: str                  # must be "pending" (v5 D3)
     max_budget_usd: float | None = None  # A4:超支→pending:budget(None=不限)
-    require_approval: bool = False    # W2.3 起點審批門(per-profile)
+    require_approval: bool = False    # W2.3 起點審批門(per-profile;開跑前)
+    # auto_close(跑完收尾;require_approval 的另一端):off=正常 HIL(人評分關單)、
+    # on_success=只 SUCCESS 自動關(其餘進 HIL)、all=全終態自動關。自動關時
+    # human_score=agent 自評、closed(by=auto)、outcome 保留。見 agent-output.md。
+    auto_close: str = "off"
     approver: str | None = None       # 審批者 email/accountId
     max_revisions: int = 3            # 退回重填上限
     retention_days: int = 270         # W3.3:終態後保留天數(0=不回收;DESIGN §3)
@@ -121,6 +125,10 @@ def load_profiles(path: str) -> dict[str, Profile]:
         agent = p.get("agent") or {}
         if not agent.get("backend"):
             raise ConfigError(f"profile {name}: agent.backend 必填")
+        auto_close = str(p.get("auto_close", "off"))
+        if auto_close not in ("off", "on_success", "all"):
+            raise ConfigError(f"profile {name}: auto_close 須為 "
+                              f"off|on_success|all(拿到 {auto_close!r})")
         # W3.6(D1):isolation.provider 白名單 fail-fast(介面先行,不實驗)
         iso_provider = (agent.get("isolation") or {}).get("provider")
         if iso_provider is not None:
@@ -159,6 +167,7 @@ def load_profiles(path: str) -> dict[str, Profile]:
             max_budget_usd=(float(loop["max_budget_usd"])
                             if loop.get("max_budget_usd") is not None else None),
             require_approval=bool(appr.get("required", False)),
+            auto_close=auto_close,
             approver=appr.get("approver"),
             max_revisions=int(appr.get("max_revisions", 3)),
             retention_days=int(p.get("retention_days", 270)),

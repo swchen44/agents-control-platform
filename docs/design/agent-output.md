@@ -23,8 +23,13 @@
 
 ```jsonc
 { "reason": "…", "status": "done|failed|need_human|handoff", "next": null|{…},
-  "summary": "100–200 字:完成了哪些 item、還沒完成哪些 item(精簡自報)" }
+  "summary": "100–200 字:完成了哪些 item、還沒完成哪些 item(精簡自報)",
+  "score":   0-10 }   // agent 對本輪成果的完成度自評(整數)
 ```
+
+`score` 餵 **HIL 三訊號**(grader / agent 自評 / 人類)+ **`auto_close`**(見下):profile 設
+auto_close 時,`human_score` 直接複製 `agent_score`、自動關單。`contract.agent_score()` 取值
+(缺/超範圍→None)。
 
 `summary` 是**人看的第一眼**:進 Jira comment 開頭 + HIL 表單頁三訊號之一。CLI 強制 →
 即使 agent 忘了寫 OUTPUT.json,至少有這段。
@@ -149,3 +154,19 @@ OUTPUT.json 缺:comment 只有 outcome + structured summary + 一行「agent 未
   安全模型;交付物快照進 interaction payload。
 - a2a 換手([architecture.md §4](architecture.md)):跨票換手的新票也照此貼交付物;base 脈絡
   注入與交付物並存。
+
+## 9. auto_close(profile 收尾政策)
+
+`require_approval`(開跑前門檻)的另一端。profile 欄 `auto_close: off|on_success|all`(預設 off):
+- **off**:正常 HIL(End)—— ScoreGate 發 score_and_close 表單、人評分關單。
+- **on_success**:只有 SUCCESS 自動關;FAILURE/UNKNOWN 仍進 HIL(異常才找人)。
+- **all**:全終態自動關(無人值守)。
+
+自動關(`ScoreGate._auto_close`):**跳過表單** → `human_score = agent_score`(contract.score;
+缺則試 self_score_fn,再缺 None)→ `transition("done")` → journal **`closed(by=auto,
+outcome, agent_score, human_score)`**。**outcome 保留**(FAILURE 仍算失敗、dashboard 失敗率
+照算——auto_close 是「不等人、如實關」,非粉飾)。**不覆寫 handoff**(handoff 非終態 outcome)。
+交付物 comment 照貼(事後可查)。`by=auto` 讓稽核看得出這票沒經人審。
+
+用途:週期性/無人值守 job 用 auto_close 的 profile;高風險 profile 維持 off。同一 profile
+只能一種行為 —— 需要兩種就開兩個 profile(profile 很便宜)。

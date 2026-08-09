@@ -216,6 +216,88 @@ def test_poller_wires_scoregate():
     store.close()
 
 
+# -- auto_close(profile 政策)-------------------------------------------- #
+class _AProf:
+    def __init__(self, name="p", auto_close="off"):
+        self.name = name
+        self.auto_close = auto_close
+
+
+class _ACSource(MockSource):
+    def __init__(self):
+        super().__init__()
+        self.transitioned = []
+
+    def transition(self, iid, cat):
+        self.transitioned.append((iid, cat))
+        return True
+
+
+def _term_sess(outcome="SUCCESS", agent_score=8):
+    return TicketSession(issue_id=1, key="P-1", profile="p", workspace="w",
+                         session_id="s", attempts=1, outcome=outcome,
+                         pending_reason=None, cost_usd=0.0,
+                         agent_score=agent_score)
+
+
+def _sg(src, store, profiles):
+    return ScoreGate(src, store, base_url="http://x",
+                     profiles_fn=lambda: profiles)
+
+
+def test_autoclose_on_success_closes_success():
+    store = Store(tempfile.mkdtemp())
+    s = _term_sess("SUCCESS", 9); store.upsert_session(s)
+    src = _ACSource()
+    ev = _sg(src, store, {"p": _AProf(auto_close="on_success")}).on_poll(
+        _ticket(), store.get_session(1))
+    assert src.transitioned == [(1, "done")]              # 轉 Done
+    assert store.get_session(1).human_score == 9          # human=agent 自評
+    assert any(e["type"] == "closed" and e["by"] == "auto" for e in ev)
+    # 沒發 score_and_close 表單
+    assert not [r for r in store.interactions_for_ticket(1)
+                if r.schema_id == "score_and_close"]
+    store.close()
+
+
+def test_autoclose_on_success_failure_goes_hil():
+    store = Store(tempfile.mkdtemp())
+    store.upsert_session(_term_sess("FAILURE", 3))
+    src = _ACSource()
+    _sg(src, store, {"p": _AProf(auto_close="on_success")}).on_poll(
+        _ticket(), store.get_session(1))
+    assert src.transitioned == []                          # 失敗不自動關
+    assert store.get_session(1).human_score is None        # 沒評分
+    assert [r for r in store.interactions_for_ticket(1)
+            if r.schema_id == "score_and_close"]           # 走 HIL 發表單
+    store.close()
+
+
+def test_autoclose_all_closes_failure_outcome_preserved():
+    store = Store(tempfile.mkdtemp())
+    store.upsert_session(_term_sess("FAILURE", 2))
+    src = _ACSource()
+    ev = _sg(src, store, {"p": _AProf(auto_close="all")}).on_poll(
+        _ticket(), store.get_session(1))
+    assert src.transitioned == [(1, "done")]               # all → 失敗也關
+    assert store.get_session(1).outcome == "FAILURE"       # outcome 保留(KPI 誠實)
+    assert any(e["type"] == "closed" and e["by"] == "auto"
+               and e["outcome"] == "FAILURE" for e in ev)
+    store.close()
+
+
+def test_autoclose_off_default_goes_hil():
+    store = Store(tempfile.mkdtemp())
+    store.upsert_session(_term_sess("SUCCESS", 8))
+    src = _ACSource()
+    _sg(src, store, {"p": _AProf(auto_close="off")}).on_poll(
+        _ticket(), store.get_session(1))
+    assert src.transitioned == []                          # off → 不自動關
+    assert [r for r in store.interactions_for_ticket(1)
+            if r.schema_id == "score_and_close"]           # 走 HIL
+    store.close()
+
+
 if __name__ == "__main__":
     ok = True
     for _name, _fn in list(globals().items()):

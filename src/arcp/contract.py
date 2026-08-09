@@ -44,8 +44,11 @@ CONTRACT_SCHEMA = {
         },
         # 100–200 字精簡自報:完成/未完成 item。完整交付物走 OUTPUT.json。
         "summary": {"type": "string"},
+        # agent 對自己這輪成果的完成度自評(0–10 整數)。餵 HIL 三訊號 +
+        # auto_close 複製為 human_score(見 docs/design/agent-output.md、jobs 設計)。
+        "score": {"type": ["integer", "null"]},
     },
-    "required": ["reason", "status", "next", "summary"],
+    "required": ["reason", "status", "next", "summary", "score"],
     "additionalProperties": False,
 }
 
@@ -78,7 +81,20 @@ def summarize(obj) -> str:
     if isinstance(nx, dict):
         tail = f";next→{nx.get('kind')}:{nx.get('to') or '-'}"
     body = f"status={obj['status']}{tail}\nreason:{obj['reason']}"
+    sc = agent_score(obj)
+    if sc is not None:
+        body += f"\nscore(自評):{sc}/10"
     s = obj.get("summary")
     if isinstance(s, str) and s.strip():
         body += f"\nsummary:{s.strip()}"
     return body
+
+
+def agent_score(obj) -> int | None:
+    """agent 數字自評(0–10);缺/非整數/超範圍 → None。auto_close 與 HIL 三訊號用。"""
+    if not isinstance(obj, dict):
+        return None
+    sc = obj.get("score")
+    if isinstance(sc, bool) or not isinstance(sc, int):
+        return None
+    return sc if 0 <= sc <= 10 else None

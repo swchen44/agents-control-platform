@@ -120,6 +120,31 @@ class ScoreGate:
         # W10.3:handoff 下拉候選 = 目前載入的全部 profile 名(注入表單 payload)。
         self.profiles_fn = profiles_fn
 
+    def _auto_close(self, ticket, session, now: float) -> list[dict]:
+        """profile.auto_close 生效:human_score=agent 自評、轉 Done、closed(by=auto)。
+        outcome 保留(FAILURE 仍算失敗);agent_score 缺則試 self_score_fn,再缺則 None。"""
+        ascore = session.agent_score
+        if ascore is None and self.self_score_fn is not None:
+            try:
+                ascore = self.self_score_fn(session)
+            except Exception as e:  # noqa: BLE001 — 取不到自評不擋自動關
+                log.warning("auto_close 取自評失敗 ticket=%s: %s", ticket.key, e)
+        session.human_score = ascore              # 人類評分 = agent 自評(定案)
+        self.store.upsert_session(session)
+        evs = []
+        # outcome 保留;不覆寫 handoff(handoff 非 SUCCESS/FAILURE/UNKNOWN,不會到這)
+        if self.source.transition(ticket.id, "done"):
+            evs.append(self.store.journal(
+                "closed", ticket.id, ticket.key, by="auto",
+                outcome=session.outcome, agent_score=ascore, human_score=ascore))
+        self.source.add_comment(ticket.id, (
+            f"[agent] auto_close:outcome={session.outcome}、human_score="
+            f"agent 自評={ascore if ascore is not None else '—'}/10、"
+            f"已自動關單(此 profile 設 auto_close,無需人評)。"))
+        log.info("%s auto_close outcome=%s score=%s",
+                 ticket.key, session.outcome, ascore)
+        return evs
+
     def on_poll(self, ticket, session, now: float | None = None) -> list[dict]:
         if session is None or session.outcome not in (
                 "SUCCESS", "FAILURE", "UNKNOWN"):       # W10:UNKNOWN 也進 HIL(End)
@@ -127,6 +152,13 @@ class ScoreGate:
         if session.human_score is not None:
             return []                     # 已評分(表單提交時記入),不重發/不催
         now = time.time() if now is None else now
+        # auto_close(profile 政策):跳過 HIL 表單,human_score=agent 自評、轉 Done。
+        # on_success 只關成功、all 全終態關;off(預設)走下面正常 HIL。
+        prof = (self.profiles_fn() or {}).get(session.profile) \
+            if self.profiles_fn else None
+        ac = getattr(prof, "auto_close", "off") if prof else "off"
+        if ac == "all" or (ac == "on_success" and session.outcome == "SUCCESS"):
+            return self._auto_close(ticket, session, now)
         from .hil import form_link, request_human
         reqs = [r for r in self.store.interactions_for_ticket(ticket.id)
                 if r.schema_id == "score_and_close"]

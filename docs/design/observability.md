@@ -67,7 +67,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `truly_resumed` | `src/arcp/dispatcher.py`, `src/arcp/triggers.py` |
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
 | `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
-| `closed` | `by`, `request_id` | `src/arcp/hil.py` |
+| `closed` | `agent_score`, `by`, `human_score`, `outcome`, `request_id` | `src/arcp/hil.py`, `src/arcp/scoring.py` |
 | `command_accepted` | `author`, `command`, `note` | `src/arcp/commands.py` |
 | `command_denied` | `author`, `command` | `src/arcp/commands.py` |
 | `command_rejected` | `command`, `target` | `src/arcp/commands.py` |
@@ -162,6 +162,9 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 **E. HIL 人機互動(hil.py / scoring.py)** —— 一次性表單:
 - `hil_requested`(`request_id`/`schema`)→(人填)→ `hil_submitted` → `hil_resumed`
   (`reason`,續跑)或 `closed`(`by`,關單)。正常的人機閉環。
+- `closed`(`by`):`by=human`=人在表單關單;**`by=auto`**=profile 設 `auto_close` 自動關
+  (跳過 HIL,`human_score`=`agent_score`,`outcome` 保留——FAILURE 仍算失敗)。看到
+  `by=auto` 表這票**沒經人審**(profile 的自動化決策),見 agent-output.md / profiles。
 - `score_requested`(HIL(End) 評分表單發出)→ `score_reminded`(`reminders`,催)→
   ⚠️ `hil_stalled`(`reminders` 達上限仍沒人回)。**票停在等人**時看這串:停在
   `hil_requested`/`score_requested` 沒有後續 = 在等人填表單(正常等待,非 bug)。

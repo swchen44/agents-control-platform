@@ -40,6 +40,8 @@ inner_loop:
       max_budget_usd: 1.0
       max_budget_monthly_usd: 50.0
       human_minutes_est: 30          # KPI 節省人時估算
+      # auto_close: off              # off(預設,正常 HIL 人評分)| on_success(只成功自動關)
+      #                              | all(全終態自動關,無人值守);自動關時 human_score=agent 自評
       workspace:
         template: empty              # empty | <name>_template(config/templates/ 下,整包 copytree)
         folder: 'tickets/{issue_id}'

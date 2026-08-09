@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp import dispatcher as dmod  # noqa: E402
 from arcp.contract import (  # noqa: E402
     CONTRACT_SCHEMA,
+    agent_score,
     summarize,
     validate_structured,
 )
@@ -54,8 +55,13 @@ check("C1 summarize 含 status/reason/next",
           {"reason": "交給人", "status": "handoff",
            "next": {"to": "swchen44", "kind": "human"}}))
       and "交給人" in s and "human:swchen44" in s)
-check("C1 schema required 列全欄位(OpenAI strict,W3.1;含 summary)",
-      set(CONTRACT_SCHEMA["required"]) == {"reason", "status", "next", "summary"})
+check("C1 schema required 列全欄位(OpenAI strict,W3.1;含 summary/score)",
+      set(CONTRACT_SCHEMA["required"])
+      == {"reason", "status", "next", "summary", "score"})
+check("C1 agent_score:0–10 整數過", agent_score({"score": 8}) == 8)
+check("C1 agent_score:超範圍/非整數/bool → None",
+      agent_score({"score": 11}) is None and agent_score({"score": "8"}) is None
+      and agent_score({"score": True}) is None and agent_score({}) is None)
 check("C1 summarize 帶 agent 自報 summary",
       "summary:做完 A、未做 B" in summarize(
           {"reason": "r", "status": "done", "next": None,
