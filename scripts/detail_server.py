@@ -16,9 +16,11 @@ W2.7 dashboard 擴充(F2 排隊 + C4 總覽 + 控制):index 加總覽卡(cost/ou
 控制列(Pause/Resume/Reload → fetch POST 到 W2.6 control API,離線顯示提示);
 審批門 ticket 顯示審批狀態卡(sections 表單本體在 Jira description)。
 
-Usage: python3 detail_server.py [runtime_dir] [port] [control_url]
-       (預設 runtime_live、8788、http://127.0.0.1:8787;
-        亦可 env ARCP_CONTROL_URL 指 control API)
+Usage(-h 看完整說明):
+    python3 detail_server.py [--port N] [--host H] [--runtime DIR]
+                             [--control-url URL] [--log-level LEVEL]
+  預設 :8788、綁 0.0.0.0(內網開放)、runtime=repo/runtime、control=127.0.0.1:8787。
+  相容舊式位置參數 [runtime] [port] [control_url];env ARCP_DASH_HOST/ARCP_CONTROL_URL 仍可用。
 """
 
 from __future__ import annotations
@@ -53,12 +55,13 @@ except Exception:  # noqa: BLE001  (arcp 缺 → 退回 cwd 相對)
     _VENDOR = os.path.dirname(os.path.abspath(__file__))
     _RUNTIME = os.path.abspath("./runtime")
 
-ROOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else _RUNTIME
-PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8788   # 8787 讓給 control API
-CONTROL = (sys.argv[3] if len(sys.argv) > 3
-           else os.environ.get("ARCP_CONTROL_URL", "http://127.0.0.1:8787"))
-# W6.1:綁定 host = config,預設 0.0.0.0(內網開放,使用者 2026-08-07 決定;
-# ⚠️ dashboard 唯讀但會顯示系統/程序資訊,內網任何人可見)。設 127.0.0.1 可鎖本機。
+# 預設值(可被 __main__ 的 argparse 覆寫;import 時不吃 sys.argv,才不會擋 -h/--flag)。
+# 被 import 當模組時(如 e2e_dashboard / 測試)保持預設;實際起服務時 __main__ 覆寫。
+ROOT = _RUNTIME
+PORT = 8788                                              # 8787 讓給 control API
+CONTROL = os.environ.get("ARCP_CONTROL_URL", "http://127.0.0.1:8787")
+# W6.1:綁定 host,預設 0.0.0.0(內網開放,使用者 2026-08-07 決定;⚠️ dashboard 唯讀
+# 但會顯示系統/程序資訊,內網任何人可見)。設 127.0.0.1(或 --host)可鎖本機。
 HOST = os.environ.get("ARCP_DASH_HOST", "0.0.0.0")
 
 
@@ -90,18 +93,28 @@ _SWAGGER_DIR = os.path.join(_VENDOR, "swagger-ui")
 _CSP_TRANSCRIPT = ("default-src 'none'; script-src 'self' 'unsafe-inline'; "
                    "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
                    "font-src 'self' data:; connect-src 'self'")
+# _CSP_MAIN / _CSP_DOCS 含 CONTROL,故由 _apply_control() 產(import 時算一次;
+# __main__ 用 --control-url 覆寫 CONTROL 後會再算一次,避免烤進舊值)。
 # 主頁(我們自寫,已無外部引用)——同樣擋外部,但放行本地 control API 的
 # 跨埠 fetch(Evict / 狀態);defense-in-depth,防未來誤加 CDN。
-_CSP_MAIN = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
-             "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-             "font-src 'self' data:; connect-src 'self' " + CONTROL)
-# W6.5:/docs(Swagger UI)專屬——vendored bundle 內含 1 處 new Function
-# (bundled lib),需 unsafe-eval;仍只放行同源資產 + 對 control API 的 Try it out。
-# 內容為自 host 已審 bundle,unsafe-eval 侷限此頁可接受(defense-in-depth)。
-_CSP_DOCS = ("default-src 'self'; "
-             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-             "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-             "font-src 'self' data:; connect-src 'self' " + CONTROL)
+# W6.5:/docs(Swagger UI)專屬——vendored bundle 內含 1 處 new Function(bundled
+# lib),需 unsafe-eval;仍只放行同源資產 + 對 control API 的 Try it out。
+_CSP_MAIN = _CSP_DOCS = ""       # 由 _apply_control() 填
+
+
+def _apply_control() -> None:
+    """(重)算依賴 CONTROL 的衍生字串。import 時 + __main__ 覆寫 CONTROL 後各呼一次。"""
+    global _CSP_MAIN, _CSP_DOCS
+    _CSP_MAIN = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                 "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                 "font-src 'self' data:; connect-src 'self' " + CONTROL)
+    _CSP_DOCS = ("default-src 'self'; "
+                 "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                 "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                 "font-src 'self' data:; connect-src 'self' " + CONTROL)
+
+
+_apply_control()
 
 
 def read_journal() -> list[dict]:
@@ -710,7 +723,7 @@ def overview_cards(sessions: dict[int, dict],
 
 
 _CONTROL_JS = ("<script>"
-    "const CTL=" + json.dumps(CONTROL) + ";"
+    "const CTL=__CTL__;"          # __CTL__ 於 render 時代入(讀當前 CONTROL,見 line 891)
     "const $c=id=>document.getElementById(id);"
     "let armed=null;"
     # shutdown 防誤觸:第一次按「武裝」、3 秒內再按才執行(不用 confirm 對話框)
@@ -875,7 +888,7 @@ def render_control_page() -> str:
             "(壞 config 不生效、舊設定續用);Graceful Shutdown=當前輪(含壓縮"
             "打包)跑完後 poller 退出。詳見 docs/design/hotreload.md。即時 kill 單張"
             "票用 ticket 頁的 Evict。</p></main>"
-            f"{_CONTROL_JS}")
+            + _CONTROL_JS.replace("__CTL__", json.dumps(CONTROL)))  # 代入當前 CONTROL
 
 
 def _du_kb(path: str) -> int:
@@ -1091,18 +1104,18 @@ _APP_JS = """
 const LS='arcp-v2';
 let D={rows:[],rate_default:null};
 let S=Object.assign({qr:'all',from:'',to:'',st:'',ksum:'',kdesc:'',kprofile:'',
-  size:20,page:0,sort:'created',dir:-1,wk1:false,wk2:false,rate:null},
+  rx:false,size:20,page:0,sort:'created',dir:-1,wk1:false,wk2:false,rate:null},
   (()=>{try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}})());
 // W8.5:URL query 反映過濾/排序/分頁狀態(可深連/分享);載入時 URL 優先於 localStorage。
-const _URLK=['qr','from','to','st','kprofile','ksum','kdesc','sort','dir',
+const _URLK=['qr','from','to','st','kprofile','ksum','kdesc','rx','sort','dir',
   'page','size'];
 (function(){const q=new URLSearchParams(location.search);
   _URLK.forEach(k=>{if(q.has(k)){const v=q.get(k);
-    S[k]=(k==='dir'||k==='page'||k==='size')?(+v):v;}});})();
+    S[k]=(k==='dir'||k==='page'||k==='size')?(+v):(k==='rx')?(v==='1'||v==='true'):v;}});})();
 function save(){localStorage.setItem(LS,JSON.stringify(S));
   const q=new URLSearchParams();
-  _URLK.forEach(k=>{const d={qr:'all',sort:'created',dir:-1,page:0,size:20};
-    if(S[k]!==''&&S[k]!=null&&S[k]!==d[k])q.set(k,S[k]);});
+  _URLK.forEach(k=>{const d={qr:'all',sort:'created',dir:-1,page:0,size:20,rx:false};
+    if(S[k]!==''&&S[k]!=null&&S[k]!==d[k])q.set(k,k==='rx'?(S[k]?'1':'0'):S[k]);});
   const u=location.pathname+(q.toString()?'?'+q:'');
   history.replaceState(null,'',u);}
 const $=id=>document.getElementById(id);
@@ -1133,20 +1146,29 @@ function syncPalette(){
     ['aborted',['撤銷',cssv('--s-aborted'),r=>r.state==='aborted']]];
 }
 // ---- 過濾(置頂,統管全部) ----
+// 二選一比對器:S.rx 勾 → 正則(不分大小寫);否 → 一般字串包含(不分大小寫)。
+// 無效正則 → 回 null(該格視為不過濾)+ 標紅提示,不讓畫面整個空掉。
+function matcher(pat){
+  if(!pat)return null;
+  if(S.rx){try{const re=new RegExp(pat,'i');return s=>re.test(s||'');}
+    catch(e){return null;}}
+  const low=pat.toLowerCase();return s=>(s||'').toLowerCase().includes(low);
+}
+function _rxBad(pat){if(!pat||!S.rx)return false;
+  try{new RegExp(pat,'i');return false;}catch(e){return true;}}
 function filtered(){
   const now=Date.now()/1000;
   let lo=0,hi=Infinity;
   if(S.from){lo=new Date(S.from+'T00:00:00').getTime()/1000;}
   if(S.to){hi=new Date(S.to+'T23:59:59').getTime()/1000;}
   if(!S.from&&!S.to&&S.qr!=='all'){lo=now-(+S.qr)*86400;}
-  const ks=S.ksum.toLowerCase(),kd=S.kdesc.toLowerCase();
-  const kp=(S.kprofile||'').toLowerCase();
+  const mp=matcher(S.kprofile),ms=matcher(S.ksum),md=matcher(S.kdesc);
   return D.rows.filter(r=>
     r.created>=lo&&r.created<=hi&&
     (!S.st||r.status===S.st)&&
-    (!kp||(r.profile||'').toLowerCase().includes(kp))&&
-    (!ks||(r.key+' '+r.summary).toLowerCase().includes(ks))&&
-    (!kd||r.desc.toLowerCase().includes(kd)));
+    (!mp||mp(r.profile||''))&&
+    (!ms||ms(r.key+' '+r.summary))&&
+    (!md||md(r.desc||'')));
 }
 // ---- 統計卡 ----
 function renderStats(rows){
@@ -1369,7 +1391,12 @@ function renderTable(rows){
 function render(){syncPalette();prep();const rows=filtered();renderStats(rows);var _u=$('upd');if(_u)_u.textContent='更新於 '+_TM.format(new Date());
   renderTime(rows);renderMoney(rows);
   renderPState(rows);renderPCost(rows);renderPScore(rows);   // W7.4 per-profile
-  renderTable(rows);save();}
+  renderTable(rows);markRx();save();}
+// 正則模式下,把無效 pattern 的關鍵字框標紅(border),提示使用者修正
+function markRx(){[['kprofile',S.kprofile],['ksum',S.ksum],['kdesc',S.kdesc]]
+  .forEach(([id,v])=>{const el=$(id);if(!el)return;
+    el.style.borderColor=_rxBad(v)?'var(--s-failure)':'';
+    el.title=_rxBad(v)?'無效的正則(regex);此格暫不套用過濾':'';});}
 function pg(d){S.page=Math.max(0,S.page+d);render();}
 // ---- W5.6 匯出經 filter+sort 的資料(CSV / JSON)----
 const EXCOLS=[['key','ticket'],['summary','summary'],['profile','profile'],
@@ -1414,6 +1441,7 @@ function bind(){
   $('ksum').value=S.ksum;$('kdesc').value=S.kdesc;$('psize').value=S.size;
   $('kprofile').value=S.kprofile||'';
   $('wk1').checked=S.wk1;$('wk2').checked=S.wk2;
+  if($('rx'))$('rx').checked=!!S.rx;
   if(S.rate!=null)$('rate').value=S.rate;
   $('qr').onchange=e=>{S.qr=e.target.value;S.page=0;render();};
   $('from').onchange=e=>{S.from=e.target.value;S.page=0;render();};
@@ -1422,6 +1450,7 @@ function bind(){
   $('ksum').oninput=e=>{S.ksum=e.target.value;S.page=0;render();};
   $('kdesc').oninput=e=>{S.kdesc=e.target.value;S.page=0;render();};
   $('kprofile').oninput=e=>{S.kprofile=e.target.value;S.page=0;render();};
+  if($('rx'))$('rx').onchange=e=>{S.rx=e.target.checked;S.page=0;render();};
   $('psize').onchange=e=>{S.size=+e.target.value;S.page=0;render();};
   $('wk1').onchange=e=>{S.wk1=e.target.checked;render();};
   $('wk2').onchange=e=>{S.wk2=e.target.checked;render();};
@@ -1731,6 +1760,10 @@ def render_index(journal, sessions, watch=None) -> str:
         f"placeholder='summary keyword…' {_INPUT}>"
         f"<input id='kdesc' aria-label='description 關鍵字' "
         f"placeholder='description keyword…' {_INPUT}>"
+        # 過濾模式:預設一般字串(不分大小寫);勾選 → 正則(profile/summary/desc 三格同時套用)
+        "<label class='sys' style='display:inline-flex;gap:4px;align-items:center;"
+        "font-size:12px;white-space:nowrap' title='勾=正則(不分大小寫);不勾=一般字串包含"
+        "(不分大小寫)'><input type='checkbox' id='rx'> 🔤 Regex</label>"
         "<span style='color:var(--faint);font-size:11px'>↓ 底下統計/圖表/表格"
         "皆只含過濾後的 Jira</span></div>")
     charts = (
@@ -2304,8 +2337,22 @@ def openapi_spec() -> dict:
                                       "content": {"application/json": {}}}}}},
             "/api/v1/tickets": {"get": {
                 "tags": ["llm-api(唯讀)"],
-                "summary": "票列表(精簡:key/profile/8態/outcome/cost/score)",
-                "responses": {"200": {"description": "tickets[]",
+                "summary": "票列表(精簡:key/profile/6態/outcome/cost/score)"
+                           ";可選 ?q=&field=&mode= 過濾",
+                "parameters": [
+                    {"name": "q", "in": "query", "required": False,
+                     "description": "關鍵字或正則(空=不過濾)",
+                     "schema": {"type": "string"}},
+                    {"name": "field", "in": "query", "required": False,
+                     "description": "比對欄位",
+                     "schema": {"type": "string", "default": "all",
+                                "enum": ["all", "key", "summary", "profile",
+                                         "desc"]}},
+                    {"name": "mode", "in": "query", "required": False,
+                     "description": "match=不分大小寫子字串;regex=正則(亦不分大小寫)",
+                     "schema": {"type": "string", "default": "match",
+                                "enum": ["match", "regex"]}}],
+                "responses": {"200": {"description": "tickets[](含 filter/filter_error)",
                                       "content": {"application/json": {}}}}}},
             "/api/v1/tickets/{ref}": {"get": {
                 "tags": ["llm-api(唯讀)"],
@@ -3241,20 +3288,56 @@ def api_ticket_status(iid: int, journal: list, sessions: dict,
     }
 
 
-def api_list_tickets(journal: list, sessions: dict, watch: dict) -> dict:
-    """精簡票列表(給 LLM 先掃全景)。"""
+def text_matcher(q: str, mode: str = "match"):
+    """回 (fn, error)。fn(s)->bool;二選一 mode:
+      match = 一般字串「包含」比對,**不分大小寫**(預設);
+      regex = 正則(re.search,亦 IGNORECASE)。無效 regex → fn 恆 False + error 訊息。
+    q 空 → (None, None)(不過濾)。dashboard 前端亦提供對等的 regex/不分大小寫兩模式。"""
+    if not q:
+        return None, None
+    if mode == "regex":
+        try:
+            rx = re.compile(q, re.IGNORECASE)
+        except re.error as e:
+            return (lambda s: False), f"bad regex: {e}"
+        return (lambda s: bool(rx.search(s or ""))), None
+    ql = q.lower()
+    return (lambda s: ql in (s or "").lower()), None
+
+
+def api_list_tickets(journal: list, sessions: dict, watch: dict, q: str = "",
+                     field: str = "all", mode: str = "match") -> dict:
+    """精簡票列表(給 LLM 先掃全景)。可選過濾:
+      q     — 關鍵字/正則(空=不過濾)
+      field — 比對欄位:key / summary / profile / desc / all(預設 all)
+      mode  — match(不分大小寫子字串,預設)或 regex(正則,亦不分大小寫)"""
+    match_fn, err = text_matcher(q, mode)
     ids = sorted(set(sessions) | set(watch))
     items = []
     for iid in ids:
         s = sessions.get(iid, {})
         w = watch.get(iid, {})
+        key = s.get("key") or w.get("key") or f"#{iid}"
+        profile = s.get("profile") or ""
+        summary = w.get("summary") or ""
+        if match_fn is not None:
+            hay = {"key": key, "summary": summary, "profile": profile,
+                   "desc": w.get("description") or ""}.get(
+                field) or f"{key} {summary} {profile} {w.get('description') or ''}"
+            if not match_fn(hay):
+                continue
         items.append({
-            "iid": iid, "key": s.get("key") or w.get("key") or f"#{iid}",
+            "iid": iid, "key": key,
             "clearquest_id": s.get("clearquest_id"),
             "profile": s.get("profile"), "state": canonical_state(s or None),
             "outcome": s.get("outcome"), "cost_usd": s.get("cost_usd") or 0,
             "score": s.get("human_score")})
-    return {"count": len(items), "tickets": items}
+    out = {"count": len(items), "tickets": items}
+    if q:
+        out["filter"] = {"q": q, "field": field, "mode": mode}
+    if err:
+        out["filter_error"] = err
+    return out
 
 
 def api_events(iid: int) -> dict:
@@ -3312,8 +3395,13 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         parts = [p for p in u.path.split("/") if p]   # api v1 tickets [ref] [sub]
         watch = read_watch()
-        if len(parts) == 3:                            # /api/v1/tickets
-            return self._send_json(api_list_tickets(journal, sessions, watch))
+        if len(parts) == 3:                            # /api/v1/tickets(?q=&field=&mode=)
+            qs = parse_qs(u.query)
+            return self._send_json(api_list_tickets(
+                journal, sessions, watch,
+                q=(qs.get("q") or [""])[0],
+                field=(qs.get("field") or ["all"])[0],
+                mode=(qs.get("mode") or ["match"])[0]))
         ref = parts[3]
         iid = _resolve_ref(ref, sessions, watch)
         if iid is None:
@@ -3532,11 +3620,53 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(page.encode())
 
 
+def _parse_args(argv):
+    import argparse
+    p = argparse.ArgumentParser(
+        prog="detail_server.py",
+        description="ARCP 唯讀觀測 dashboard(狀態機 / KPI 圖表 / DB 瀏覽 / 概念頁 / "
+                    "REST /api/v1)。零外部依賴、內網可跑。",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="範例:\n"
+               "  python3 detail_server.py                       # 預設 :8788、內網開放\n"
+               "  python3 detail_server.py --port 9000 --host 127.0.0.1  # 換 port、鎖本機\n"
+               "  python3 detail_server.py --runtime /data/runtime --log-level DEBUG\n"
+               "相容舊式位置參數:detail_server.py [runtime] [port] [control_url]")
+    p.add_argument("runtime", nargs="?", default=None,
+                   help="runtime 目錄(harness.db/events/workspaces;預設 repo/runtime)")
+    p.add_argument("port_pos", nargs="?", type=int, default=None,
+                   help=argparse.SUPPRESS)          # 舊式位置參數(相容,不列 help)
+    p.add_argument("control_pos", nargs="?", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--port", type=int, default=None, metavar="PORT",
+                   help="dashboard 埠(預設 8788)")
+    p.add_argument("--host", default=None, metavar="HOST",
+                   help="綁定 host(預設 0.0.0.0 內網開放;127.0.0.1 鎖本機)")
+    p.add_argument("--runtime", dest="runtime_opt", default=None, metavar="DIR",
+                   help="runtime 目錄(等同位置參數 runtime)")
+    p.add_argument("--control-url", default=None, metavar="URL",
+                   help="control API URL(狀態頁連它;預設 http://127.0.0.1:8787)")
+    p.add_argument("--log-level", default=None,
+                   choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                   help="日誌層級(等同設 ARCP_LOG_LEVEL;預設 INFO)")
+    return p.parse_args(argv)
+
+
 if __name__ == "__main__":
+    _a = _parse_args(sys.argv[1:])
+    if _a.log_level:
+        os.environ["ARCP_LOG_LEVEL"] = _a.log_level
+    # flag 優先於舊式位置參數;都沒給則沿用 module 層預設(env / 內建)
+    _rt = _a.runtime_opt or _a.runtime
+    if _rt:
+        ROOT = os.path.abspath(_rt)
+    PORT = _a.port or _a.port_pos or PORT
+    CONTROL = _a.control_url or _a.control_pos or CONTROL
+    HOST = _a.host or HOST
+    _apply_control()                     # CONTROL 可能被覆寫 → 重算 CSP(_CONTROL_JS 於 render 代入)
     where = "所有介面(內網開放)" if HOST == "0.0.0.0" else HOST
     print(f"[detail] serving {ROOT} on {HOST}:{PORT} — {where}", flush=True)
     if HOST == "0.0.0.0":
         print("[detail] ⚠️ 內網開放:dashboard 唯讀但會顯示系統/程序資訊;"
               "control API(寫入端點)風險見 /docs。鎖本機:"
-              "ARCP_DASH_HOST=127.0.0.1", flush=True)
+              "--host 127.0.0.1(或 ARCP_DASH_HOST=127.0.0.1)", flush=True)
     HTTPServer((HOST, PORT), Handler).serve_forever()

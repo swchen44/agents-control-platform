@@ -7,11 +7,16 @@ session——**只對啟動之後的新票與新留言反應**,不重跑歷史�
 
 store 用 runtime_live/(持久,重啟不清——冪等靠它)。
 
-Usage: python3 run_poller.py [minutes] [interval_sec]   (預設 30 分鐘、15 秒)
+Usage(-h 看完整說明):
+    python3 run_poller.py [minutes] [interval] [--control-port N]
+                          [--form-port N] [--log-level LEVEL]
+  minutes=0 → 無限常駐(24h+,靠外部排程 / Ctrl-C / POST /shutdown 停);預設 30 分。
 """
 
 from __future__ import annotations
 
+import argparse
+import os
 import sys
 import time
 
@@ -87,9 +92,35 @@ def make_reload(loop, disp, cmds, ext, config_path: str = "config.yaml"):
     return _reload
 
 
-def main() -> int:
-    minutes = float(sys.argv[1]) if len(sys.argv) > 1 else 30.0
-    interval = float(sys.argv[2]) if len(sys.argv) > 2 else 15.0
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        prog="run_poller.py",
+        description="時間盒常駐 poller:Jira 事件驅動派工;同時起 control API "
+                    "(pause/resume/reload/evict…)與一次性表單服務。",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="範例:\n"
+               "  python3 run_poller.py 30 15   # 跑 30 分、每 15 秒一輪\n"
+               "  python3 run_poller.py 0       # 無限常駐(24h+,靠外部/Ctrl-C 停)\n"
+               "  python3 run_poller.py 0 15 --form-port 8899 --log-level DEBUG")
+    p.add_argument("minutes", nargs="?", type=float, default=30.0,
+                   help="時間盒分鐘數;0=無限常駐(24h+)。到時自動退,重起不重跑")
+    p.add_argument("interval", nargs="?", type=float, default=15.0,
+                   help="每輪 poll 間隔秒")
+    p.add_argument("--control-port", type=int, default=None, metavar="PORT",
+                   help="control API port(覆寫 config source.control.port;預設 8787)")
+    p.add_argument("--form-port", type=int, default=None, metavar="PORT",
+                   help="一次性表單服務 port(覆寫 config source.form.port;預設 8790)")
+    p.add_argument("--log-level", default=None,
+                   choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                   help="日誌層級(等同設 ARCP_LOG_LEVEL;預設 INFO)")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+    minutes, interval = args.minutes, args.interval
+    if args.log_level:                       # 在建 logger 前設好(logutil 讀此 env)
+        os.environ["ARCP_LOG_LEVEL"] = args.log_level
 
     cfg_path = config_path()                             # W12.4:repo-root 相對
     source_cfg, routes = load_config(cfg_path)
@@ -125,7 +156,7 @@ def main() -> int:
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
     fcfg = source_cfg.get("form") or {}
     form_host = fcfg.get("host", "127.0.0.1")
-    form_port = int(fcfg.get("port", 8790))
+    form_port = args.form_port or int(fcfg.get("port", 8790))  # CLI 覆寫 config
     form_base = fcfg.get("base_url") or f"http://{form_host}:{form_port}"
     mention = fcfg.get("mention_account_id", "")
     # W4.5:allowed_commenters / cancel_states 從 config 接線(原 hardcode)
@@ -160,7 +191,7 @@ def main() -> int:
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,
                      host=ctl.get("host", "127.0.0.1"),
-                     port=int(ctl.get("port", 8787)),
+                     port=args.control_port or int(ctl.get("port", 8787)),
                      profiles_fn=lambda: disp.profiles)  # W6.4 被動 transcript
     api.start()
     # W6.4:移除定時快照器(耗資源)。transcript 改純事件觸發(換手/交人/
@@ -187,13 +218,19 @@ def main() -> int:
           flush=True)
 
     adopted = adopt_existing(src, store, routes, jql)
+    forever = minutes == 0             # minutes=0 → 無限常駐(24h+)
+    span = "常駐(24h+,靠外部/Ctrl-C/POST /shutdown 停)" if forever \
+        else f"{minutes:.0f}m"
     print(f"[poller] adopted {adopted} pre-existing ticket(s); "
-          f"live for {minutes:.0f}m, interval {interval:.0f}s", flush=True)
+          f"live for {span}, interval {interval:.0f}s", flush=True)
 
     # 迭代計數時間盒:機器睡眠造成的 wall-clock 跳躍不會吃掉時間盒
-    # (lesson:睡眠凍結行程但時鐘照走)
-    cycles = max(1, int(minutes * 60 / interval))
-    for i in range(cycles):
+    # (lesson:睡眠凍結行程但時鐘照走)。forever(minutes=0)則不設上限,
+    # 只由 stopping / KeyboardInterrupt 結束(24h 常駐用)。
+    cycles = 0 if forever else max(1, int(minutes * 60 / interval))
+    i = 0
+    while forever or i < cycles:
+        i += 1
         if loop.stopping:              # W4.5 graceful shutdown(POST /shutdown)
             print("[poller] graceful shutdown(當前輪已完成)", flush=True)
             break
