@@ -29,6 +29,9 @@ FORM_SCHEMAS: dict[str, dict] = {
         "fields": [
             {"key": "answer", "label": "請補充 agent 需要的資訊",
              "type": "textarea", "required": True},
+            # Q10:給 agent 的補充指示 → 寫進 workspace 的人類指示段(data path)
+            {"key": "human_prompt", "label": "給 agent 的補充指示(選填,寫進 TICKET.md)",
+             "type": "textarea", "required": False},
         ],
     },
     "decision": {
@@ -38,6 +41,16 @@ FORM_SCHEMAS: dict[str, dict] = {
              "required": True, "options_from": "options"},
             {"key": "note", "label": "備註(選填)", "type": "textarea",
              "required": False},
+            {"key": "human_prompt", "label": "給 agent 的補充指示(選填,寫進 TICKET.md)",
+             "type": "textarea", "required": False},
+        ],
+    },
+    # Q11:人類強制中斷(@agent hold)→ 開此表單給新指示 → submit 後 resume 排隊。
+    "hold": {
+        "version": SCHEMA_VERSION, "title": "強制中斷:給 agent 新指示", "hil": "middle",
+        "fields": [
+            {"key": "human_prompt", "label": "給 agent 的補充指示(寫進 TICKET.md)",
+             "type": "textarea", "required": True},
         ],
     },
     "score_and_close": {

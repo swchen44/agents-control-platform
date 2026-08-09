@@ -126,9 +126,11 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
   poller 加 Jira 健康偵測 + 降級暫停/恢復 + 回寫執行。
 - **屬 runtime 行為 → W11,先不動碼**(與 W10.2 HIL 行為、W10.3 a2a 一併待實作)。
 
-## 13. 人機互動增修(2026-08-09 group A 定案,待實作)
+## 13. 人機互動增修(2026-08-09 group A,已實作)
 
-逐題決策樹(Q9–Q13)敲定,設計如下;實作為新功能,尚未動碼。
+逐題決策樹(Q9–Q13)敲定並落地(`test_group_a.py` 12 檢查)。Q13 的**數字自評 hook**
+(`ScoreGate.self_score_fn`)已接線 + mock 測;真正的 resume+prompt 自評呼叫屬真 agent
+路徑(V1 類),live 環境接一個 best-effort 實作即可(None/例外皆 fail-safe)。
 
 ### 13.1 control path / data path 模型(Q9/Q12)
 - **control path = 餵 CLI 的 prompt**(祈使、瞬時、harness 主動控制,含「TICKET.md 已更新,

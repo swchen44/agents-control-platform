@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+### Added
+- **人機互動增修(group A)**:HIL 表單加「給 agent 補充指示」自由欄 → 累加寫進 workspace
+  sidecar `.arcp_human.md` → `render_ticket_md` 出「人類指示」段(Q10);`@agent hold` 指令
+  = 立即 evict(killpg)→ HIL(Middle)+ hold 表單(含 prompt 欄)→ submit 寫指示 + resume 排隊
+  (Q11,不耗 attempt;硬殺限制見開發者手冊 FAQ);`ScoreGate.self_score_fn` hook —— 關單
+  首發 score_and_close 時取一次 agent 數字自評(Q13,真自評呼叫留 live)。control/data path
+  模型定案(prompt=control 主動提示、TICKET.md=data)。`tests/test_group_a.py` 12 檢查。
+
 ### Fixed
 - **workspace 佈建原子性(A2/#11)**:install 腳本路徑原本非原子(中途 crash → 半殘 ws
   被下次 provision 當「已建」沿用)。改用 `.arcp_provisioned` commit marker:佈建全部成功

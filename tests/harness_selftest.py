@@ -69,9 +69,10 @@ with tempfile.TemporaryDirectory() as tmp:
         check("on_unknown: retry 被拒(v5 D3)", True)
 
 print("command parse:")
-check("run/RETRY/hold/cancel 解析",
+check("run/RETRY/hold/stop/cancel 解析",
       parse("@agent run now") == "run" and parse("@Agent RETRY") == "retry"
-      and parse("@agent hold") == "stop" and parse("@agent cancel x") == "cancel")
+      and parse("@agent hold") == "hold" and parse("@agent stop") == "stop"
+      and parse("@agent cancel x") == "cancel")
 check("@agent dance -> unknown", parse("@agent dance") == "unknown")
 check("[agent] 自家留言不解析", parse("[agent] ack: run") is None)
 check("一般留言不解析", parse("just a note about @agent stuff") is None)

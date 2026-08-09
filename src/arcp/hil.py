@@ -14,6 +14,7 @@ import yaml
 from .interaction import InteractionRequest, build_request, summarize
 from .logutil import get_logger
 from .sections import Section, parse, render
+from .workspace import append_human_instruction
 
 log = get_logger("hil")
 
@@ -85,6 +86,13 @@ def apply_submission(source, store, req: InteractionRequest, *,
         f"(by {req.submitted_by or '—'};Request {req.request_id})")
     sess = store.get_session(req.issue_id)
     if sess is not None:
+        # Q10:人類補充指示 → 累加寫進 workspace 人類指示段(agent resume 後重讀)
+        hp = (data.get("human_prompt") or "").strip()
+        if hp and sess.workspace and sess.workspace not in ("(adopted)", "(handoff)"):
+            try:
+                append_human_instruction(sess.workspace, hp, now=now)
+            except OSError as e:      # workspace 不在也不擋提交(降級)
+                log.warning("寫人類指示失敗 ticket=%s: %s", req.key, e)
         if req.schema_id == "score_and_close":
             sc = data.get("human_score")
             if sc is not None:

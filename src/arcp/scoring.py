@@ -104,7 +104,7 @@ class ScoreGate:
 
     def __init__(self, source, store, base_url: str = "", mention: str = "",
                  interval_sec: float = REMIND_INTERVAL_SEC, ttl_sec: float = 0.0,
-                 stall_after: int = STALL_REMINDERS):
+                 stall_after: int = STALL_REMINDERS, self_score_fn=None):
         self.source = source
         self.store = store
         self.base_url = base_url
@@ -112,6 +112,9 @@ class ScoreGate:
         self.interval = interval_sec
         self.ttl = ttl_sec
         self.stall_after = stall_after
+        # Q13:關單時取 agent 數字自評(0–10)。fn(session)->int|None;None=不取。
+        # 只在首次發 score_and_close 表單時呼叫一次(非每 attempt)。含一次真 agent 呼叫。
+        self.self_score_fn = self_score_fn
 
     def on_poll(self, ticket, session, now: float | None = None) -> list[dict]:
         if session is None or session.outcome not in (
@@ -124,14 +127,20 @@ class ScoreGate:
         reqs = [r for r in self.store.interactions_for_ticket(ticket.id)
                 if r.schema_id == "score_and_close"]
         if not reqs:                       # 首次:發 score_and_close 表單
+            agent_score = getattr(session, "agent_score", None)
+            if agent_score is None and self.self_score_fn is not None:
+                try:                       # Q13:關單這刻 resume+prompt 問 agent 一次
+                    agent_score = self.self_score_fn(session)
+                except Exception as e:     # noqa: BLE001 — 取不到自評不擋關單流程
+                    log.warning("agent 自評取得失敗 ticket=%s: %s", ticket.key, e)
+                    agent_score = None
             req = request_human(
                 self.source, self.store, ticket.id, ticket.key,
                 "score_and_close", question="請評分並裁決:關單或續跑",
                 payload_extra={"title": (ticket.summary or "")[:120],
                                "agent_state": "HIL(End)",
                                "grader": session.outcome,
-                               "agent_score": getattr(session, "agent_score",
-                                                      None)},
+                               "agent_score": agent_score},
                 base_url=self.base_url, mention=self.mention,
                 ttl_sec=self.ttl, now=now)
             return [self.store.journal("score_requested", ticket.id,

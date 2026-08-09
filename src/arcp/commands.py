@@ -25,6 +25,7 @@ External-change policy(v5 §6-10/11 + W12 假設更新):
 
 from __future__ import annotations
 
+import os
 import re
 
 from .jira_source import JiraCloudSource
@@ -47,7 +48,8 @@ def _finalize_leaving(sess, profiles: dict | None, reason: str) -> None:
 
 _COMMANDS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)^@agent\s+run\b"), "run"),
-    (re.compile(r"(?i)^@agent\s+(stop|hold|pause)\b"), "stop"),
+    (re.compile(r"(?i)^@agent\s+(hold|interrupt)\b"), "hold"),   # Q11:強制中斷→HIL
+    (re.compile(r"(?i)^@agent\s+(stop|pause)\b"), "stop"),       # 交還人工(pending)
     (re.compile(r"(?i)^@agent\s+retry\b"), "retry"),
     (re.compile(r"(?i)^@agent\s+cancel\b"), "cancel"),
     (re.compile(r"(?i)^@agent\s+next\b"), "next"),
@@ -55,7 +57,7 @@ _COMMANDS: list[tuple[re.Pattern, str]] = [
 _NEXT_RE = re.compile(r"(?i)^@agent\s+next\s+([A-Za-z0-9_-]+)")
 _GENERIC = re.compile(r"(?i)^@agent\b")
 
-HELP = ("[agent] 不認得這個指令。可用:@agent run|retry|stop|cancel"
+HELP = ("[agent] 不認得這個指令。可用:@agent run|retry|hold|stop|cancel"
         "|next <profile>")
 DENIED = "[agent] 未授權:你的帳號不在指令白名單(commands.allowed_commenters)"
 
@@ -74,11 +76,27 @@ def parse(body: str) -> str | None:
 class CommandHandler:
     def __init__(self, source: JiraCloudSource, store: Store,
                  allowed_commenters: list[str],
-                 profiles: dict | None = None):
+                 profiles: dict | None = None,
+                 base_url: str = "", mention: str = ""):
         self.source = source
         self.store = store
         self.allowed = allowed_commenters
         self.profiles = profiles       # W2.5:next 目標校驗(None=不校驗)
+        self.base_url = base_url        # Q11:hold 開一次性表單用(同 ScoreGate)
+        self.mention = mention
+
+    def _evict_running(self, sess) -> None:
+        """Q11:寫 EVICT 檔 → agent 看門狗 killpg(同 control /evict);無 workspace 則略。"""  # noqa: E501
+        ws = getattr(sess, "workspace", "") or ""
+        if ws in ("", "(adopted)", "(handoff)"):
+            return
+        artifacts = os.path.join(os.path.dirname(ws), "attempts")
+        try:
+            os.makedirs(artifacts, exist_ok=True)
+            with open(os.path.join(artifacts, "EVICT"), "w") as f:
+                f.write("evict")
+        except OSError as e:           # 寫不了不擋指令(可能還沒 spawn)
+            log.warning("hold evict 寫檔失敗 %s: %s", getattr(sess, "key", "?"), e)
 
     def _authorized(self, c: Comment) -> bool:
         return (c.author in self.allowed) or (c.author_id in self.allowed)
@@ -131,6 +149,18 @@ class CommandHandler:
             log.info("%s 換手指令 → %s", t.key, target)
             return [self.store.journal("handoff", t.id, t.key, kind="command",
                                        to=target, author=c.author)]
+        if cmd == "hold":                       # Q11:人類強制中斷 → HIL(Middle)
+            self._evict_running(sess)           # 立即 evict(killpg,不耗 attempt)
+            sess.pending_reason = "hold"        # 進 HIL(Middle),下輪不派工
+            self.store.upsert_session(sess)
+            from .hil import request_human  # lazy(避免 import 期耦合)
+            request_human(
+                self.source, self.store, t.id, t.key, "hold",
+                question="人類強制中斷,請給 agent 新指示(填完 agent 會帶著它 resume)",
+                base_url=self.base_url, mention=self.mention)
+            log.info("%s hold:evict + 開 hold 表單", t.key)
+            return [self.store.journal("command_accepted", t.id, t.key,
+                                       command="hold", author=c.author)]
         if cmd in ("run", "retry"):
             if cmd == "retry":
                 sess.attempts = 0

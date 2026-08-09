@@ -14,9 +14,10 @@
 | **C2** | trace 完整性自檢 `scripts/trace_lint.py`(L0–L3 齊全,UNKNOWN 依設計可缺)+ 6 情境測試 | ✅ 見 [design/observability.md](docs/design/observability.md) §6 |
 | **A2** | tool-output ledger（冪等） | ✅**釐清後不建 ledger(重工)**:agent 工具靠 native resume、harness 副作用靠 at-most-once 寫入順序、HIL 靠一次性 token,A2 目標已達成;唯一殘缺 = W15 install 原子性,已用 `.arcp_provisioned` marker 補。見 [design/idempotency.md](docs/design/idempotency.md) A2 結論 |
 
-## ★ 人機互動增修(group A,2026-08-09 設計定案 → 待實作)
+## ★ 人機互動增修(group A,2026-08-09 ✅ 已實作)
 
-Q9–Q13 逐題定案(設計見 [docs/design/interaction.md §13](docs/design/interaction.md)):
+Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
+[docs/design/interaction.md §13](docs/design/interaction.md)):
 
 | # | 項目 | 定案 |
 |---|---|---|
@@ -25,7 +26,9 @@ Q9–Q13 逐題定案(設計見 [docs/design/interaction.md §13](docs/design/in
 | Q10 | HIL 表單自由 prompt 欄 | submit → 累加寫 TICKET.md「人類指示」段(sidecar `ws/.arcp_human.md`)+ resume 重讀 |
 | Q11 | 人類強制中斷 → HIL(`@agent hold`) | comment 觸發 → 立即 evict(killpg)→ HIL(Middle)+need_info 表單(含 prompt 欄)→ submit 寫 TICKET.md + resume 排隊,不耗 attempt;硬殺限制寫進開發者手冊 FAQ |
 
-實作橫跨 interaction/hil/scoring/commands/dispatcher/workspace;Q13 的自評含一次真 agent 呼叫。
+✅ 已建:human_prompt 欄 + sidecar `.arcp_human.md` + TICKET.md 人類指示段(Q10)、
+`@agent hold`→evict+HIL 表單→resume(Q11)、ScoreGate `self_score_fn` hook(Q13,真自評
+呼叫留 live/V1)。橫跨 interaction/hil/scoring/commands/workspace/run_poller。
 
 **仍待辦(需真 Jira/agent,我不能替跑):**
 

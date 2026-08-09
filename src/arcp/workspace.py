@@ -11,10 +11,12 @@ Layout(以不變的 numeric issue_id 命名,native resume cwd-bound → 路徑�
 
 from __future__ import annotations
 
+import datetime
 import os
 import shlex
 import shutil
 import subprocess
+import time
 
 from .logutil import get_logger
 from .paths import common_skills_dir, templates_dir
@@ -26,6 +28,24 @@ log = get_logger("workspace")
 _INJECT_FILE = "inject_claude_md_end.md"
 _MARK_BEGIN = "<!-- BEGIN arcp inject -->"
 _MARK_END = "<!-- END arcp inject -->"
+_HUMAN_SIDECAR = ".arcp_human.md"     # Q10:人類指示累加(不被 TICKET.md 重渲染蓋掉)
+
+
+def append_human_instruction(ws: str, text: str, now: float | None = None) -> None:
+    """把人類在 HIL 表單輸入的補充指示,累加寫進 workspace 的 sidecar(data path)。
+    下次 render_ticket_md 會讀進 TICKET.md 的「人類指示」段。單一寫入者=harness。"""
+    text = (text or "").strip()
+    if not text:
+        return
+    now = time.time() if now is None else now
+    stamp = datetime.datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")
+    with open(os.path.join(ws, _HUMAN_SIDECAR), "a", encoding="utf-8") as f:
+        f.write(f"- [{stamp}] {text}\n")
+
+
+def _read_human_notes(ws: str) -> str:
+    p = os.path.join(ws, _HUMAN_SIDECAR)
+    return open(p, encoding="utf-8").read().strip() if os.path.isfile(p) else ""
 
 
 def _render_acceptance(profile: Profile | None) -> str:
@@ -43,8 +63,8 @@ def _render_acceptance(profile: Profile | None) -> str:
 
 
 def render_ticket_md(t: Ticket, profile: Profile | None = None,
-                     base_url: str | None = None) -> str:
-    """任務簡報(agent prompt 第一句叫它讀這個)。內容 = Jira 票 + profile。"""
+                     base_url: str | None = None, human_notes: str = "") -> str:
+    """任務簡報(agent prompt 第一句叫它讀這個)。內容 = Jira 票 + profile + 人類指示。"""
     comments = "\n".join(
         f"- [{c.author}] {c.body[:300]}" for c in t.comments[-5:]) or "(無)"
     head = [f"# {t.key}: {t.summary}", "",
@@ -57,6 +77,8 @@ def render_ticket_md(t: Ticket, profile: Profile | None = None,
     if profile and profile.goal:
         parts.append(f"## 目標\n\n{profile.goal}")
     parts.append(f"## 描述(要做什麼)\n\n{t.description or '(無)'}")
+    if human_notes:                    # Q10:人類在 HIL 表單補的指示(累加,最新在下)
+        parts.append("## 人類指示(累加,請一併遵循)\n\n" + human_notes)
     parts.append("## 驗收標準(通過才算 SUCCESS)\n\n" + _render_acceptance(profile))
     parts.append(f"## 最新留言(最多 5 則)\n\n{comments}")
     return "\n\n".join(parts) + "\n"
@@ -187,7 +209,7 @@ def provision(root: str, ticket: Ticket, profile: Profile,
             f.write("ok\n")
 
     with open(os.path.join(ws, "TICKET.md"), "w") as f:  # 5. 任務簡報(每輪刷新)
-        f.write(render_ticket_md(ticket, profile, base_url))
+        f.write(render_ticket_md(ticket, profile, base_url, _read_human_notes(ws)))
     return ws
 
 
@@ -201,7 +223,7 @@ def health_check(ws: str, ticket: Ticket, profile: Profile | None = None,
     ticket_md = os.path.join(ws, "TICKET.md")
     if not os.path.isfile(ticket_md):
         return False, "TICKET.md 遺失"
-    fresh = render_ticket_md(ticket, profile, base_url)
+    fresh = render_ticket_md(ticket, profile, base_url, _read_human_notes(ws))
     if open(ticket_md).read() != fresh:                 # 票內容變了:刷新非損壞
         with open(ticket_md, "w") as f:
             f.write(fresh)

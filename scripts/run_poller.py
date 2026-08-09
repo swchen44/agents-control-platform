@@ -121,17 +121,6 @@ def main() -> int:
               or src.myself().get("accountId", ""))
     disp = Dispatcher(src, store, profiles, root=runtime,
                       approval=ApprovalGate(src, store, bot_id))
-    # W4.5:allowed_commenters / cancel_states 從 config 接線(原 hardcode)
-    cmds = CommandHandler(
-        src, store,
-        (source_cfg.get("commands") or {}).get("allowed_commenters")
-        or ["Shao-wei Chen"],
-        profiles=profiles)
-    ext = ExternalChangePolicy(
-        src, store,
-        (source_cfg.get("external_change") or {}).get("cancel_states")
-        or ["完成", "Done", "Concluído"],
-        bot_account_id=bot_id, profiles=profiles)      # W4.3 離手定格
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
     fcfg = source_cfg.get("form") or {}
@@ -139,6 +128,17 @@ def main() -> int:
     form_port = int(fcfg.get("port", 8790))
     form_base = fcfg.get("base_url") or f"http://{form_host}:{form_port}"
     mention = fcfg.get("mention_account_id", "")
+    # W4.5:allowed_commenters / cancel_states 從 config 接線(原 hardcode)
+    cmds = CommandHandler(
+        src, store,
+        (source_cfg.get("commands") or {}).get("allowed_commenters")
+        or ["Shao-wei Chen"],
+        profiles=profiles, base_url=form_base, mention=mention)  # Q11:hold 開表單
+    ext = ExternalChangePolicy(
+        src, store,
+        (source_cfg.get("external_change") or {}).get("cancel_states")
+        or ["完成", "Done", "Concluído"],
+        bot_account_id=bot_id, profiles=profiles)      # W4.3 離手定格
 
     loop = OuterLoop(
         src, store, routes, jql,
@@ -146,8 +146,12 @@ def main() -> int:
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
         triggers=load_triggers(cfg_path, profiles),        # W3.4 scheduled
-        scoregate=ScoreGate(src, store, base_url=form_base,  # W11:HIL(End) 表單
-                            mention=mention))
+        # W11:HIL(End) 表單。Q13:agent 數字自評 hook = self_score_fn(session)->0..10,
+        # 只在關單首發 score_and_close 時呼叫一次(含一次真 agent resume+prompt,故屬
+        # 真派工才跑的 V1 類路徑;此處先掛 None,真環境接上一個 best-effort 實作即可,
+        # ScoreGate 對 None / 例外都 fail-safe,不擋關單)。
+        scoregate=ScoreGate(src, store, base_url=form_base,
+                            mention=mention, self_score_fn=None))
     loop.poll_interval = interval                            # W9.1 control 顯示
 
     _reload = make_reload(loop, disp, cmds, ext, cfg_path)  # W13/W4.5 hot reload
