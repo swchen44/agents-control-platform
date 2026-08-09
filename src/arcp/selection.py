@@ -36,8 +36,7 @@ def _pool(profile) -> list[str]:
 
 
 def _script_input(ticket: Ticket, profile, pool: list[str],
-                  clearquest_id: str | None) -> dict:
-    yaml_path = config_path()          # 目前全 profile 同一檔;Q15 拆檔後可 per-profile
+                  yaml_of: dict, clearquest_id: str | None) -> dict:
     raw = getattr(ticket, "raw", {}) or {}
     created = (((raw.get("fields") or {}).get("created")) if raw else "") or ""
     return {
@@ -47,8 +46,8 @@ def _script_input(ticket: Ticket, profile, pool: list[str],
                    "created": created, "updated": getattr(ticket, "updated", ""),
                    "labels": list(ticket.labels or [])},
         "clearquest": {"crid": clearquest_id or "", "title": ""},
-        "original": {"name": profile.name, "yaml": yaml_path},
-        "candidates": [{"name": n, "yaml": yaml_path} for n in pool],
+        "original": {"name": profile.name, "yaml": yaml_of.get(profile.name, "")},
+        "candidates": [{"name": n, "yaml": yaml_of.get(n, "")} for n in pool],
     }
 
 
@@ -68,11 +67,13 @@ def select_profile(ticket: Ticket, profile, profiles: dict,
         return chosen, meta
 
     # method == "script":JSON stdin → stdout 回 profile 名
+    yaml_of = {n: (getattr(profiles[n], "source_yaml", "") or config_path())
+               for n in pool}
     argv = shlex.split(cfg["script"])
     try:
         proc = subprocess.run(
             argv, input=json.dumps(_script_input(ticket, profile, pool,
-                                                 clearquest_id)),
+                                                 yaml_of, clearquest_id)),
             capture_output=True, text=True, timeout=_SCRIPT_TIMEOUT)
     except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("select script 失敗 ticket=%s: %s → fallback %s",

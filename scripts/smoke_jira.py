@@ -39,7 +39,7 @@ def main() -> int:
                     help="含寫入測(會改指定測試票,測後還原)")
     ap.add_argument("--ticket", help="寫入測用的測試票 key(如 SCRUM-36)")
     ap.add_argument("--jql", default=None,
-                    help="search 用的 jql(預設=routes.yaml 的 poller jql;"
+                    help="search 用的 jql(預設=config.yaml 的 poller jql;"
                          "新端點禁止無界查詢,務必帶 project 等條件)")
     a = ap.parse_args()
 

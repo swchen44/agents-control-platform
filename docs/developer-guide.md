@@ -53,7 +53,7 @@ uv run python tests/e2e_form.py                   # 互動服務端到端(fake J
   `e2e_form`。免 token、免網、免真 agent。
 - **需真依賴**(CI 不跑):`scripts/smoke_jira.py`(真 Jira)、`tests/e2e_c*` /
   `e2e_codex*`(openhands venv / 真 agent)。
-- CI 用 `ARCP_CONFIG=routes.example.yaml`(避免依賴本機才有的 openhands venv)。
+- CI 用 `ARCP_CONFIG=config.example.yaml`(避免依賴本機才有的 openhands venv)。
 - 腳本/設定/vendored/runner 由 `arcp.paths` 以 repo-root 相對解析,測試不綁 cwd;
   少數 import 腳本的測試(`test_kpi` / `test_hotreload`)靠 `tests/_env.py` 把
   `scripts/` 放進 `sys.path`。
@@ -72,7 +72,7 @@ uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改�
 
 ## 加一個 profile
 
-在 `routes.yaml` 的 `inner_loop.profiles` 加一項(見 `routes.example.yaml` 範本):
+在 `config.yaml` 的 `inner_loop.profiles` 加一項(見 `config.example.yaml` 範本):
 `agent`(backend/engine/model/sandbox)、`verify`(確定性檢查)、`loop.max_attempts`、
 `goal` / 預算 / `human_minutes_est`;再在 `outer_loop.routes` 加比對規則指到它。
 

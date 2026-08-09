@@ -30,7 +30,7 @@ trigger/輸入/輸出/上下游見下表(與 `/concepts` 頁的職責表同內�
 | **jira_source** | Jira Cloud 讀寫封裝(search/comment/transition/set_description,含 write_retry + on_write 回呼) | poller 每輪 / 各政策要寫入時 | JQL、issue_id、寫入動作 | Ticket/Comment 物件、寫入結果 | poller·dispatcher·各政策 → Jira Cloud REST |
 | **triggers** | 內部排程觸發源(scheduled agent / script) | poller 每輪查 due | trigger 定義 + store 上次執行時間 | 到期 trigger → 派工/跑 script | poller → dispatcher·script |
 | **poller(OuterLoop)** | 外圈輪詢:diff 變更→journal→協調派工/指令/政策/評分 | run_poller 定時迴圈(interval 秒) | JQL 搜到的票 + store watch 狀態 | journal 事件流 + 派工決策 | run_poller → routing·gate·dispatcher·commands·external·scoring·store |
-| **routing** | 票 → route/profile 比對(when 條件式) | poller 每票 | Ticket 欄位 + routes.yaml | Route(profile, on_match) | poller → poller·dispatcher |
+| **routing** | 票 → route/profile 比對(when 條件式) | poller 每票 | Ticket 欄位 + config.yaml | Route(profile, on_match) | poller → poller·dispatcher |
 | **gate(F1)** | 分層並發額度閘(global / per-engine / per-profile) | poller 有候選待派時 | 候選清單 + in-flight 計數 | selected / queued 劃分 | poller → dispatcher |
 | **dispatcher** | 派工:審批門→provision workspace→跑 attempt→寫 envelope→更新 session | poller 選中候選(create_or_resume) | Ticket + profile + store session | attempt 執行 + envelope + session/journal 更新 | poller·gate → approval·workspace·inner_runner·contract·store |
 | **inner_runner** | 實跑 claude -p / codex exec 一個 attempt(看門狗/killpg/native resume) | dispatcher 呼叫 | prompt、workspace、session_id | raw 結果 + cost + session_id | dispatcher → claude/codex CLI |

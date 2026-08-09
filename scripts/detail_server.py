@@ -38,7 +38,7 @@ try:                                    # W6.1 系統資訊(純 stdlib);缺也�
 except Exception:  # noqa: BLE001
     sysinfo_collect = None
 
-# W7.5:Agent Detail 讀 config/routes.yaml(設定 + profiles)。憑證在 ~/.env 不在此。
+# W7.5:Agent Detail 讀 config/config.yaml(設定 + profiles)。憑證在 ~/.env 不在此。
 # 路徑一律走 arcp.paths(repo-root 相對),dashboard 在 scripts/ 仍定位得到 config/vendor/runtime。
 try:
     from arcp.paths import config_path as _arcp_config_path
@@ -48,7 +48,7 @@ try:
     _VENDOR = _arcp_vendor_dir() or os.path.dirname(os.path.abspath(__file__))
     _RUNTIME = _arcp_runtime_dir() or os.path.abspath("./runtime")
 except Exception:  # noqa: BLE001  (arcp 缺 → 退回 cwd 相對)
-    _CONFIG_PATH = os.environ.get("ARCP_CONFIG", "routes.yaml")
+    _CONFIG_PATH = os.environ.get("ARCP_CONFIG", "config.yaml")
     _VENDOR = os.path.dirname(os.path.abspath(__file__))
     _RUNTIME = os.path.abspath("./runtime")
 
@@ -62,7 +62,7 @@ HOST = os.environ.get("ARCP_DASH_HOST", "0.0.0.0")
 
 
 def _instance_name() -> str:
-    """W8.6:此 Control Plane 實例名(routes.yaml source.name;多實例分辨用)。
+    """W8.6:此 Control Plane 實例名(config.yaml source.name;多實例分辨用)。
     輕量讀取、壞掉不擋站。ARCP_NAME 環境變數可覆寫。"""
     env = os.environ.get("ARCP_NAME")
     if env:
@@ -748,7 +748,7 @@ def render_control_page() -> str:
             "<span id='cmsg' aria-live='polite' style='color:var(--muted);font-size:12px'></span>"
             "</div>"
             "<p style='color:var(--muted);font-size:12px'>"
-            "Pause=只 watch 不派新工(正在跑的不中斷);Reload=熱載 routes.yaml"
+            "Pause=只 watch 不派新工(正在跑的不中斷);Reload=熱載 config.yaml"
             "(壞 config 不生效、舊設定續用);Graceful Shutdown=當前輪(含壓縮"
             "打包)跑完後 poller 退出。詳見 docs/design/hotreload.md。即時 kill 單張"
             "票用 ticket 頁的 Evict。</p></main>"
@@ -2191,7 +2191,7 @@ def openapi_spec() -> dict:
                 "暫停派工(graceful:只 watch,不派新工,不中斷正在跑的)")},
             "/resume": {"post": w("恢復派工")},
             "/reload": {"post": w(
-                "熱重載 routes.yaml(壞 config 回 400、舊設定續用、不弄死 poller)")},
+                "熱重載 config.yaml(壞 config 回 400、舊設定續用、不弄死 poller)")},
             "/shutdown": {"post": w(
                 "優雅關閉(當前 poll 輪跑完後退出並清理)")},
             "/evict/{issue_id}": {"post": w(
@@ -2228,7 +2228,7 @@ _SWAGGER_CT = {".css": "text/css", ".js": "application/javascript",
 
 # ── W7.5:Agent Detail — harness 設定 + 全 Profile 參數(唯讀,server-render)── #
 def _redact(d):
-    """遮蔽疑似敏感 key(routes.yaml 本無憑證,防禦性;憑證在 ~/.env)。"""
+    """遮蔽疑似敏感 key(config.yaml 本無憑證,防禦性;憑證在 ~/.env)。"""
     sens = re.compile(r"token|secret|password|api[_-]?key", re.I)
     if isinstance(d, dict):
         return {k: ("***" if sens.search(str(k)) else _redact(v))
@@ -2252,7 +2252,7 @@ def _kv_table(pairs) -> str:
 
 
 def render_agent_page() -> str:
-    """W7.5:harness 設定(routes.yaml)+ 每個 Profile 全參數。憑證不在此檔。"""
+    """W7.5:harness 設定(config.yaml)+ 每個 Profile 全參數。憑證不在此檔。"""
     try:
         import sys as _sys
         _here = os.path.dirname(os.path.abspath(__file__))
@@ -2277,7 +2277,7 @@ def render_agent_page() -> str:
 
     # harness 設定(source/concurrency/control/commands/external_change…)
     cfg = _redact(src)
-    cfg_card = ("<h2>harness 設定(routes.yaml)</h2><div class='card'>"
+    cfg_card = ("<h2>harness 設定(config.yaml)</h2><div class='card'>"
                 + _kv_table(sorted(cfg.items())) + "</div>")
 
     # 路由
@@ -2426,7 +2426,7 @@ _ARCH_MODULES = {
                "journal 事件流 + 派工決策", "run_poller",
                "routing·gate·dispatcher·commands·external·scoring·store"),
     "routing": ("routing", "票 → route/profile 比對(when 條件式)",
-                "poller 每票", "Ticket 欄位 + routes.yaml",
+                "poller 每票", "Ticket 欄位 + config.yaml",
                 "Route(profile, on_match)", "poller", "poller·dispatcher"),
     "gate": ("gate(F1)", "分層並發額度閘(global / per-engine / per-profile)",
              "poller 有候選待派時", "候選清單 + in-flight 計數",

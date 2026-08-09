@@ -20,7 +20,7 @@ A:目前來源是 Jira Cloud(`jira_source.py` 是唯一碰 Cloud 細節的檔,�
 **Q:一定要 OpenHands / venv 嗎?**
 A:**不用**。主線 `rawcli` backend 純 stdlib(直接 spawn `claude -p` / `codex exec`),
 系統 python 即可跑。openhands-acp / openhands-server backend 是選配(需 venv)。
-`routes.example.yaml` 就是 rawcli-only。
+`config.example.yaml` 就是 rawcli-only。
 
 **Q:claude 還是 codex?**
 A:都支援(profile 的 `agent.engine`)。共用同一 envelope 契約,換引擎不改 dispatcher。
@@ -58,9 +58,9 @@ A:`uv run python tests/<test>.py`(從 repo root)。離線集(CI 跑)= 所有 `te
 `harness_selftest` + `e2e_dashboard` + `e2e_form`。真 Jira 用 `smoke_jira.py`。詳
 [開發者手冊](developer-guide.md)。
 
-**Q:CI 為什麼用 `routes.example.yaml`?**
-A:`routes.yaml` 的 openhands profiles 依賴 gitignored 的 venv,fresh checkout 沒有 →
-`load_profiles` 會失敗。`routes.example.yaml` 是 rawcli-only、無 venv 依賴。
+**Q:CI 為什麼用 `config.example.yaml`?**
+A:`config.yaml` 的 openhands profiles 依賴 gitignored 的 venv,fresh checkout 沒有 →
+`load_profiles` 會失敗。`config.example.yaml` 是 rawcli-only、無 venv 依賴。
 
 **Q:怎麼加一個 backend / profile?**
 A:見 [開發者手冊](developer-guide.md)「加一個 backend / profile」。

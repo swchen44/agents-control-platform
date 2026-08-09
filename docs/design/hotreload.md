@@ -8,7 +8,7 @@
 ## 1. 機制總覽
 
 ```
-POST /reload    重讀 routes.yaml → swap 引用(make_reload,run_poller.py)
+POST /reload    重讀 config.yaml → swap 引用(make_reload,run_poller.py)
 POST /pause     暫停派工(watch/指令照常;正在跑的不中斷)——「軟暫停」
 POST /resume    恢復派工
 POST /shutdown  graceful:當前 poll 輪(含 attempt/驗證/壓縮打包)自然跑完

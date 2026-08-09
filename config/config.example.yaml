@@ -1,6 +1,6 @@
 # ARCP 範例設定(可直接跑;rawcli-only、無 openhands venv 依賴)。
-# 新使用者從這份起步:複製成 routes.yaml、改 jql/project/profile 即可。
-# CI 也用這份(ARCP_CONFIG=routes.example.yaml)——不依賴本機才有的 venv。
+# 新使用者從這份起步:複製成 config.yaml、改 jql/project/profile 即可。
+# CI 也用這份(ARCP_CONFIG=config.example.yaml)——不依賴本機才有的 venv。
 version: 1
 
 outer_loop:

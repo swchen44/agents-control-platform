@@ -105,7 +105,7 @@
   依賴**——`arcp_rawcli/agent.py` 重寫純 stdlib(去 AgentBase/Conversation/
   pydantic,`run(prompt,ws,on_event)` 取代 step,事件 dict 同 JSONL 形狀
   dashboard 零改);rawcli 主線不再需要 591MB openhands venv(系統 python 即
-  跑,claude/codex/e2e_evict 真跑驗過);routes.yaml 四個 rawcli profile 移除
+  跑,claude/codex/e2e_evict 真跑驗過);config.yaml 四個 rawcli profile 移除
   venv;openhands-acp/server backend 仍選配(需 venv)。live poller hot reload
   帶入零重啟。
 - **W6 全部完成 ✅(2026-08-07)** `docs/history/PLAN_wave6.md` + REQUIREMENTS §10:

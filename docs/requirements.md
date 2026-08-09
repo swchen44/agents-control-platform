@@ -39,7 +39,7 @@
 - **內部觸發源**(scheduled cron / oneshot / script,W3.4/W4.6):非 Jira 票也能跑。
   **Why**:定時維護、一次性任務、跑任意 script(uvx/npx/.sh/.py)。cron 用五欄位
   crontab(W4.6),與 every 並存時 cron 優先。
-- 現狀:`poller.py`/`routing.py`/`triggers.py`;routes.yaml 設定。
+- 現狀:`poller.py`/`routing.py`/`triggers.py`;config.yaml 設定。
 
 ## 2. 內層證據迴路(W1-W2)
 
@@ -249,11 +249,11 @@ dashboard 呈現每張 Jira 效益 = **(score/10) × 省下工時 × 時薪 − 
 - **Why**:要能比較不同 profile 的量、成本、有用度;精細狀態才看得出票卡在哪(診斷)。
 
 ### 12.4 Agent Detail tab(R5)
-新開 tab,顯示 **harness 設定**(routes.yaml:jql/並發/control/retry…)+ **每個
+新開 tab,顯示 **harness 設定**(config.yaml:jql/並發/control/retry…)+ **每個
 Profile 全參數**(backend/engine/skills/verify/budgets/approver/goal/human_minutes_est/
 retention…)。與現有 **Server tab**(機器/系統/程序,W6.1)分工:Server=機器現況,
 Agent Detail=設定檔內容。
-- **Why**:設定目前只在 routes.yaml,網頁看不到;人要在網頁就能查 agent 怎麼配的。
+- **Why**:設定目前只在 config.yaml,網頁看不到;人要在網頁就能查 agent 怎麼配的。
 
 ### 12.5 概念 / 生命週期 / 狀態機頁(R6)
 新「概念/說明」tab:Jira 生命週期 + **8 態狀態機圖(純 SVG,零依賴)** + 「狀態存哪」

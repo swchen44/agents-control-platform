@@ -35,12 +35,12 @@ JIRA_API_TOKEN=<你的 Atlassian API token>
 
 驗證連線:`uv run python scripts/smoke_jira.py`(唯讀:auth + search;從 repo root)。
 
-## 4. 設定 routes.yaml
+## 4. 設定 config.yaml
 
 複製範例、改成你的:
 
 ```bash
-cp config/routes.example.yaml config/routes.yaml
+cp config/config.example.yaml config/config.yaml
 ```
 
 重點欄位:

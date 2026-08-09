@@ -156,7 +156,7 @@ N13(killpg→resume)、E3(evict/rehydrate)、A2(關一半靠冪等)。使用者�
 - **機器人** = 現有 `~/.env` 的 `JIRA_EMAIL`(swchen.tw@gmail.com)+ `JIRA_API_TOKEN`。
   發 comment / 改 assignee 用它。`~/.env` 在 HOME、不在 repo 樹內,**不會被 commit**。
 - **人類審批者**(如 swchen44@gmail.com):harness **不需要它的 token**(人在 Jira 網頁自己
-  操作)。只需在 `routes.yaml` per-profile `approver:` 記其 email(**非機密**)以判斷
+  操作)。只需在 `config.yaml` per-profile `approver:` 記其 email(**非機密**)以判斷
   「這個 assignee / 這則 comment author 是不是本人」。
 - 結論:**一個機器人 token 就夠**,不新增。
 

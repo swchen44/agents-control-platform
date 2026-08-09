@@ -58,6 +58,8 @@ class Profile:
     # Q16:首次派工選 profile(A/B 測試 / 泛化 triage)。None=不選、直接用本 profile。
     # {candidates:[名], method:"random"|"script", script:"argv(method=script)"}
     select: dict | None = None
+    # Q15:此 profile 來源 yaml 絕對路徑(inline=主檔;拆檔=config/profiles/<名>.yaml)。
+    source_yaml: str = ""
 
     def est_minutes(self) -> float:
         """W7(R3):有效估時——未設回預設 240 分(4h),讓效益一律算得出來。"""
@@ -65,11 +67,33 @@ class Profile:
                 else DEFAULT_HUMAN_MINUTES_EST)
 
 
-def load_profiles(path: str) -> dict[str, Profile]:
+def _collect_profile_raw(path: str) -> dict[str, tuple[dict, str]]:
+    """Q15:主檔 inline profiles + config/profiles/<名>.yaml(檔名=名、內容=body)合併。
+    回 {name: (body, source_yaml)};同名跨檔衝突 → fail-fast。"""
     with open(path) as f:
         doc = yaml.safe_load(f) or {}
-    profiles: dict[str, Profile] = {}
+    raw: dict[str, tuple[dict, str]] = {}
     for name, p in ((doc.get("inner_loop") or {}).get("profiles") or {}).items():
+        raw[name] = (p or {}, os.path.abspath(path))
+    pdir = os.path.join(os.path.dirname(os.path.abspath(path)), "profiles")
+    if os.path.isdir(pdir):
+        for fn in sorted(os.listdir(pdir)):
+            if not fn.endswith((".yaml", ".yml")):
+                continue                       # 略過 README.md 等
+            name = os.path.splitext(fn)[0]
+            fp = os.path.join(pdir, fn)
+            with open(fp) as f:
+                body = yaml.safe_load(f) or {}
+            if name in raw:
+                raise ConfigError(
+                    f"profile '{name}' 同時在 {raw[name][1]} 與 {fp} 定義(衝突)")
+            raw[name] = (body, fp)
+    return raw
+
+
+def load_profiles(path: str) -> dict[str, Profile]:
+    profiles: dict[str, Profile] = {}
+    for name, (p, _source) in _collect_profile_raw(path).items():
         ws = p.get("workspace") or {}
         loop = p.get("loop") or {}
         if loop.get("on_unknown", "pending") != "pending":
@@ -141,7 +165,8 @@ def load_profiles(path: str) -> dict[str, Profile]:
                                if ws.get("install") else None),
             common_skills=list(ws.get("common_skills") or []),
             inject_md=bool(ws.get("inject_md", True)),
-            select=_parse_select(name, p.get("select")))
+            select=_parse_select(name, p.get("select")),
+            source_yaml=_source)
     # Q16:候選存在性要等全部 profile 載完才驗(候選可能定義在後面)。
     for name, prof in profiles.items():
         if not prof.select:

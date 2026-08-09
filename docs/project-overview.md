@@ -17,7 +17,7 @@ agents-control-platform/
 ├── src/arcp/               # ← 套件本體(可安裝)
 ├── scripts/                # 可執行入口 + 被 spawn 的 runner + demo
 ├── tests/                  # 單元 + 端到端測試
-├── config/                 # 宣告式設定(git 追蹤):routes*.yaml + templates/ + skills/
+├── config/                 # 宣告式設定(git 追蹤):config.yaml + profiles/ + templates/ + skills/
 ├── vendor/                 # 離線 vendored 資產(cclog / swagger-ui / vis-timeline …)
 ├── runtime/                # 運行狀態(gitignore):harness.db + events.jsonl + runs/ + workspaces
 ├── docs/                   # 文件(本資料夾;研究報告在 docs/research/)
@@ -57,7 +57,9 @@ agents-control-platform/
 
 ## `config/` — 宣告式設定(git 追蹤)
 
-- `routes.yaml`(你的實際設定,`~/.env` 放憑證)、`routes.example.yaml`(範例/CI 用)
+- `config.yaml`(你的實際設定,`~/.env` 放憑證)、`config.example.yaml`(範例/CI 用)
+- `profiles/`:拆檔的 agent profile `<名>.yaml`(檔名=名;`load_profiles` 自動合併主檔
+  inline + 這裡,同名 fail-fast)—— 命名精準、分檔 owner(Q15,見 [設計/選擇](design/selection.md))
 - `templates/`:workspace 模板 `<name>_template/` + 全域 `inject_claude_md_end.md`
 - `skills/`:common skills 庫(`<name>/`;profile `common_skills` 選子集)
 - 佈建流程見 [設計/workspace](design/workspace.md)。

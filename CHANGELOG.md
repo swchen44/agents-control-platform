@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+### Changed
+- **config 改名 + profile 拆檔(Q15)**:`config/routes.yaml`→`config/config.yaml`、
+  `routes.example.yaml`→`config.example.yaml`(未 release,不做相容;`config_path` 預設改
+  `config.yaml`、CI `ARCP_CONFIG=config.example.yaml`、全 doc 引用更新)。profile 可拆到
+  `config/profiles/<名>.yaml`(檔名=profile 名、內容=body),`load_profiles` 自動合併主檔
+  inline + 拆檔,同名跨檔 fail-fast;`Profile.source_yaml` 記來源 yaml(Q16 script 拿到候選
+  的 per-profile 路徑)。`config.example.yaml` 為 CI 自足仍內建 profile。`test_profiles_split.py`。
+
 ### Added
 - **profile 選擇 / 泛化 triage(Q16)**:main profile 加 `select` 區塊
   (`candidates` + `method: random|script` + `script`);首次派工從 [main+候選] 選一個實際
@@ -60,7 +68,7 @@
   並入 index;CLAUDE.md 指向除錯導引。
 - **專業化打包(W12)**:src-layout(`src/arcp/`)、`pyproject.toml`(hatchling,
   Python ≥ 3.10)、`uv.lock`、MIT `LICENSE`;GitHub Actions **CI**(3.10–3.13 矩陣:
-  ruff + build + 離線測試)與 **CD**(tag → GitHub Release);`routes.example.yaml`
+  ruff + build + 離線測試)與 **CD**(tag → GitHub Release);`config.example.yaml`
   範例設定;完整 `docs/`(使用者/開發者手冊、專案介紹、需求、決策、FAQ、設計文件)。
 - **互動服務(W11,HIL 人機介面)**:一次性 token 受控表單(`need_info` / `decision` /
   `score_and_close`)、`@mention` 通知、表單提交回寫 Jira human 段 + 稽核 comment +

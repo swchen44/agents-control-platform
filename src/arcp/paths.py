@@ -31,7 +31,7 @@ def _under_root(*parts: str) -> str | None:
 
 
 def config_dir() -> str | None:
-    """宣告式設定的家:routes*.yaml + templates/ + skills/(全 git 追蹤)。"""
+    """宣告式設定的家:config*.yaml + templates/ + skills/(全 git 追蹤)。"""
     return _under_root("config")
 
 
@@ -62,15 +62,15 @@ def scripts_dir() -> str | None:
 
 def config_path() -> str:
     """解析設定檔路徑。ARCP_CONFIG:含路徑分隔或絕對 → 原樣用;純檔名 → 視為
-    config/ 下的檔(讓 CI 的 `ARCP_CONFIG=routes.example.yaml` 不綁 cwd)。
-    未設 → config/routes.yaml。全找不到 config 時退回 cwd 相對(舊行為)。"""
+    config/ 下的檔(讓 CI 的 `ARCP_CONFIG=config.example.yaml` 不綁 cwd)。
+    未設 → config/config.yaml。全找不到 config 時退回 cwd 相對(舊行為)。"""
     env = os.environ.get("ARCP_CONFIG")
     c = config_dir()
     if env:
         if os.path.isabs(env) or os.sep in env or (os.altsep and os.altsep in env):
             return env
         return os.path.join(c, env) if c else env
-    return os.path.join(c, "routes.yaml") if c else "routes.yaml"
+    return os.path.join(c, "config.yaml") if c else "config.yaml"
 
 
 def find_script(name: str) -> str:

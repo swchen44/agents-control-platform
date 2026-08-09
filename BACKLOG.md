@@ -36,7 +36,7 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 |---|---|---|
 | **Q16** | profile A/B 測試 / 泛化 triage:main profile 加 `select`(candidates+method random\|script);首次派工選一次 pin 進 session;script 吃 JSON stdin(ticket/crid/候選+yaml)→ stdout 回名;fail-safe 回 main | ✅ 已建(`selection.py` + `test_selection.py` 11 檢查;見 [design/selection.md](docs/design/selection.md)) |
 | **Q7** | triage(要不要人、選 profile) | ✅ **由 Q16 泛化涵蓋**:選到 require_approval 的 profile=要人、否則直跑;現行 per-profile require_approval 仍為基礎閘 |
-| **Q15** | config 改名 / 拆 config_{agent}.yaml(命名精準 + 分檔 owner) | ⏳ 待做(會影響 arcp.paths.config_path 的載入 + selection 的 yaml 路徑可 per-profile) |
+| **Q15** | config 改名 / 拆檔(命名精準 + 分檔 owner) | ✅ 已建:`routes.yaml`→`config.yaml`(不相容,未 release);profile 可拆到 `config/profiles/<名>.yaml`(檔名=名),`load_profiles` 自動合併主檔 inline + 拆檔、同名 fail-fast;`Profile.source_yaml` 記來源(Q16 script 拿 per-profile yaml)。`test_profiles_split.py` 7 檢查 |
 
 **仍待辦(需真 Jira/agent,我不能替跑):**
 

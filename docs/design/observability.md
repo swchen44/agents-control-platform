@@ -206,7 +206,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - 連看:`state` 欄位 + 該票的 `status_changed`/`assignee_changed` + Jira 端操作記錄。
 
 **`handoff_invalid`** — 換手目標無效(dispatcher)
-- 異常訊號:`to` 指的 profile 不存在/不合法 → 換手沒生效。連看 `routes.yaml` profiles。
+- 異常訊號:`to` 指的 profile 不存在/不合法 → 換手沒生效。連看 `config.yaml` profiles。
 
 **`hil_stalled`** — 評分/需人表單催了 N 次仍無人回(scoring)
 - 正常:確實在等人(非 bug)。

@@ -35,10 +35,10 @@ def t(**kw) -> Ticket:
     return Ticket(**base)
 
 
-print("routing (using the real routes.yaml):")
-# 這些 route 斷言綁定「真 routes.yaml」的內容,固定讀它(不跟 ARCP_CONFIG,
-# 否則 CI 的 routes.example.yaml 缺這些 route 會誤判失敗)。
-_, routes = load_config(os.path.join(config_dir(), "routes.yaml"))
+print("routing (using the real config.yaml):")
+# 這些 route 斷言綁定「真 config.yaml」的內容,固定讀它(不跟 ARCP_CONFIG,
+# 否則 CI 的 config.example.yaml 缺這些 route 會誤判失敗)。
+_, routes = load_config(os.path.join(config_dir(), "config.yaml"))
 check("label agent -> agent-labeled(notify_only)",
       (r := match(t(labels=["agent"]), routes)) is not None
       and r.name == "agent-labeled" and r.on_match == "notify_only")

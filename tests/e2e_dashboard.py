@@ -409,7 +409,7 @@ try:
         f"http://127.0.0.1:{port}/agent", timeout=5).read().decode()
     check("Agent Detail:頁 + tab + 設定/路由/Profile 區塊",
           "href='/agent'" in apage and "class='cmdbar'" in apage
-          and "harness 設定(routes.yaml)" in apage
+          and "harness 設定(config.yaml)" in apage
           and "路由(route" in apage and "Profile · " in apage)
     check("Agent Detail:W7 新欄位可見",
           "max_budget_monthly_usd(月)" in apage

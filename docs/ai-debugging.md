@@ -66,8 +66,8 @@ ARCP 讓 headless coding agent(`claude -p` / `codex exec`)由 Jira 事件驅動�
 uv run ruff check .                                   # lint + import 排序
 for t in tests/test_*.py; do uv run python "$t"; done # 單元
 uv run python tests/harness_selftest.py               # 路由/config/指令 冒煙
-ARCP_CONFIG=routes.example.yaml uv run python tests/e2e_dashboard.py  # dashboard e2e
-ARCP_CONFIG=routes.example.yaml uv run python tests/e2e_form.py       # 互動服務 e2e
+ARCP_CONFIG=config.example.yaml uv run python tests/e2e_dashboard.py  # dashboard e2e
+ARCP_CONFIG=config.example.yaml uv run python tests/e2e_form.py       # 互動服務 e2e
 python3 scripts/gen_event_dict.py --check             # journal 事件字典未漂移
 ```
 

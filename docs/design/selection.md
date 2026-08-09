@@ -44,7 +44,8 @@ method ∈ {random, script}、method=script 需有 script。
   "candidates": [{"name","yaml"}]
 }
 ```
-- `yaml` 目前是唯一的 `config/routes.yaml` 絕對路徑(Q15 拆檔後可 per-profile)。
+- `yaml` = 該 profile 的來源檔絕對路徑(`Profile.source_yaml`):inline 在主檔的 = `config.yaml`;
+  拆到 `config/profiles/<名>.yaml` 的 = 該檔(Q15,per-owner)。
 - **fail-safe**:script 逾時 / rc≠0 / 回傳不在池 → 一律 fallback 回 main(journal 記 error),
   不擋派工。stderr 會被 logger 吐出。
 

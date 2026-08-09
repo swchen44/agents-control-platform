@@ -14,7 +14,7 @@ git config core.hooksPath .githooks   # 啟用 pre-commit(ruff),每台機器一�
 ```bash
 uv run ruff check .
 uv build
-ARCP_CONFIG=routes.example.yaml sh -c '
+ARCP_CONFIG=config.example.yaml sh -c '
   for t in tests/test_*.py; do uv run python "$t"; done
   uv run python tests/harness_selftest.py
   uv run python tests/e2e_dashboard.py

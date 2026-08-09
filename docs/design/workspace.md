@@ -35,7 +35,7 @@ config/
 > 範例可直接照抄:[`config/templates/example_template/`](../../config/templates/example_template/)
 > (install 腳本)、[`config/skills/example-skill/`](../../config/skills/example-skill/)、
 > [`config/templates/inject_claude_md_end.md`](../../config/templates/inject_claude_md_end.md)。
-> `config/routes.example.yaml` 的 `default` profile 有註解版的 install/common_skills/inject_md 用法。
+> `config/config.example.yaml` 的 `default` profile 有註解版的 install/common_skills/inject_md 用法。
 
 ## 佈建流程(provision)
 

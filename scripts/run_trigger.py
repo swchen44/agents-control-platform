@@ -2,7 +2,7 @@
 """W3.4 oneshot 觸發 CLI — 立即跑一個 trigger(忽略 every/last_run)。
 
 Usage: python3 run_trigger.py <trigger名> [runtime_dir]   (預設 runtime_live)
-routes.yaml 的 outer_loop.triggers 需有該名字(every 可省略=純 oneshot)。
+config.yaml 的 outer_loop.triggers 需有該名字(every 可省略=純 oneshot)。
 """
 from __future__ import annotations
 

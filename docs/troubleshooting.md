@@ -28,11 +28,11 @@
 
 **先看**:該票的 journal 有沒有 `route_matched`(見 [observability §3-A](design/observability.md))。
 
-- **沒有 `new_issue`**:poller 根本沒看到這票。根因:`routes.yaml` 的
+- **沒有 `new_issue`**:poller 根本沒看到這票。根因:`config.yaml` 的
   `source.jql` 沒涵蓋它(project/狀態/label 條件),或 poller 沒在跑。處置:用
   `scripts/smoke_jira.py`(唯讀)確認 jql 撈得到該票;確認 `run_poller.py` 有在跑。
 - **有 `new_issue` 沒 `route_matched`**:沒命中任何 route。處置:對照
-  `routes.yaml` 的 `routes`,檢查 label/keyword/assignee 條件;`no-agent` 之類的
+  `config.yaml` 的 `routes`,檢查 label/keyword/assignee 條件;`no-agent` 之類的
   排除 route 是否先命中。
 - **`route_matched` 的 `on_match` 是 `ignore`/`notify_only`**:設計上就不派工
   (灰度只記錄)。要真的派工需 `create_or_resume`。
@@ -90,8 +90,8 @@
   ```
   全 `True` 才正常。**這正是 W12.1 曾踩的 bug**(套件搬進 `src/arcp/` 後路徑解析指錯),
   W12.4 已用 `arcp.paths` 修掉 —— 若你改動了資料夾結構,先跑這行確認(見 BACKLOG V1)。
-- **openhands backend 報缺 venv**:`routes.yaml` 的 openhands profile 依賴本機
-  `.venv`(gitignored);fresh checkout/內網沒有。用 `routes.example.yaml`(rawcli-only,
+- **openhands backend 報缺 venv**:`config.yaml` 的 openhands profile 依賴本機
+  `.venv`(gitignored);fresh checkout/內網沒有。用 `config.example.yaml`(rawcli-only,
   純 stdlib 免 venv)或自建 venv。**主線 rawcli 不需要 venv**。
 - **`dispatch_error` / `trigger_error`**:讀 `error` 欄位 + poller 主控台輸出。
 - **kill 沒殺乾淨、子程序孤兒續跑**:必須殺 **process group**(killpg);只殺 CLI pid,
@@ -128,7 +128,7 @@
 
 在 Jira 留 `@agent …` 沒反應 → 看 journal:
 
-- `command_denied`:作者不在 `routes.yaml` 的 `commands.allowed_commenters` 白名單。
+- `command_denied`:作者不在 `config.yaml` 的 `commands.allowed_commenters` 白名單。
 - `command_unknown`:指令拼錯/不認得(看 `body` 欄位)。
 - `command_rejected`:指令對象/狀態不對(看 `target`)。
 - 完全沒有 command_* 事件:poller 沒看到那則留言(留言在水位之前?非該票?)。
@@ -152,8 +152,8 @@
 - **多實例數字混在一起/互相覆寫**:兩個實例 poll 了**同一 Jira project/重疊 jql** →
   互搶同批票、覆寫彼此狀態(併發 flaky 來源)。**分 project 或用不重疊的 label/JQL**;
   各實例分 name、分 control/dashboard port(見 README「多實例部署」)。
-- **/agent 頁載入失敗**:多半是 `routes.yaml` 的 openhands profiles 依賴缺失的 venv →
-  `load_profiles` 擲錯。用 `routes.example.yaml`(`ARCP_CONFIG=routes.example.yaml`)。
+- **/agent 頁載入失敗**:多半是 `config.yaml` 的 openhands profiles 依賴缺失的 venv →
+  `load_profiles` 擲錯。用 `config.example.yaml`(`ARCP_CONFIG=config.example.yaml`)。
 - **元件/圖表沒出來**:dashboard 所有前端元件都是 **vendored**(內網零外部依賴);若
   缺,檢查 `vendor/` 的 vendored 資產是否完整(不該連任何 CDN)。
 
