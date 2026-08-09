@@ -55,7 +55,7 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 
 | # | 項目 | 做法 |
 |---|---|---|
-| **V1** | **真後端派工複驗** | 用一次真實 rawcli 派工確認 runner 能被 spawn(W12.1 runner-path bug 會炸的正是這條)+ W15 install 腳本佈建走一遍;一併複驗 C3/C5 retry flaky(memory:e2e-commands-c3-c5-flaky)。離線 CI 抓不到,需真環境。 |
+| **V1** | **真後端派工複驗** | 助手:`scripts/reverify_v1.py`。**免費部分已驗綠(2026-08-09)**:runner 路徑、config/profiles 載入、事件字典、**真 Jira 唯讀 auth+search(撈到 20 票)** —— 大重構未破真 Jira 接線。**剩付費部分**(真派一次 haiku 工,需充電):確認 runner spawn / Q16 select / W15 install / Q11 hold→resume / Q13 自評 / Q10 human-prompt 在真 agent 下如預期 + C3/C5 flaky。清單見 reverify_v1.py 輸出。 |
 
 ## ★ 使用者圈定優先級(2026-08-04,全 23 項逐項問過)
 

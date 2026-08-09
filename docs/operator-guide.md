@@ -95,6 +95,18 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # 另開:dashb
 - 憑證只在 `~/.env`,永不進 git、dashboard 只顯示「有/無/到期」不顯示值。
 - 互動表單的一次性 token 是機密,勿記入共用日誌。
 
+## 9. 升級/改動後複驗
+
+改了設定、資料夾結構或升級版本後,跑複驗助手確認沒壞:
+
+```bash
+uv run python scripts/reverify_v1.py --offline   # 免費本機:runner 路徑/config 載入/事件字典
+uv run python scripts/reverify_v1.py             # 再加 Jira 唯讀連線(需 ~/.env,不派 agent)
+```
+
+它會印出**付費部分**(真派一次工才驗得到:runner spawn / select / install / hold / 自評 /
+human-prompt)的逐項清單,你在有 agent/充電時對照 dashboard trace + `runtime/events.jsonl` 打勾。
+
 ## 常見問題(Operator FAQ)
 
 - **第一次要手動建 database 嗎?** 不用。`Store` 首次跑自動在 `runtime/harness.db` 建表,零手動。
