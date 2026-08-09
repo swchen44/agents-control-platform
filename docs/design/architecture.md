@@ -1,9 +1,9 @@
 # DESIGN_architecture — 模組架構 · HIL 生命週期 · agent↔agent 交接
 
-> W10(2026-08-08)定案。與 `/concepts` 頁「模組架構 / 狀態機」段同源;生命週期
-> 細節見 [lifecycle.md](lifecycle.md)。**本文件描述目標設計**:
-> W10.1(狀態模型/圖/網頁)已實作;**W10.2(HIL 行為)與 W10.3(a2a)暫緩**,
-> 待使用者審過模型/文件/網頁再接線。
+> W10(2026-08-08)定案、W10.3(2026-08-09)實作。與 `/concepts` 頁「模組架構 /
+> 狀態機」段同源;生命週期細節見 [lifecycle.md](lifecycle.md)。
+> W10.1(狀態模型/圖/網頁)、W10.2(HIL 行為,於 W11+group A 落地)、
+> **W10.3(a2a 交接:同票 next + 跨票 base,由 HIL 表單驅動)皆已實作**。
 
 ## 1. 分層模組架構(資料流由上而下)
 
@@ -56,29 +56,41 @@ jql)。`success/failure/unknown` 是 **HIL(End) 的結果屬性**,不是頂層�
 
 ## 4. agent↔agent 交接:兩種機制,怎麼選?
 
-| | **同票換手** `@agent next <profile>` | **跨票 base 繼承** |
+**觸發點(W10.3)**:人在 **HIL(End) `score_and_close`** 或 **HIL(Middle) `decision`**
+一次性表單選「改派下一棒」(`close_decision=handoff` / `next_step=handoff`),再選
+`handoff_kind`(next / base)+ 下一棒 profile(下拉,候選=載入的全部 profile)+ 交接
+prompt。也保留 agent 自發(`@agent next` 指令 / envelope `status=handoff`)的同票換手。
+
+| | **同票 next** | **跨票 base** |
 |---|---|---|
-| 做法 | 同一張 Jira,重置 session、pin 新 profile | 人**自建**新 Jira,宣告 `base:<ref>`,harness 登記+注入脈絡,舊票收成 ABORTED(交接) |
-| 脈絡 | 全留在同一票(留言/description/transcript 都在) | 複製 base 的 transcript/TICKET.md 進新 workspace(`ws/BASE_<key>/`)+ prompt 前置 + 貼 Jira 連結 |
+| 做法 | 同一張 Jira,重置 session、pin 新 profile | **系統**在 agent 自己 project 建新票(`create_ticket`,一步完成)、預建其 session(pin 新 profile + `base_ref` 指回本票),本票收成 ABORTED(交接) |
+| 脈絡 | 全留在同一票(留言/description/transcript 都在) | dispatcher 於新票首次佈建後複製 base 的 `TICKET.md`+最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路 |
 | 舊工作 | 就地接續(可 native resume) | 新票重新開始,但帶 base 脈絡 |
-| 開新票? | 否 | 是(人在 Jira 建,harness 只登記) |
+| 開新票? | 否 | 是(**系統建**,非人手建;沿用本票 labels → 新票走同 route) |
 | **適合場景** | 小幅換手、**同一件事繼續**、換 profile 但引擎/脈絡相容 | 換**引擎**、重開、跨專案、人策展重啟、任何要「乾淨重來但保留前輪脈絡」的泛化場景 |
 
 **怎麼選(給人的判斷準則)**:
 - 想「就地把這件事交給另一個 agent/profile 繼續」→ **同票 next**。
 - 想「這條路走不下去了,換個引擎/從頭來過,但別讓新 agent 從零摸索」→ **跨票 base**。
 - 跨引擎(claude↔codex)因 session 格式不同無法 native resume,通常走 **跨票 base**。
+- 資料不完整(沒選 kind/profile)→ fail-safe **降級為續跑原 agent**,不硬失敗(見 `handoff_invalid`)。
 
-### 4.1 base(基底票)spec(W10.3 實作)
+### 4.1 base(基底票)spec(W10.3,`hil._do_handoff` + `dispatcher._inject_base`)
 
-- **宣告**:新票 description human 段 `base: <ref>`(3 合 1 ref:Jira key / 內部 id
-  / CQ id),或在 Control 頁登記「新票=N,base=M」。源票術語稱 **base(基底票)**。
-- **登記 + 脈絡注入**(harness,不建 Jira):
-  1. 解析 base → 複製 base 的 `final.html` transcript + `TICKET.md` + 最後 envelope
-     進新 workspace `ws/BASE_<key>/`;
-  2. agent prompt **前置**一段「請先讀 `ws/BASE_<key>/` 的前輪脈絡,確認做到哪、
-     再續做」;
-  3. 在新票貼 Jira 留言,連到 base 的觀測頁(dashboard `/ticket/<base>`)供人追。
-- **舊票收尾**:交接時 base 票 session 收成 **ABORTED(reason=handoff→新票)**,
-  **不算 failure**(交接不是 agent 失敗,失敗率 KPI 才誠實);若還在跑則 killpg 釋放。
-- **Control 頁**:輸入 Jira ID 做設定;「開新票、繼承自哪張 base」→ 登記連結。
+- **觸發**:HIL 表單選 `handoff_kind=base` + 下一棒 profile + 交接 prompt。源票術語稱
+  **base(基底票)**。人的選擇同時寫進本票 description human 段(hash 保護)供稽核。
+- **系統建新票 + 預建 session**(`hil._do_handoff`,不需人手建 Jira):
+  1. `create_ticket` 在同 project(= 本票 key 前綴)建新票,summary=`[base:<key>] …`、
+     description 含 `base: <key>` + 交接指示、**沿用本票 labels**(→ 新票走同 route 被撿);
+  2. 預建新票 `ticket_session`:pin 選定 profile、`workspace="(handoff)"` 哨值、
+     `base_ref=<本票 issue_id>`(標記待注入 base 脈絡);
+  3. 本票 session 收成 **ABORTED**(交接出去=終態,**不算 failure**,失敗率 KPI 才誠實;
+     HIL 時本票非執行中,不需 killpg)。兩票互貼留言可於 dashboard 對照。
+- **脈絡注入**(`dispatcher._inject_base`,新票下一輪首次佈建後,一次性):
+  1. 解析 `base_ref` → 複製 base 的 `TICKET.md` + 最後一個 envelope 進 `ws/BASE_<key>/`,
+     寫 `HANDOFF.md` 指路(含 base 觀測頁連結);
+  2. 往 human 指示 sidecar 追一行指向 `BASE_<key>/`,並立刻刷新 TICKET.md → agent 首跑
+     即在「人類指示」段看到「先讀 BASE_ 前輪脈絡再續做」;
+  3. 注入後清 `base_ref`(之後 resume 不重注)+ journal `base_injected`。
+- **觀測**:journal `handoff(kind=base, new_ticket, via=hil)` + `base_injected(base, dest)`;
+  事件語意見 [observability.md](observability.md)。

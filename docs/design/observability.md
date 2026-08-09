@@ -66,6 +66,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py` |
 | `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `truly_resumed` | `src/arcp/dispatcher.py`, `src/arcp/triggers.py` |
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
+| `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
 | `closed` | `by`, `request_id` | `src/arcp/hil.py` |
 | `command_accepted` | `author`, `command`, `note` | `src/arcp/commands.py` |
 | `command_denied` | `author`, `command` | `src/arcp/commands.py` |
@@ -76,8 +77,8 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `evicted` | `count`, `session` | `src/arcp/dispatcher.py` |
 | `external_abort` | `state` | `src/arcp/commands.py` |
 | `external_cleared` | `cause` | `src/arcp/dispatcher.py` |
-| `handoff` | `author`, `from_profile`, `kind`, `to` | `src/arcp/commands.py`, `src/arcp/dispatcher.py` |
-| `handoff_invalid` | `to` | `src/arcp/dispatcher.py` |
+| `handoff` | `author`, `from_profile`, `kind`, `new_ticket`, `to`, `via` | `src/arcp/commands.py`, `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
+| `handoff_invalid` | `kind`, `to`, `via` | `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
 | `hil_requested` | `request_id`, `schema` | `src/arcp/hil.py` |
 | `hil_resumed` | `reason`, `request_id`, `schema` | `src/arcp/hil.py` |
 | `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py` |
@@ -102,7 +103,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 43 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 44 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -134,9 +135,14 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - ⚠️ `evicted`(`count`/`session`):被強制驅逐(killpg 釋放資源)。人為(按鈕/`POST
   /evict`)屬正常;非預期出現要查誰觸發。
 
-**C. agent↔agent 交接(dispatcher/commands)**:
-- `handoff`(`kind`/`to`/`from_profile`):換手(同票 `next` 換 template,或跨票 base)。
-- ⚠️ `handoff_invalid`(`to`):換手目標無效(profile 不存在等)→ 換手沒生效,查 `to`。
+**C. agent↔agent 交接(dispatcher/commands/hil)**:
+- `handoff`(`kind`/`to`/`from_profile`;`via=hil` 表人在 HIL 表單選的、`new_ticket`=跨票新票):
+  換手。`kind=agent`/`next`=同票換 profile;`kind=base`=跨票(建 `new_ticket` 交新 profile);
+  `kind=human`=交人。W10.3:HIL(End/Middle) 表單可選 `next`(同票)或 `base`(跨票)。
+- `base_injected`(`base`/`dest`):跨票 base 子票首次佈建後,已把來源票 `base` 的脈絡
+  (TICKET.md + 最後 envelope)注入 workspace 的 `dest`(BASE_<key>/);一次性,之後 resume 不重注。
+- ⚠️ `handoff_invalid`(`kind`/`to`/`via`):換手目標無效(profile 不存在/kind 空)→ 換手沒
+  生效;`via=hil` 時已 fail-safe 降級為續跑原 agent(不硬失敗),查 `to`/`kind`。
 
 **D. 指令通道(commands.py)** —— 人在 Jira 留 `@agent` 指令:
 - `command_accepted` / `command_denied`(非白名單作者)/ `command_rejected`(對象不對)/

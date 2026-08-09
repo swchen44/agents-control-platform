@@ -21,6 +21,19 @@ SUBMITTED = "submitted"
 EXPIRED = "expired"
 INVALIDATED = "invalidated"
 
+# W10.3 a2a handoff 共用欄位:decision(HIL Middle)與 score_and_close(End)都內嵌。
+# 這些欄位「選 handoff 才有意義」——schema 一律非必填,實際校驗在 hil._do_handoff
+#(kind/profile 不完整則 fail-safe 降級續跑)。next_profile 下拉吃 payload["profiles"]
+#(載入的全部 profile 名,由 ScoreGate 產表時注入),讓人選下一棒。
+_HANDOFF_FIELDS: list[dict] = [
+    {"key": "handoff_kind", "label": "handoff 種類(選 handoff 才填)", "type": "select",
+     "required": False, "options": ["next", "base"]},
+    {"key": "next_profile", "label": "下一棒 agent profile(選 handoff 才填)",
+     "type": "select", "required": False, "options_from": "profiles"},
+    {"key": "handoff_prompt", "label": "給下一棒的交接指示(選 handoff 才填)",
+     "type": "textarea", "required": False},
+]
+
 # 表單型別(對應 HIL):need_info/decision=HIL(Middle);score_and_close=HIL(End)。
 # select 的 options 可 per-request(options_from 指向 request.payload 的 key)。
 FORM_SCHEMAS: dict[str, dict] = {
@@ -39,6 +52,11 @@ FORM_SCHEMAS: dict[str, dict] = {
         "fields": [
             {"key": "choice", "label": "請擇一", "type": "select",
              "required": True, "options_from": "options"},
+            # W10.3:HIL(Middle) 也能改派下一棒。proceed=照常續跑本 agent;
+            # handoff=改交接(再依 handoff_kind 走同票 next / 跨票 base)。
+            {"key": "next_step", "label": "續跑或改派", "type": "select",
+             "required": False, "options": ["proceed", "handoff"]},
+            *_HANDOFF_FIELDS,
             {"key": "note", "label": "備註(選填)", "type": "textarea",
              "required": False},
             {"key": "human_prompt", "label": "給 agent 的補充指示(選填,寫進 TICKET.md)",
@@ -59,8 +77,9 @@ FORM_SCHEMAS: dict[str, dict] = {
         "fields": [
             {"key": "human_score", "label": "人類完成度評分(0–10)",
              "type": "int", "required": True, "min": 0, "max": 10},
-            {"key": "close_decision", "label": "裁決", "type": "select",
-             "required": True, "options": ["close", "continue"]},
+            {"key": "close_decision", "label": "下一步", "type": "select",
+             "required": True, "options": ["close", "continue", "handoff"]},
+            *_HANDOFF_FIELDS,      # W10.3:選 handoff 時填(kind/下一 profile/prompt)
             {"key": "note", "label": "備註(選填)", "type": "textarea",
              "required": False},
         ],

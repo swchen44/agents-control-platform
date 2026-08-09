@@ -27,7 +27,7 @@ from .store import Store, TicketSession
 from .ticket import Ticket
 from .transcript import engine_of_agent
 from .transcript import finalize as finalize_transcript
-from .workspace import health_check, provision
+from .workspace import health_check, inject_base_context, provision
 
 BASE_PROMPT = ("請先閱讀工作目錄裡的 TICKET.md,完成其中「描述」段落交付的任務。"
                "完成後回覆一行 TASK_DONE。")
@@ -113,6 +113,32 @@ class Dispatcher:
                             engine_of_agent(profile.agent),
                             sess.workspace, pack=False, reason="pending:budget")
         return ev
+
+    def _inject_base(self, sess: TicketSession, ticket: Ticket,
+                     profile: Profile, events: list[dict]) -> None:
+        """W10.3 跨票 base:把來源票(sess.base_ref = 其 issue_id)脈絡注入本子票 ws,
+        注入後清 base_ref(一次性)。來源 session 不在則跳過(降級,不擋子票)。"""
+        try:
+            base = self.store.get_session(int(sess.base_ref))
+        except (TypeError, ValueError):
+            base = None
+        if base is None:
+            log.warning("%s base_ref=%s 找不到來源 session,跳過脈絡注入",
+                        ticket.key, sess.base_ref)
+        else:
+            dest = inject_base_context(
+                sess.workspace, base.workspace, base.key,
+                getattr(self.source, "base_url", None))
+            # 注入會往 human sidecar 追一行指向 BASE_/;立刻刷新 TICKET.md 讓「人類指示」
+            # 段當輪就顯示(否則要等下一輪 health_check 才刷,agent 首跑會看不到)。
+            health_check(sess.workspace, ticket, profile,
+                         getattr(self.source, "base_url", None))
+            events.append(self.store.journal(
+                "base_injected", ticket.id, ticket.key, base=base.key,
+                dest=os.path.basename(dest)))
+            log.info("%s 注入 base 脈絡 ← %s", ticket.key, base.key)
+        sess.base_ref = None                     # 一次性:注入後清除
+        self.store.upsert_session(sess)
 
     def _effective_agent(self, profile: Profile) -> dict:
         """Inject shared-server info for openhands-server backend (conc.3)."""
@@ -209,6 +235,11 @@ class Dispatcher:
                 sess.workspace = provision(self.root, ticket, profile,
                                       getattr(self.source, "base_url", None))
                 self.store.upsert_session(sess)
+
+        # W10.3 跨票 base:子票首次佈建完成後,注入來源票脈絡(一次性;注入後清 base_ref,
+        # 之後 resume 不再重注)。workspace 已於上方 provision/health 解析為實體目錄。
+        if sess.base_ref and os.path.isdir(sess.workspace):
+            self._inject_base(sess, ticket, profile, events)
 
         grader = _grader(profile)
         artifacts = os.path.join(os.path.dirname(sess.workspace), "attempts")

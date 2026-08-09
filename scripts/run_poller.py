@@ -151,7 +151,8 @@ def main() -> int:
         # 真派工才跑的 V1 類路徑;此處先掛 None,真環境接上一個 best-effort 實作即可,
         # ScoreGate 對 None / 例外都 fail-safe,不擋關單)。
         scoregate=ScoreGate(src, store, base_url=form_base,
-                            mention=mention, self_score_fn=None))
+                            mention=mention, self_score_fn=None,
+                            profiles_fn=lambda: profiles))  # W10.3 handoff 下拉候選
     loop.poll_interval = interval                            # W9.1 control 顯示
 
     _reload = make_reload(loop, disp, cmds, ext, cfg_path)  # W13/W4.5 hot reload
@@ -179,7 +180,8 @@ def main() -> int:
 
     form = FormServer(store, host=form_host, port=form_port,
                       jira_health_fn=_jira_up,
-                      on_submit=lambda r: apply_submission(src, store, r))
+                      on_submit=lambda r: apply_submission(
+                          src, store, r, profiles=profiles))  # W10.3 handoff 候選
     form.start()
     print(f"[poller] form service on {form_base} (一次性表單;/form/<token>)",
           flush=True)

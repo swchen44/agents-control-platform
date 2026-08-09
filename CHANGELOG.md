@@ -6,6 +6,19 @@
 ## [Unreleased]
 
 ### Added
+- **a2a 跨票 base 交接(W10.3)**:HIL(End) `score_and_close` 與 HIL(Middle) `decision`
+  表單內嵌 handoff 欄位(`handoff_kind` next/base + `next_profile` 下拉 + `handoff_prompt`);
+  人在裁決時把票交給下一棒(下拉候選=載入的全部 profile,由 `ScoreGate.profiles_fn` 注入)。
+  **同票 next** = reset+pin 新 profile+`(handoff)` 哨值(鏡像 agent 自發換手);**跨票 base**
+  = 系統 `create_ticket` 在同 project 建新票 + 預建 pinned session(`ticket_session.base_ref`
+  指回本票 issue_id)+ 本票收 ABORTED(交接非失敗),`dispatcher._inject_base` 於新票首次
+  佈建後複製 base 的 TICKET.md/最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路
+  (一次性,journal `base_injected`)。kind/profile 不完整 → fail-safe 降級續跑原 agent。
+  新增事件 `base_injected`(共 44 種)、`handoff` 加 `new_ticket`/`via`。`hil._do_handoff` +
+  `workspace.inject_base_context` + `tests/test_handoff_hil.py`(32 檢查)。設計見
+  [architecture.md §4.1](docs/design/architecture.md) 與 [interaction.md §14](docs/design/interaction.md)。
+
+### Added
 - **三視角操作手冊(Q1)**:新增 [管理者手冊](docs/operator-guide.md)(起停 / 控制面
   pause-resume-reload-evict-recover / 監控 Server 效能頁 / 調設定 / **備份還原 runbook**(Q4)
   / 多實例 / 異常處置 / 安全 / Operator FAQ,收斂 Q2/3/6 現況)。index/README 以「三視角」

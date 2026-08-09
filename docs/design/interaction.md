@@ -124,7 +124,9 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
 - **要改**:`dispatcher.py` 不再主動 `assign` 人;`external.py` 不再以 assignee 為訊號;
   `DESIGN_lifecycle` 的「assignee=資源開關」改寫;`sections.py` human 段改系統寫+hash;
   poller 加 Jira 健康偵測 + 降級暫停/恢復 + 回寫執行。
-- **屬 runtime 行為 → W11,先不動碼**(與 W10.2 HIL 行為、W10.3 a2a 一併待實作)。
+- **已實作**:W11 一次性表單 + group A HIL 行為;W10.3 於 `score_and_close`/`decision`
+  內嵌 handoff 欄位(`handoff_kind` next/base + `next_profile` 下拉 + `handoff_prompt`),
+  由 `hil._do_handoff` 落地(見 §14 與 [architecture.md §4](architecture.md))。
 
 ## 13. 人機互動增修(2026-08-09 group A,已實作)
 
@@ -159,3 +161,20 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
 - ⚠️ **限制(寫進開發者手冊 FAQ)**:立即 killpg = 進行中的工具步驟被硬殺;不丟資料
   (native resume 下輪重跑那一步),但那一步會重跑。未做「SIGTERM→10s→SIGKILL」優雅停,因
   native resume 已保進度、grace 效益低。此為已知現象,debug 時據此理解。
+
+## 14. HIL 表單改派下一棒(W10.3 a2a handoff,2026-08-09 實作)
+
+HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄位,讓人在裁決時
+把票交給下一棒 agent。**下一棒由人選**(下拉,候選=載入的全部 profile),不交給路由猜。
+
+- **欄位**:`close_decision`(End)/`next_step`(Middle)多一個 `handoff` 選項;選了才填
+  `handoff_kind`(`next` 同票 / `base` 跨票)+ `next_profile`(下拉,`options_from=profiles`,
+  由 ScoreGate 注入 payload)+ `handoff_prompt`(交接指示)。schema 一律非必填,實際校驗在
+  `hil._do_handoff`:kind/profile 不完整 → **fail-safe 降級為續跑原 agent**(不硬失敗)。
+- **同票 next**:reset session、pin `next_profile`、`workspace="(handoff)"` 哨值 → 下輪重
+  provision 由新 profile 接手同一票。`handoff_prompt` 隨表單寫進 description human 段 → 新
+  TICKET.md 顯示。等同 agent 自發 `@agent next` 的效果,只是由人在表單觸發。
+- **跨票 base**:見 [architecture.md §4.1](architecture.md) —— 系統 `create_ticket` 建新票 +
+  預建 pinned session(`base_ref`)+ 本票 ABORTED;dispatcher 於新票首次佈建後注入 base 脈絡。
+- **人的選擇全寫回**:human_score / 裁決 / handoff 參數都經 `_write_human_section` 寫進 Jira
+  description human 段(hash 保護)+ 稽核 comment;journal `handoff(via=hil)` / `base_injected`。

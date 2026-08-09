@@ -6,7 +6,8 @@
 > resume+重置額度續跑;`closed` 為概念終點。本文件下述的審批門 / assignee=資源開關機制
 > 仍是 HIL(Middle) 的底層實作。完整新狀態機 + agent↔agent 交接(同票 `next` vs 跨票
 > `base`)見 [architecture.md](architecture.md) 與 `/concepts` 頁。
-> W10.1(模型/圖/網頁)已實作;**HIL 行為(W10.2)與 a2a base 交接(W10.3)暫緩、待審**。
+> W10.1(模型/圖/網頁)、HIL 行為(W10.2,W11+group A 落地)、
+> **a2a 交接(W10.3:同票 next + 跨票 base,HIL 表單驅動)皆已實作**。
 
 > 使用者 2026-08-04 提出的一套設計,逐項反問(Q1–Q7)+ assignee 生命週期釐清後定案。
 > 橫切 F1(資源閘門)/F3(換手)/G1(結構化契約)/A2(冪等)/E3(evict)/N13(killpg→resume)。

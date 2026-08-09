@@ -7,6 +7,7 @@
 
 | # | 項目 | 狀態 |
 |---|---|---|
+| **W10.3** | a2a 交接由 HIL 表單驅動:同票 `next`(reset+pin)+ 跨票 `base`(系統 `create_ticket` 建新票 + 預建 pinned session `base_ref` + 本票 ABORTED + dispatcher 注入 base 脈絡到 `ws/BASE_<key>/`);fail-safe 降級續跑;新事件 `base_injected`(44 種) | ✅ 見 [architecture.md §4.1](docs/design/architecture.md);`test_handoff_hil.py` 32 檢查 |
 | **W12** | 專業化打包:src-layout、pyproject/uv/MIT、GitHub CI(3.10–3.13)+CD、tests/ 與 scripts/ 分層 | ✅ CI 綠 |
 | **W13** | 離線內網文件自足(AI 自我除錯):ai-debugging / troubleshooting / observability(journal 事件字典,`gen_event_dict --check` 入 CI)+ docs/history + docs/lessons | ✅ 見 §主題 H |
 | **W14** | 研究策展 `docs/research/`(結論比較文 + 原始長文合併)+ **消除 harness/** → `config/` + `vendor/` + `runtime/`,路徑全走 `arcp.paths`;順修 W12.1 遺留 `_HARNESS_ROOT` bug | ✅ CI 綠 |

@@ -104,7 +104,8 @@ class ScoreGate:
 
     def __init__(self, source, store, base_url: str = "", mention: str = "",
                  interval_sec: float = REMIND_INTERVAL_SEC, ttl_sec: float = 0.0,
-                 stall_after: int = STALL_REMINDERS, self_score_fn=None):
+                 stall_after: int = STALL_REMINDERS, self_score_fn=None,
+                 profiles_fn=None):
         self.source = source
         self.store = store
         self.base_url = base_url
@@ -115,6 +116,8 @@ class ScoreGate:
         # Q13:關單時取 agent 數字自評(0–10)。fn(session)->int|None;None=不取。
         # 只在首次發 score_and_close 表單時呼叫一次(非每 attempt)。含一次真 agent 呼叫。
         self.self_score_fn = self_score_fn
+        # W10.3:handoff 下拉候選 = 目前載入的全部 profile 名(注入表單 payload)。
+        self.profiles_fn = profiles_fn
 
     def on_poll(self, ticket, session, now: float | None = None) -> list[dict]:
         if session is None or session.outcome not in (
@@ -140,7 +143,9 @@ class ScoreGate:
                 payload_extra={"title": (ticket.summary or "")[:120],
                                "agent_state": "HIL(End)",
                                "grader": session.outcome,
-                               "agent_score": agent_score},
+                               "agent_score": agent_score,
+                               "profiles": (list(self.profiles_fn())
+                                            if self.profiles_fn else [])},
                 base_url=self.base_url, mention=self.mention,
                 ttl_sec=self.ttl, now=now)
             return [self.store.journal("score_requested", ticket.id,

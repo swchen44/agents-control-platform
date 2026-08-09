@@ -88,6 +88,42 @@ def _slug(s: str) -> str:
     return "".join(c if (c.isalnum() or c in "-.") else "-" for c in s)
 
 
+def inject_base_context(ws: str, base_ws: str, base_key: str,
+                        base_url: str | None = None) -> str:
+    """W10.3 跨票 base:把來源票 <base_key> 的脈絡複製進新票 workspace 的 BASE_<key>/。
+
+    複製 base 的 TICKET.md(任務簡報)+ 最後一個 attempt envelope(產出證據),並寫一份
+    HANDOFF.md 指路;同時在人類指示 sidecar 加一行,讓 TICKET.md「人類指示」段永遠指向
+    BASE_ 目錄(dispatcher 於子票首次佈建後呼叫一次)。回傳 BASE_ 目錄路徑。
+    """
+    dest = os.path.join(ws, f"BASE_{_slug(base_key)}")
+    os.makedirs(dest, exist_ok=True)
+    copied: list[str] = []
+    src_ticket = os.path.join(base_ws, "TICKET.md")
+    if os.path.isfile(src_ticket):
+        shutil.copy(src_ticket, os.path.join(dest, "TICKET.md"))
+        copied.append("TICKET.md")
+    attempts = os.path.join(os.path.dirname(base_ws), "attempts")
+    if os.path.isdir(attempts):
+        envs = sorted(f for f in os.listdir(attempts)
+                      if f.endswith(".envelope.json"))
+        if envs:
+            shutil.copy(os.path.join(attempts, envs[-1]),
+                        os.path.join(dest, envs[-1]))
+            copied.append(envs[-1])
+    note = [f"# 來自 {base_key} 的交接(a2a handoff base)", ""]
+    if base_url and base_key:
+        note.append(f"- 來源票:{base_url.rstrip('/')}/browse/{base_key}")
+    note.append(f"- 已複製到本目錄:{', '.join(copied) or '(無可複製產物)'}")
+    note.append("- 這是**只讀脈絡**;請閱讀後在本 workspace 繼續新任務。")
+    with open(os.path.join(dest, "HANDOFF.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(note) + "\n")
+    append_human_instruction(
+        ws, f"本票由 {base_key} 跨票交接(base)而來;來源脈絡在 ./BASE_{_slug(base_key)}/"
+            f"(含其 TICKET.md 與產出),請先閱讀再繼續。")
+    return dest
+
+
 def _resolve_targets(ws: str, claude_rel: str, agents_rel: str,
                      create_default: bool) -> list[str]:
     """統一目標解析(skills 目錄 / md 檔共用,docs/design/workspace.md):

@@ -14,6 +14,7 @@ import yaml
 from .interaction import InteractionRequest, build_request, summarize
 from .logutil import get_logger
 from .sections import Section, parse, render
+from .store import TicketSession
 from .workspace import append_human_instruction
 
 log = get_logger("hil")
@@ -66,13 +67,92 @@ def _write_human_section(source, issue_id: int, data: dict, now_iso: str) -> Non
     source.set_description(issue_id, render(before, secs, after))
 
 
+def _handoff_choice(schema_id: str, data: dict) -> bool:
+    """表單是否選了 a2a handoff(HIL End close_decision / HIL Middle next_step)。"""
+    if schema_id == "score_and_close":
+        return data.get("close_decision") == "handoff"
+    if schema_id == "decision":
+        return data.get("next_step") == "handoff"
+    return False
+
+
+def _do_handoff(source, store, sess: TicketSession, req: InteractionRequest,
+                data: dict, profiles: dict, now: float) -> list[dict]:
+    """W10.3 a2a handoff:人在 HIL 表單選「改派下一棒」。
+
+    kind=next(同票):reset session、pin 新 profile、workspace 哨值 → 下輪重 provision
+    由新 profile 接手同一張票(prompt 已隨表單寫進 description 人類段 → 新 TICKET.md)。
+    kind=base(跨票):系統在同 project 建新票、預建其 session(pin 新 profile + base_ref
+    指回本票)→ 本票轉 ABORTED(交接出去,非失敗)→ 新票下輪由 dispatcher 注入 base 脈絡。
+    資料不完整(無 kind / profile 無效)→ fail-safe 降級為續跑原 agent(不硬失敗)。
+    """
+    kind = (data.get("handoff_kind") or "").strip()
+    target = (data.get("next_profile") or "").strip()
+    prompt = (data.get("handoff_prompt") or "").strip()
+    if req.schema_id == "score_and_close" and data.get("human_score") is not None:
+        sess.human_score = int(data["human_score"])   # HIL End 仍評了分,先記
+    old = sess.profile
+
+    if kind not in ("next", "base") or (profiles and target not in profiles):
+        source.add_comment(req.issue_id, (
+            f"[agent] handoff 資料不完整(kind={kind or '空'}、"
+            f"profile={target or '空'}),改為續跑原 agent «{old}»。"))
+        sess.outcome = sess.pending_reason = None      # 解終態 → 下輪 resume 原 agent
+        sess.inactive = False
+        store.upsert_session(sess)
+        return [store.journal("handoff_invalid", req.issue_id, req.key,
+                              kind=kind, to=target, via="hil")]
+
+    if kind == "next":
+        sess.profile = target
+        sess.session_id = None
+        sess.attempts = 0
+        sess.outcome = sess.pending_reason = None
+        sess.inactive = False
+        sess.workspace = "(handoff)"                   # 下輪重 provision 新 instance
+        store.upsert_session(sess)
+        log.info("%s HIL handoff(next)%s → %s", req.key, old, target)
+        return [store.journal("handoff", req.issue_id, req.key, kind="next",
+                              from_profile=old, to=target, via="hil")]
+
+    # kind == "base":跨票交接
+    t = source.get_ticket(req.issue_id)
+    project = req.key.rsplit("-", 1)[0]              # 同 project(= agent 自己 project)
+    labels = list(getattr(t, "labels", None) or [])  # 沿用本票 labels → 新票同 route
+    summary = (getattr(t, "summary", "") or req.key)[:100]
+    desc = [f"base: {req.key}",
+            f"由 {req.key} 跨票交接(a2a handoff base)建立,交由 «{target}» 接手。"]
+    if prompt:
+        desc += ["", "## 交接指示", prompt]
+    new_t = source.create_ticket(project, f"[base:{req.key}] {summary}",
+                                 description="\n".join(desc), labels=labels)
+    store.upsert_session(TicketSession(          # 預建新票 session:pin + base_ref
+        issue_id=new_t.id, key=new_t.key, profile=target, workspace="(handoff)",
+        session_id=None, attempts=0, outcome=None, pending_reason=None,
+        cost_usd=0.0, base_ref=str(req.issue_id)))
+    sess.outcome = "ABORTED"                            # 本票交接出去=終態(非 FAILURE)
+    sess.pending_reason = None
+    store.upsert_session(sess)
+    source.add_comment(req.issue_id, (
+        f"[agent] 跨票交接(base):已建立新票 {new_t.key} 交由 «{target}» 接手;"
+        f"本票結束(ABORTED,非失敗)。兩票可於 dashboard 互相對照。"))
+    source.add_comment(new_t.id, (
+        f"[agent] 本票由 {req.key} 跨票交接(base)建立,將由 «{target}» 接手;"
+        f"來源脈絡下輪佈建後見 workspace 的 BASE_{req.key}/。"))
+    log.info("%s HIL handoff(base)→ 新票 %s by %s", req.key, new_t.key, target)
+    return [store.journal("handoff", req.issue_id, req.key, kind="base",
+                          from_profile=old, to=target, new_ticket=new_t.key,
+                          via="hil")]
+
+
 def apply_submission(source, store, req: InteractionRequest, *,
+                     profiles: dict | None = None,
                      now: float | None = None) -> list[dict]:
-    """提交後:回寫 human 段 + 稽核 comment + 觸發 resume/評分/關單。回 journal 事件。
+    """提交後:回寫 human 段 + 稽核 comment + 觸發 resume/評分/關單/handoff。回事件。
 
     need_info/decision(HIL Middle)→ 清 pending/inactive 讓下輪 resume;
     score_and_close(HIL End)→ 記 human_score;close=系統轉 Done、continue=解終態+
-    重置額度回 running。
+    重置額度回 running。close_decision/next_step=handoff(W10.3)→ 改派下一棒。
     """
     now = time.time() if now is None else now
     iso = datetime.datetime.fromtimestamp(now).isoformat(timespec="seconds")
@@ -93,7 +173,10 @@ def apply_submission(source, store, req: InteractionRequest, *,
                 append_human_instruction(sess.workspace, hp, now=now)
             except OSError as e:      # workspace 不在也不擋提交(降級)
                 log.warning("寫人類指示失敗 ticket=%s: %s", req.key, e)
-        if req.schema_id == "score_and_close":
+        if _handoff_choice(req.schema_id, data):       # W10.3 改派下一棒(優先)
+            evs.extend(_do_handoff(source, store, sess, req, data,
+                                   profiles or {}, now))
+        elif req.schema_id == "score_and_close":
             sc = data.get("human_score")
             if sc is not None:
                 sess.human_score = int(sc)

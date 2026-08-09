@@ -303,7 +303,8 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 ## 13. W10 新需求:HIL 生命週期 / triage 閘 / agent↔agent 交接(2026-08-08 口述,12 題決策樹定案)
 
 > 使用者要求「一改全改」(文件/程式/網站)。**W10.1 模型/圖/網頁 + W10.4 架構圖 +
-> W10.5 互動 + 文件已做;W10.2 HIL 行為與 W10.3 a2a base 交接暫緩、待審**。完整設計見
+> W10.5 互動 + W10.2 HIL 行為(W11+group A 落地)+ W10.3 a2a 交接(2026-08-09 由 HIL
+> 表單驅動實作)皆已完成**。完整設計見
 > [docs/design/architecture.md](design/architecture.md) 與 [docs/design/lifecycle.md](design/lifecycle.md)。
 
 ### 13.1 HIL 生命週期(Model A)
@@ -324,14 +325,20 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 - **Why**:怕路由挑錯 profile / 這題不適合 agent;開跑前先讓人把關,復用已驗證的審批機制。
 
 ### 13.3 agent↔agent 交接(兩機制並存,文件須寫清楚何時用哪個)
-- **同票** `@agent next <profile>`:就地換 profile/引擎(已存在)。適合「同一件事繼續」。
-- **跨票 base 繼承**:人**自建** Jira,宣告 `base:<3合1 ref>`(description `human` 段 或
-  Control 頁登記);harness 只**登記 + 注入脈絡**(複製 base 的 transcript/TICKET.md 進
-  新 `ws/BASE_<key>/` + prompt 前置「先讀前輪脈絡再續做」+ 貼 Jira 連結);舊票收成
-  **ABORTED(reason=handoff→新票,非 failure)**,在跑則 killpg。源票術語=**base(基底票)**。
-  適合「換引擎/重開/跨專案/人策展重啟」等泛化場景。
-- **Why**:交接方法越泛化越好,可用於任何場景;人建票+harness 登記 → harness 不新增
-  「建 Jira」寫入權責(最小、最安全);本地檔注入脈絡 → 內網/離線最可靠。
+> **W10.3 定案演進(2026-08-09)**:原案為「人自建 Jira + harness 只登記」;實作時
+> 改為 **HIL 表單驅動 + 系統建票(一步完成,使用者選定「系統在 agent project 建」)**。
+> 兩者脈絡注入邏輯相同,差別在「誰觸發、誰建票」。實作見 [architecture.md §4.1](design/architecture.md)。
+- **同票 next**:就地換 profile/引擎。觸發 = HIL 表單選 `handoff_kind=next`,或 agent 自發
+  (`@agent next <profile>` 指令 / envelope `status=handoff`)。適合「同一件事繼續」。
+- **跨票 base 繼承**:觸發 = HIL(End/Middle) 表單選 `handoff_kind=base` + 下一棒 profile +
+  交接 prompt。**系統**(`hil._do_handoff`)在同 project `create_ticket` 建新票、預建其
+  session(pin 新 profile + `base_ref`);dispatcher 於新票首次佈建後**注入脈絡**(複製 base
+  的 TICKET.md/最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路);本票收成
+  **ABORTED(交接→新票,非 failure)**。源票術語=**base(基底票)**。適合「換引擎/重開/
+  跨專案/人策展重啟」等泛化場景。
+- **Why**:交接方法越泛化越好;由 HIL 表單一次完成(選種類+下一棒+prompt)最少人手;
+  系統建票省掉「人自建再貼 ref」的來回,下一棒由人選(不交給路由猜);本地檔注入脈絡 →
+  內網/離線最可靠;fail-safe(資料不完整→續跑原 agent)不讓誤填毀掉本票。
 
 ### 13.4 互動式圖形(內網離線)
 - 狀態機 + 架構圖用 **svg-pan-zoom**(vendored,離線,同 vis-timeline)可拖曳/縮放。
@@ -339,8 +346,8 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 
 ## 14. W11 互動服務:HIL 人機介面(2026-08-08 口述定案,取代人編 description)
 
-> 完整設計見 [docs/design/interaction.md](design/interaction.md)。**屬 runtime 行為,先只寫
-> 文件、程式待實作**(與 W10.2/W10.3 一併待審後排波)。
+> 完整設計見 [docs/design/interaction.md](design/interaction.md)。**已實作**(W11 一次性
+> 表單 + group A HIL 行為 + W10.3 handoff 表單欄位)。
 
 ### 14.1 核心原則
 - **assignee 恆定=Agent**;Description/state **單一寫入者=Agent/系統**;人類輸入一律經

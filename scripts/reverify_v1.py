@@ -117,6 +117,13 @@ dashboard ticket 頁 trace + runtime/events.jsonl,逐項確認新路徑:
       self_score_fn;預設 None 則顯示 —)
   [ ] C3/C5 retry 計數 flaky:觀察 retry 情境的 attempt 計數是否穩定(memory:
       e2e-commands-c3-c5-flaky)
+  [ ] W10.3 handoff(HIL 表單):終態發 score_and_close → 選 close_decision=handoff。
+      · next:handoff_kind=next + next_profile → journal handoff(kind=next,via=hil);
+        下輪換該 profile 跑同票、TICKET.md 描述含交接指示
+      · base:handoff_kind=base → 系統 create_ticket 建新票(同 project、summary 帶
+        [base:<key>])、本票轉 ABORTED;新票下輪 journal base_injected + ws 有
+        BASE_<key>/(含來源 TICKET.md/envelope)+ 人類指示段指路。⚠️ 這會真的建一張
+        新 Jira 票(唯一在 handoff 路徑的寫入),請在測試 project 上驗
 
 看不到某項時:先 scripts/trace_lint.py 檢查該票四層證據齊不齊,再對照
 docs/design/observability.md 的事件字典 + docs/troubleshooting.md。
