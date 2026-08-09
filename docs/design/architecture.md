@@ -3,7 +3,7 @@
 > W10(2026-08-08)定案、W10.3(2026-08-09)實作。與 `/concepts` 頁「模組架構 /
 > 狀態機」段同源;生命週期細節見 [lifecycle.md](lifecycle.md)。
 > W10.1(狀態模型/圖/網頁)、W10.2(HIL 行為,於 W11+group A 落地)、
-> **W10.3(a2a 交接:同票 next + 跨票 base,由 HIL 表單驅動)皆已實作**。
+> **W10.3(a2a 交接:同票換手(next) + 跨票換手(base),由 HIL 表單驅動)皆已實作**。
 
 ## 1. 分層模組架構(資料流由上而下)
 
@@ -61,7 +61,7 @@ jql)。`success/failure/unknown` 是 **HIL(End) 的結果屬性**,不是頂層�
 `handoff_kind`(next / base)+ 下一棒 profile(下拉,候選=載入的全部 profile)+ 交接
 prompt。也保留 agent 自發(`@agent next` 指令 / envelope `status=handoff`)的同票換手。
 
-| | **同票 next** | **跨票 base** |
+| | **同票換手(next)** | **跨票換手(base)** |
 |---|---|---|
 | 做法 | 同一張 Jira,重置 session、pin 新 profile | **系統**在 agent 自己 project 建新票(`create_ticket`,一步完成)、預建其 session(pin 新 profile + `base_ref` 指回本票),本票收成 ABORTED(交接) |
 | 脈絡 | 全留在同一票(留言/description/人類指示 → 新 TICKET.md) | dispatcher 於新票首次佈建後複製 base 的 `TICKET.md`+最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路 |
@@ -70,12 +70,12 @@ prompt。也保留 agent 自發(`@agent next` 指令 / envelope `status=handoff`
 | **適合場景** | 小幅換手、**同一件事繼續**、換 profile 但引擎/脈絡相容 | 換**引擎**、重開、跨專案、人策展重啟、任何要「乾淨重來但保留前輪脈絡」的泛化場景 |
 
 **怎麼選(給人的判斷準則)**:
-- 想「就地把這件事交給另一個 agent/profile 繼續」→ **同票 next**。
-- 想「這條路走不下去了,換個引擎/從頭來過,但別讓新 agent 從零摸索」→ **跨票 base**。
-- 跨引擎(claude↔codex)因 session 格式不同無法 native resume,通常走 **跨票 base**。
+- 想「就地把這件事交給另一個 agent/profile 繼續」→ **同票換手**。
+- 想「這條路走不下去了,換個引擎/從頭來過,但別讓新 agent 從零摸索」→ **跨票換手**。
+- 跨引擎(claude↔codex)因 session 格式不同無法 native resume,通常走 **跨票換手**。
 - 資料不完整(沒選 kind/profile)→ fail-safe **降級為續跑原 agent**,不硬失敗(見 `handoff_invalid`)。
 
-### 4.1 base(基底票)spec(W10.3,`hil._do_handoff` + `dispatcher._inject_base`)
+### 4.1 跨票換手(base)spec(W10.3,`hil._do_handoff` + `dispatcher._inject_base`)
 
 - **觸發**:HIL 表單選 `handoff_kind=base` + 下一棒 profile + 交接 prompt。源票術語稱
   **base(基底票)**。人的選擇同時寫進本票 description human 段(hash 保護)供稽核。

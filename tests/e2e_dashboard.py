@@ -426,7 +426,7 @@ try:
           and "marker id='ah'" in cpage
           and all(s in cpage for s in ("待處理", "進行中", "排隊",
                                        "HIL(Middle)", "HIL(End)", "撤銷"))
-          and "跨票 base" in cpage
+          and "跨票換手" in cpage
           and "狀態存在哪" in cpage)
     # W10.4/W10.6:模組架構圖(分層)+ 職責表(補檔名/分層/API 欄)
     check("概念頁:模組架構圖 + 職責表(檔名/分層/API/trigger/上下游)",
@@ -444,7 +444,7 @@ try:
           ">Introduction</a>" in cpage
           and "Introduction ·" in cpage
           and "agent 自評" in cpage and "三訊號" in cpage
-          and "同票 next" in cpage and "跨票 base" in cpage)
+          and "同票換手" in cpage and "跨票換手" in cpage)
     # W10.7:node+edge graph 圖 + 多選過濾器 + focus
     check("概念頁:模組 graph(node+edge)+ 過濾器 + focus",
           "id='graphsvg'" in cpage and "id='gfilter'" in cpage

@@ -139,7 +139,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - `handoff`(`kind`/`to`/`from_profile`;`via=hil` 表人在 HIL 表單選的、`new_ticket`=跨票新票):
   換手。`kind=agent`/`next`=同票換 profile;`kind=base`=跨票(建 `new_ticket` 交新 profile);
   `kind=human`=交人。W10.3:HIL(End/Middle) 表單可選 `next`(同票)或 `base`(跨票)。
-- `base_injected`(`base`/`dest`):跨票 base 子票首次佈建後,已把來源票 `base` 的脈絡
+- `base_injected`(`base`/`dest`):跨票換手(base)子票首次佈建後,已把來源票 `base` 的脈絡
   (TICKET.md + 最後 envelope)注入 workspace 的 `dest`(BASE_<key>/);一次性,之後 resume 不重注。
 - ⚠️ `handoff_invalid`(`kind`/`to`/`via`):換手目標無效(profile 不存在/kind 空)→ 換手沒
   生效;`via=hil` 時已 fail-safe 降級為續跑原 agent(不硬失敗),查 `to`/`kind`。
@@ -214,7 +214,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 **`handoff` / `base_injected`** — agent↔agent 交接(dispatcher/hil,W10.3)
 - 何時:人在 HIL 表單選「改派下一棒」或 agent 自發換手。`kind=next`(同票)/ `base`
   (跨票)/ `agent`(自發同票)/ `human`(交人);`via=hil` 表人在表單觸發。
-- 正常(跨票 base):`handoff(kind=base, new_ticket=SCRUM-N, via=hil)` → 下一輪新票出現
+- 正常(跨票換手 base):`handoff(kind=base, new_ticket=SCRUM-N, via=hil)` → 下一輪新票出現
   `base_injected(base=舊票, dest=BASE_<key>)`(來源脈絡已注入)→ 新票照常 `session_created`
   …;舊票同時 `outcome=ABORTED`(非 failure)。
 - 異常:有 `handoff(kind=base)` 但新票遲遲沒 `base_injected` → 新票沒被 poller 撿到
@@ -252,10 +252,10 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   `hil_stalled`。停在這串沒後續 = 等人填表單(去看 Jira 那張票的 @mention + 表單連結)。
 - **crash 後續跑**:… → `attempt_started` →(崩)→ 下輪 `attempt_crash_recovered
   (resume=true)` → `attempt_finished`。`truly_resumed=true` 代表沒重工。
-- **跨票 base 交接**(W10.3):舊票 … → `score_requested` →(人填 handoff base)→
+- **跨票換手(base)**(W10.3):舊票 … → `score_requested` →(人填 handoff base)→
   `handoff(kind=base, new_ticket=SCRUM-N, via=hil)` + 舊票 `outcome=ABORTED`;新票下一輪
   → `base_injected(base=舊票)` → `session_created` → `attempt_started` …(帶 BASE_ 脈絡)。
-  同票 next 則舊票不 ABORTED,而是同 `key` 直接 `handoff(kind=next)` → 下輪換 profile 重跑。
+  同票換手(next)則舊票不 ABORTED,而是同 `key` 直接 `handoff(kind=next)` → 下輪換 profile 重跑。
 - **被驅逐後回收**:`evicted` →(下輪)`attempt_crash_recovered` 續跑。evict 不耗
   attempt、不重花錢。
 

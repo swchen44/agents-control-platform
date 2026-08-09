@@ -168,13 +168,14 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
 把票交給下一棒 agent。**下一棒由人選**(下拉,候選=載入的全部 profile),不交給路由猜。
 
 - **欄位**:`close_decision`(End)/`next_step`(Middle)多一個 `handoff` 選項;選了才填
-  `handoff_kind`(`next` 同票 / `base` 跨票)+ `next_profile`(下拉,`options_from=profiles`,
+  `handoff_kind`(value 仍是 `next`/`base`,表單顯示中文「同票換手(同一張票,換 profile)」/
+  「跨票換手(系統另開新票,帶脈絡)」)+ `next_profile`(下拉,`options_from=profiles`,
   由 ScoreGate 注入 payload)+ `handoff_prompt`(交接指示)。schema 一律非必填,實際校驗在
   `hil._do_handoff`:kind/profile 不完整 → **fail-safe 降級為續跑原 agent**(不硬失敗)。
-- **同票 next**:reset session、pin `next_profile`、`workspace="(handoff)"` 哨值 → 下輪重
+- **同票換手(next)**:reset session、pin `next_profile`、`workspace="(handoff)"` 哨值 → 下輪重
   provision 由新 profile 接手同一票。`handoff_prompt` 隨表單寫進 description human 段 → 新
   TICKET.md 顯示。等同 agent 自發 `@agent next` 的效果,只是由人在表單觸發。
-- **跨票 base**:見 [architecture.md §4.1](architecture.md) —— 系統 `create_ticket` 建新票 +
+- **跨票換手(base)**:見 [architecture.md §4.1](architecture.md) —— 系統 `create_ticket` 建新票 +
   預建 pinned session(`base_ref`)+ 本票 ABORTED;dispatcher 於新票首次佈建後注入 base 脈絡。
 - **人的選擇全寫回**:human_score / 裁決 / handoff 參數都經 `_write_human_section` 寫進 Jira
   description human 段(hash 保護)+ 稽核 comment;journal `handoff(via=hil)` / `base_injected`。

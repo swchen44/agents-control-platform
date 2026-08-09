@@ -410,8 +410,9 @@ class Dispatcher:
                     sess.workspace = "(handoff)"   # 新 instance,下輪重 provision
                     self.store.upsert_session(sess)
                     self.source.add_comment(ticket.id, (
-                        f"[agent] handoff→{target}:{summarize(res.structured)}\n"
-                        f"已重置 session,下輪由 {target} 重新排隊接手。"))
+                        f"[agent] 同票換手(same-ticket)→ {target}:"
+                        f"{summarize(res.structured)}\n"
+                        f"已重置 session,下輪由 {target} 在同一張票重新排隊接手。"))
                     events.append(self.store.journal(
                         "handoff", ticket.id, ticket.key, kind="agent",
                         from_profile=old, to=target))

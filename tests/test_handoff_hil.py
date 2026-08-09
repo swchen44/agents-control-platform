@@ -16,6 +16,7 @@ from arcp.hil import apply_submission  # noqa: E402
 from arcp.interaction import (  # noqa: E402
     FORM_SCHEMAS,
     build_request,
+    opt_pairs,
     validate_submission,
 )
 from arcp.store import Store, TicketSession  # noqa: E402
@@ -92,9 +93,10 @@ def _score_req(iid, decision, kind="", prof="", prompt="", score=7):
 sc_keys = {f["key"] for f in FORM_SCHEMAS["score_and_close"]["fields"]}
 check("schema:score_and_close 有 handoff 欄位",
       {"handoff_kind", "next_profile", "handoff_prompt"} <= sc_keys)
-check("schema:close_decision 含 handoff",
-      "handoff" in next(f for f in FORM_SCHEMAS["score_and_close"]["fields"]
-                        if f["key"] == "close_decision")["options"])
+_cd_vals = [v for v, _ in opt_pairs(
+    next(f for f in FORM_SCHEMAS["score_and_close"]["fields"]
+         if f["key"] == "close_decision")["options"])]
+check("schema:close_decision 含 handoff(value 穩定)", "handoff" in _cd_vals)
 dc_keys = {f["key"] for f in FORM_SCHEMAS["decision"]["fields"]}
 check("schema:decision 有 next_step + handoff 欄位",
       {"next_step", "handoff_kind", "next_profile"} <= dc_keys)

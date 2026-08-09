@@ -95,7 +95,7 @@ def _do_handoff(source, store, sess: TicketSession, req: InteractionRequest,
 
     if kind not in ("next", "base") or (profiles and target not in profiles):
         source.add_comment(req.issue_id, (
-            f"[agent] handoff 資料不完整(kind={kind or '空'}、"
+            f"[agent] 換手資料不完整(種類={kind or '空'}、"
             f"profile={target or '空'}),改為續跑原 agent «{old}»。"))
         sess.outcome = sess.pending_reason = None      # 解終態 → 下輪 resume 原 agent
         sess.inactive = False
@@ -134,10 +134,10 @@ def _do_handoff(source, store, sess: TicketSession, req: InteractionRequest,
     sess.pending_reason = None
     store.upsert_session(sess)
     source.add_comment(req.issue_id, (
-        f"[agent] 跨票交接(base):已建立新票 {new_t.key} 交由 «{target}» 接手;"
-        f"本票結束(ABORTED,非失敗)。兩票可於 dashboard 互相對照。"))
+        f"[agent] 跨票換手(cross-ticket,base={req.key}):已建立新票 {new_t.key} "
+        f"交由 «{target}» 接手;本票結束(ABORTED,非失敗)。兩票可於 dashboard 對照。"))
     source.add_comment(new_t.id, (
-        f"[agent] 本票由 {req.key} 跨票交接(base)建立,將由 «{target}» 接手;"
+        f"[agent] 本票由 {req.key} 跨票換手(cross-ticket)建立,將由 «{target}» 接手;"
         f"來源脈絡下輪佈建後見 workspace 的 BASE_{req.key}/。"))
     log.info("%s HIL handoff(base)→ 新票 %s by %s", req.key, new_t.key, target)
     return [store.journal("handoff", req.issue_id, req.key, kind="base",

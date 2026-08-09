@@ -21,8 +21,18 @@ uv run python scripts/run_poller.py [分鐘] [間隔秒] # 常駐 poller(預設 
 ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # 另開:dashboard
 ```
 
+- **poller 參數化**:`python3 scripts/run_poller.py [minutes] [interval] [--control-port N]
+  [--form-port N] [--log-level DEBUG|INFO|WARNING|ERROR]`。**`minutes=0` → 無限常駐**
+  (24h+,靠外部排程 / Ctrl-C / `POST /shutdown` 停);預設 30 分、15 秒。例:`run_poller.py 0`
+  (24 小時常駐)、`run_poller.py 0 15 --form-port 8899 --log-level DEBUG`。
+- **dashboard 參數化**:`python3 scripts/detail_server.py [--port N] [--host H] [--runtime DIR]
+  [--control-url URL] [--log-level LEVEL]`;`--host 127.0.0.1` 鎖本機;相容舊式位置參數
+  `[runtime] [port] [control_url]`。
+- **log 層級**:`--log-level` 等同設環境變數 `ARCP_LOG_LEVEL`(預設 INFO)。兩個服務都可用
+  `-h` / `--help` 看完整說明。
 - **優雅停**:`curl -X POST :8787/shutdown`(當前輪跑完退出);或直接 Ctrl-C。
 - poller 是**時間盒**:到時自動退,靠外部(cron / 迭代)重起;重起不重跑(冪等靠 `runtime/`)。
+  要 24h+ 常駐請用 `minutes=0`。
 
 ## 2. 日常控制(control API,或 dashboard Control 頁)
 
@@ -43,6 +53,11 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # 另開:dashb
   錯誤事件 >3、系統資源 >90%、journal >200MB。
 - **bottleneck 心法**:ARCP 本身開銷小;慢幾乎都在 ① agent 執行時長(model)② Jira 延遲/降級
   ③ 並發飽和(排隊)。看燈 + 各 profile 時長/$ 找熱點;單票細節看 ticket 頁 trace。
+- **票列過濾(dashboard 上方過濾列)**:profile / summary / description 三個關鍵字框,預設
+  **一般字串包含比對(不分大小寫)**;勾「🔤 Regex」checkbox → 改**正則(regex,亦不分大小寫)**。
+  無效正則該框標紅、暫不過濾;過濾狀態寫進 URL(可分享深連結)。對應 REST:
+  `GET /api/v1/tickets?q=<關鍵字或正則>&field=<key|summary|profile|desc|all>&mode=<match|regex>`
+  (match=不分大小寫子字串;regex=正則亦不分大小寫);回傳含 `filter`,無效正則時另含 `filter_error`。
 - 除錯用 journal:見 [可觀測性](design/observability.md) + [troubleshooting](troubleshooting.md)。
 
 ## 4. 調設定(不重啟)
@@ -51,7 +66,13 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # 另開:dashb
 - **新增一個 agent(profile)**:在 `config/profiles/<名>.yaml` 建一個(檔名=profile 名,
   範例見 [設計/workspace](design/workspace.md)),`config.yaml` 的 `outer_loop.routes` 加比對
   規則指到它 → `POST /reload`。
-- **A/B 測試 / 自動選 profile**:main profile 加 `select`(random 或 script),見
+- **A/B 測試 / 自動選 profile(Q16)**:main profile 加 `select` 區塊 —— `candidates`(候選
+  profile 名清單,每個名字**須以 main 名為前綴**)+ `method: random | script` + `script`
+  (method=script 時的腳本路徑)。**首次派工時選一個實際 profile 並 pin 進 session**
+  (resume 不重選,確保同一票結果穩定)。`method=script` 時,腳本吃 JSON stdin(含 ticket 資訊 /
+  clearquest_id / 候選及其 yaml 路徑)→ stdout 印出要用的 profile 名 → 可做條件式 triage。
+  **任何失敗 fail-safe 回 main**;journal 記 `profile_selected`(original / chosen / method),
+  在 dashboard 事件時間軸 / `/api/v1/tickets` 可觀測「這票實際跑哪個 profile」。詳見
   [設計/選擇](design/selection.md)。
 - **控管花費**:profile 的 `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月);超支交人。
 - **控管並發**:`outer_loop.concurrency`(global + per-engine + per-profile);超額 QUEUED。
@@ -133,10 +154,10 @@ human-prompt)的逐項清單,你在有 agent/充電時對照 dashboard trace + `
 - **第一次要手動建 database 嗎?** 不用。`Store` 首次跑自動在 `runtime/harness.db` 建表,零手動。
 - **一次性表單連結重啟後還記得嗎?** 記得。存在 `harness.db` 的 `interactions` 表(非記憶體),
   靠 status 狀態機保證一次性,重啟完全還原。設計細節見 §10。
-- **突然多一張 `[base:XXX]` 的票是誰建的?** 是 **agent 跨票交接(handoff base)**:人在 HIL
-  表單選「改派下一棒→跨票 base」,系統會用 `create_ticket` 在同 project 自動開一張新票交給
-  選定 profile,原票標為交接(ABORTED,非失敗)。新票沿用原票 labels(故走同 route)、下一輪
-  自動被撿起跑(帶 base 脈絡)。這是**唯一**由系統(非人)建 Jira 票的路徑;journal 有
+- **突然多一張 `[base:XXX]` 的票是誰建的?** 是**跨票換手(base)**:人在 HIL 表單選
+  「改派下一棒 → 換手種類=跨票換手」,系統會用 `create_ticket` 在同 project 自動開一張新票交給
+  選定 profile,原票收 ABORTED(交接,非失敗)。新票沿用原票 labels(故走同 route)、下一輪
+  自動被撿起跑(首次佈建時注入 base 脈絡)。這是**唯一**由系統(非人)建 Jira 票的路徑;journal 有
   `handoff(kind=base)` + `base_injected`。詳見 [design/architecture.md §4.1](design/architecture.md)。
 - **hot reload 會先驗設定檔嗎?** 會。壞 config 擲 ConfigError → 回 400、**舊設定原封續用**
   (不弄死 poller);見 [hotreload](design/hotreload.md)。

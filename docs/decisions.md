@@ -46,9 +46,15 @@ Jira 寫入/健康失敗 → poller 降級暫停(停寫/停派),poll 成功自�
 /recover`;人開表單時異常則「暫勿送出、不落地」。**Why**:work queue 有不同步風險;
 circuit-breaker 式暫停/恢復更簡單可靠。
 
-### D10. agent↔agent 交接:同票 `next` vs 跨票 `base`(對等,依場景選)
-同票換手(同 workspace 換 template、保住半成品)/ 跨票 base 繼承(新票+注入脈絡、乾淨
-重來)。**Why**:兩者保留的東西相反(工作進度 vs 敘事脈絡),各有適用場景。
+### D10. agent↔agent 交接:同票換手(next) vs 跨票換手(base)(對等,依場景選)
+- **同票換手(next)**:同一張 Jira 票,重置 session(session_id/attempts 歸零)、pin 新
+  profile、重新 provision workspace(**非** native resume)。觸發:HIL 表單「同票換手」/
+  `@agent next`/agent 自發。適合「同一件事換人/換引擎重新來過」。
+- **跨票換手(base)**:系統 `create_ticket` 另開新票、預建 pinned session(`base_ref`)、
+  本票收成 **ABORTED**;新票首次佈建後注入 `BASE_<key>/` 脈絡(來源票 TICKET.md/末次
+  envelope + 指路)。觸發:HIL 表單「跨票換手」。適合「換引擎/重開/跨專案/人策展重啟」。
+**Why**:延續同一件事 vs 另開新票承接敘事脈絡,兩場景各有適用。兩者**都是乾淨重啟**
+(不吃舊 workspace 的 native resume),差別在同票 vs 新票、以及是否注入來源脈絡。
 
 ### D11. 併發用 F1 分層額度閘(global + per-engine + per-profile)
 超額 QUEUED(FIFO);HIL/終態不占額度。**Why**:怕機器 CPU/memory 不夠用。

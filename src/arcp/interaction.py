@@ -26,11 +26,14 @@ INVALIDATED = "invalidated"
 #(kind/profile 不完整則 fail-safe 降級續跑)。next_profile 下拉吃 payload["profiles"]
 #(載入的全部 profile 名,由 ScoreGate 產表時注入),讓人選下一棒。
 _HANDOFF_FIELDS: list[dict] = [
-    {"key": "handoff_kind", "label": "handoff 種類(選 handoff 才填)", "type": "select",
-     "required": False, "options": ["next", "base"]},
-    {"key": "next_profile", "label": "下一棒 agent profile(選 handoff 才填)",
+    {"key": "handoff_kind", "label": "換手種類(選換手才填)", "type": "select",
+     "required": False,
+     # value 穩定(next/base)、label 顯示中文:同票=同一張票、跨票=系統另開新票
+     "options": [["next", "同票換手(同一張票,換 profile)"],
+                 ["base", "跨票換手(系統另開新票,帶脈絡)"]]},
+    {"key": "next_profile", "label": "下一棒 agent profile(選換手才填)",
      "type": "select", "required": False, "options_from": "profiles"},
-    {"key": "handoff_prompt", "label": "給下一棒的交接指示(選 handoff 才填)",
+    {"key": "handoff_prompt", "label": "給下一棒的交接指示(選換手才填)",
      "type": "textarea", "required": False},
 ]
 
@@ -53,9 +56,11 @@ FORM_SCHEMAS: dict[str, dict] = {
             {"key": "choice", "label": "請擇一", "type": "select",
              "required": True, "options_from": "options"},
             # W10.3:HIL(Middle) 也能改派下一棒。proceed=照常續跑本 agent;
-            # handoff=改交接(再依 handoff_kind 走同票 next / 跨票 base)。
+            # handoff=改換手(再依 handoff_kind 走同票 / 跨票)。
             {"key": "next_step", "label": "續跑或改派", "type": "select",
-             "required": False, "options": ["proceed", "handoff"]},
+             "required": False,
+             "options": [["proceed", "照常續跑本 agent"],
+                         ["handoff", "換手改派下一棒"]]},
             *_HANDOFF_FIELDS,
             {"key": "note", "label": "備註(選填)", "type": "textarea",
              "required": False},
@@ -78,7 +83,10 @@ FORM_SCHEMAS: dict[str, dict] = {
             {"key": "human_score", "label": "人類完成度評分(0–10)",
              "type": "int", "required": True, "min": 0, "max": 10},
             {"key": "close_decision", "label": "下一步", "type": "select",
-             "required": True, "options": ["close", "continue", "handoff"]},
+             "required": True,
+             "options": [["close", "關單(結案)"],
+                         ["continue", "續跑(重置額度回進行中)"],
+                         ["handoff", "換手改派下一棒"]]},
             *_HANDOFF_FIELDS,      # W10.3:選 handoff 時填(kind/下一 profile/prompt)
             {"key": "note", "label": "備註(選填)", "type": "textarea",
              "required": False},
@@ -140,14 +148,34 @@ def build_request(issue_id: int, key: str, schema_id: str,
         payload=payload or {})
 
 
-def _options_for(field_def: dict, req: InteractionRequest | None):
-    """select 的合法選項:schema 內建 options,或 per-request(options_from)。"""
+def opt_pairs(raw) -> list[tuple[str, str]]:
+    """正規化 select options → [(value, label)]。接受純字串清單(value=label)或
+    [value, label] 配對清單(顯示中文 label、送出穩定 value,如 next→同票換手)。"""
+    out: list[tuple[str, str]] = []
+    for o in raw or []:
+        if isinstance(o, (list, tuple)) and len(o) >= 2:
+            out.append((str(o[0]), str(o[1])))
+        else:
+            out.append((str(o), str(o)))
+    return out
+
+
+def _raw_options(field_def: dict, req: InteractionRequest | None):
+    """取此 select 的原始 options(schema 內建 或 per-request options_from)。"""
     if "options" in field_def:
-        return list(field_def["options"])
+        return field_def["options"]
     src = field_def.get("options_from")
     if src and req is not None:
-        return list(req.payload.get(src) or [])
+        return req.payload.get(src) or []
     return None
+
+
+def _options_for(field_def: dict, req: InteractionRequest | None):
+    """select 的合法「值」集合(驗證用);配對清單只取 value。None=無限制。"""
+    raw = _raw_options(field_def, req)
+    if raw is None:
+        return None
+    return [v for v, _ in opt_pairs(raw)]
 
 
 def validate_submission(schema_id: str, data: dict | None,
@@ -193,9 +221,16 @@ def validate_submission(schema_id: str, data: dict | None,
 
 
 def summarize(schema_id: str, data: dict | None) -> str:
-    """回填摘要(給稽核 comment / 「已提交」唯讀顯示)。"""
+    """回填摘要(給稽核 comment / 「已提交」唯讀顯示)。select 值顯示中文 label。"""
     schema = FORM_SCHEMAS.get(schema_id) or {"fields": []}
     data = data or {}
-    parts = [f"{f['label']}={data[f['key']]}"
-             for f in schema["fields"] if f["key"] in data]
+    parts = []
+    for f in schema["fields"]:
+        if f["key"] not in data:
+            continue
+        val = data[f["key"]]
+        if f.get("type") == "select" and "options" in f:   # value → 中文 label
+            lbl = dict(opt_pairs(f["options"])).get(str(val))
+            val = f"{lbl}({val})" if lbl and lbl != str(val) else val
+        parts.append(f"{f['label']}={val}")
     return "; ".join(parts)

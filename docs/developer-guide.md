@@ -42,9 +42,9 @@ caffeinate。詳 [需求與理由](requirements.md)。
 - **HIL 表單驅動**:`hil._do_handoff`(被 `apply_submission` 呼叫)。表單欄位(`handoff_kind`
   next/base + `next_profile` + `handoff_prompt`)定義在 `interaction.FORM_SCHEMAS` 的
   `score_and_close`/`decision`;下拉候選由 `scoring.ScoreGate.profiles_fn` 注入 payload。
-- **同票 next**:reset session + pin profile + `workspace="(handoff)"` 哨值(與 `dispatcher`
-  裡 agent 自發換手同一套機制)。
-- **跨票 base**:`hil._do_handoff` 用 `source.create_ticket` 建新票 + 預建 pinned session
+- **同票換手(next)**:reset session + pin profile + `workspace="(handoff)"` 哨值(與
+  `dispatcher` 裡 agent 自發換手同一套機制)。
+- **跨票換手(base)**:`hil._do_handoff` 用 `source.create_ticket` 建新票 + 預建 pinned session
   (`store.TicketSession.base_ref` = 來源票 issue_id);`dispatcher._inject_base` 於新票首次
   佈建後呼 `workspace.inject_base_context` 複製脈絡進 `ws/BASE_<key>/`,一次性後清 `base_ref`。
 - **測試**:`tests/test_handoff.py`(指令式 @agent next)+ `tests/test_handoff_hil.py`(HIL 表單
@@ -93,6 +93,20 @@ uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改�
 `verify` 每步 `files` / `cmd` / `json` 擇一(grader 對應 `FileChecklistGrader` /
 `CommandGrader` / `JsonGrader`,`AllOf` 組合)。build/test/lint = `cmd` 型別;`json`
 (C1)= JSON 檔的形狀檢查(存在+可解析+必要鍵/型別),見 `tests/test_grader.py`。
+
+## A/B 測試 / 自動選 profile
+
+首次派工可從同族候選裡自動選一個 profile(A/B 分流或條件式 triage)。實作在
+`src/arcp/selection.py`(`select_profile`),接線在 `dispatcher.handle` 的**首次派工**分支
+(`sess is None` 且 main profile 有 `select`):選中的 profile 會 pin 進 session,resume 不
+重選。設定(`select` 區塊 random/script 範例)、fail-safe、與 triage 的關係、觀測方式見
+[design/selection.md](design/selection.md)。
+
+## 服務 CLI 參數
+
+`run_poller.py` 與 `detail_server.py` 都支援 `-h` 看用法:可設 port(poller 用
+`--control-port` / `--form-port`;dashboard 用 `--port`)與 `--log-level`;`run_poller.py`
+給 `minutes=0` 即**無限常駐**(靠外部排程 / Ctrl-C / `POST /shutdown` 停)。
 
 ## CI / CD
 

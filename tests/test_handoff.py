@@ -157,7 +157,8 @@ def test_g1_handoff_to_agent():
     assert sess.profile == "other"                  # pin 新 profile
     assert sess.session_id is None and sess.attempts == 0
     assert sess.workspace == "(handoff)"
-    assert any("handoff→other" in c for _, c in d.source.comments)
+    assert any("同票換手" in c and "other" in c
+               for _, c in d.source.comments)
 
 
 def test_g1_handoff_to_human():

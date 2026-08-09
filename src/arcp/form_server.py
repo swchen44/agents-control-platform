@@ -21,6 +21,7 @@ from .interaction import (
     FORM_SCHEMAS,
     PENDING,
     SUBMITTED,
+    opt_pairs,
     validate_submission,
 )
 from .logutil import get_logger
@@ -77,12 +78,13 @@ def _field_html(f: dict, req, val=None) -> str:
         inp = (f"<input type='number' name='{k}' value='{v}' "
                f"min='{lo}' max='{hi}'>")
     elif typ == "select":
-        opts = (f.get("options")
-                or (req.payload.get(f["options_from"]) if req else []) or [])
+        raw = (f.get("options")
+               or (req.payload.get(f["options_from"]) if req else []) or [])
+        # value 穩定、label 顯示(可中文,如 next→同票換手);純字串則兩者相同
         os_html = "".join(
-            f"<option value='{_esc(o)}'"
-            f"{' selected' if str(o) == str(val) else ''}>{_esc(o)}</option>"
-            for o in opts)
+            f"<option value='{_esc(ov)}'"
+            f"{' selected' if str(ov) == str(val) else ''}>{_esc(ol)}</option>"
+            for ov, ol in opt_pairs(raw))
         inp = f"<select name='{k}'><option value=''>—</option>{os_html}</select>"
     else:
         inp = f"<input type='text' name='{k}' value='{v}'>"

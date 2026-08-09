@@ -87,13 +87,17 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 資�
   (評分 0–10 + 裁決:關單 / 續跑 / **改派下一棒**)。
 - 你填完送出 → 系統回寫 Jira description 的 human 段 + 貼稽核 comment,並讓 agent
   resume;`score_and_close` 選「關單」→ 系統幫你把 Jira 轉 Done。
-- **改派下一棒(handoff,W10.3)**:裁決選 `handoff` 後,再選種類 + 下一棒 profile
+- **改派下一棒(handoff,W10.3)**:裁決選 `handoff` 後,再選**換手種類** + 下一棒 profile
   (下拉,候選=系統載入的全部 profile)+ 交接指示:
-  - **同票 next**:同一張票換一個 profile/引擎接手,脈絡全留在這張票。
-  - **跨票 base**:系統**自動另開一張新票**交給選定 profile,並把本票的脈絡
-    (TICKET.md + 產出)複製進新票的工作區(`ws/BASE_<本票>/`)供它參考;本票就此
-    結束(標記為「交接」,不算失敗)。適合換引擎/重開/跨專案但要保留前輪脈絡時。
-  - 沒選種類/profile → 系統自動改回「續跑原 agent」(不會弄壞本票)。
+  - **同票換手(next)**:同一張票換一個 profile/引擎在**這張票**接手 —— 重置 session
+    (session_id、attempts 歸零)、pin 新 profile、依新 profile 的 template 重新佈建
+    workspace,回「進行中」。**非 native resume**(新 profile 重新開始,不接手前一棒的原生
+    session);脈絡全留在這張 Jira 票(留言 / description / 人類指示 → 新 TICKET.md)。
+  - **跨票換手(base)**:**系統自動**用 `create_ticket` 在同 project 另開一張**新票**交給
+    選定 profile,並預建其 session(base_ref 指回本票);本票收 ABORTED(標記為「交接」,
+    不算失敗)。新票下一輪首次佈建時,把本票脈絡(TICKET.md + 最後 envelope)複製進新票
+    工作區的 `ws/BASE_<本票>/` + 人類指示段指路。適合換引擎 / 重開 / 跨專案但要保留前輪脈絡時。
+  - 沒填全換手種類 / profile → fail-safe 降級回「續跑原 agent」(不會弄壞本票)。
 - Jira 暫時異常時,表單會提示「暫勿送出」;送出也會回「稍後再試」(不會假裝成功)。
 - **連結是一次性的**:填過一次後同一連結只會顯示唯讀結果;連結**重啟後仍有效**
   (存在資料庫,非記憶體),所以你晚點再開也還在。
@@ -102,13 +106,16 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 資�
 
 在票上留言(需在白名單):`@agent run` / `retry` / `stop` / `cancel` /
 `next <profile>`(同票換手)/ `hold`(立即中斷回 HIL)。
-> 換手也可走上面的 HIL 表單(§7 改派下一棒);表單能選「跨票 base」,留言 `next` 則只做同票換手。
+> 換手也可走上面的 HIL 表單(§7 改派下一棒);表單能選「跨票換手」,留言 `next` 則只做同票換手。
 
 ## 9. 常見操作
 
 - **暫停/恢復派工**:`curl -X POST http://127.0.0.1:8787/pause`(或 dashboard Control 頁)。
 - **強制驅逐卡住的 agent**:ticket 頁「⏻ 強制驅逐」或 `POST /evict/<id>`(killpg 釋放
   資源、不耗 attempt、下輪自動 native resume)。
+- **在 dashboard 過濾票**:上方過濾列 profile / summary / description 三個關鍵字框,預設
+  **一般字串包含比對(不分大小寫)**;勾「🔤 Regex」checkbox → 改**正則(regex,亦不分大小寫)**。
+  無效正則該框標紅、暫不過濾;過濾狀態寫進 URL,可分享深連結。
 - **Jira 恢復後解除降級**:自動偵測,或 `POST /recover` / dashboard「🩺 Recover」。
 
 疑問見 [FAQ](faq.md)。

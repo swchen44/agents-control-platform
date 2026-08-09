@@ -5,6 +5,29 @@
 
 ## [Unreleased]
 
+### Changed
+- **換手術語統一為「同票換手 / 跨票換手」**(表明 ticket 是同一張還是換新的;全站 + 全文件 +
+  程式面向人字串)。內部資料鍵維持 `next`/`base`(穩定、journal 相容),文件首次出現標
+  「同票換手(next)」「跨票換手(base)」對照。HIL 表單 `handoff_kind` 下拉改顯示中文
+  label(value 仍 next/base:select 支援 (value,label) 分離,`interaction.opt_pairs`);
+  `close_decision`/`next_step` 亦給中文 label;summarize 回填顯示 label。dispatcher/hil
+  面向人 comment、dashboard `/concepts`、7 份手冊 + design/faq 全部改用新術語。順修
+  `decisions.md` D10 一處與實作不符的描述(同票換手並非「保住半成品換大腦」,而是重置
+  session+重新 provision)。
+- **服務參數化(-h/--help)**:`run_poller.py` 與 `detail_server.py` 改用 argparse。
+  run_poller:`minutes=0` → 無限常駐(24h+);`--control-port`/`--form-port`/`--log-level`。
+  detail_server:`--port`/`--host`/`--runtime`/`--control-url`/`--log-level`(相容舊式位置
+  參數);import 時不再吃 sys.argv(才不擋 -h 與被 import),`__main__` 覆寫 globals +
+  `_apply_control()` 重算 CSP/`_CONTROL_JS`(修 CONTROL 覆寫後衍生常數變舊值)。`--log-level`
+  等同 `ARCP_LOG_LEVEL`。
+- **dashboard 過濾器 regex/一般字串二選一**:過濾列加「🔤 Regex」checkbox(勾=正則不分
+  大小寫;不勾=一般字串包含不分大小寫,原行為),套用於 profile/summary/description 三格,
+  無效正則標紅、狀態進 URL。REST:`/api/v1/tickets?q=&field=(key/summary/profile/desc/all)
+  &mode=(match/regex)`,共用純函式 `detail_server.text_matcher`;回傳帶 filter/filter_error。
+- **AB test / 自動選 profile(Q16)文件完整化**:`docs/design/selection.md` 補 random/script
+  兩個獨立 config 範例、「怎麼觀測」章節、script JSON 契約細節、fail-safe/triage 關係;
+  operator/user/developer/faq 補使用說明與連結。
+
 ### Added
 - **grader JSON 形狀檢查(C1)**:`grader.JsonGrader` + profile `verify` 新增 `json` 型別
   (`{file, require:[鍵/點號路徑], types:{鍵:型別}}`)—— JSON 檔存在 + 可解析 + 必要鍵
@@ -18,20 +41,20 @@
 
 ### Changed
 - **`/concepts` a2a 交接說明對齊 W10.3 實作**:原描述「同票=保留半成品換大腦、跨票=人自建
-  Jira」已過時 → 更正為「同票 next=重置 session+pin 新 profile+重新 provision(非 native
-  resume);跨票 base=**系統** create_ticket 建票 + 注入 BASE_ 脈絡」。狀態機 SVG 本已含
-  `hil_end→aborted`(base)/`hil_end→running`(next),僅修 docstring。
+  Jira」已過時 → 更正為「同票換手(next)=重置 session+pin 新 profile+重新 provision(非
+  native resume);跨票換手(base)=**系統** create_ticket 建票 + 注入 BASE_ 脈絡」。狀態機
+  SVG 本已含 `hil_end→aborted`(base)/`hil_end→running`(next),僅修 docstring。
 - **pre-commit hook 更新**:`.githooks/pre-commit` 原檢已消除的 `harness/*.py` → 改檢
   `src/arcp`/`scripts`/`tests` 的 staged `.py`(ruff)+ 動到 code 時補跑
   `gen_event_dict --check`(本機早一步擋事件字典漂移;缺工具則警告放行)。
 - **BACKLOG 校正**:加「實作現況對照」表 —— 標明 F1/F2/F3/G1/G2/A3/A4/C1–C4 等已落地、
   B3 改設計、B1/D1/D2/E1/E2/A1/V1 仍待真環境;避免內網凍結版讀者被 2026-08-04 原始規劃誤導。
 
-- **a2a 跨票 base 交接(W10.3)**:HIL(End) `score_and_close` 與 HIL(Middle) `decision`
+- **a2a 換手(W10.3)**:HIL(End) `score_and_close` 與 HIL(Middle) `decision`
   表單內嵌 handoff 欄位(`handoff_kind` next/base + `next_profile` 下拉 + `handoff_prompt`);
   人在裁決時把票交給下一棒(下拉候選=載入的全部 profile,由 `ScoreGate.profiles_fn` 注入)。
-  **同票 next** = reset+pin 新 profile+`(handoff)` 哨值(鏡像 agent 自發換手);**跨票 base**
-  = 系統 `create_ticket` 在同 project 建新票 + 預建 pinned session(`ticket_session.base_ref`
+  **同票換手(next)** = reset+pin 新 profile+`(handoff)` 哨值(鏡像 agent 自發換手);
+  **跨票換手(base)** = 系統 `create_ticket` 在同 project 建新票 + 預建 pinned session(`ticket_session.base_ref`
   指回本票 issue_id)+ 本票收 ABORTED(交接非失敗),`dispatcher._inject_base` 於新票首次
   佈建後複製 base 的 TICKET.md/最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路
   (一次性,journal `base_injected`)。kind/profile 不完整 → fail-safe 降級續跑原 agent。

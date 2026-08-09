@@ -2571,7 +2571,7 @@ _SM_EDGES = [
 
 def _sm_svg() -> str:
     """狀態機 SVG(7 節點=6 態 + 概念終點 closed):中心→中心連線裁切到矩形邊界 +
-    箭頭 + 雙向邊垂直偏移。W10.3:aborted 節點兼「撤銷/交接」、hil_end→aborted=跨票 base。"""
+    箭頭 + 雙向邊垂直偏移。W10.3:aborted 節點兼「撤銷/交接」、hil_end→aborted=跨票換手。"""
     hw, hh = 62, 22           # 節點半寬/半高
     W, H = 1000, 490
     out = ["<svg id='smsvg' viewBox='0 0 %d %d' width='100%%' "
@@ -3136,22 +3136,22 @@ def render_concepts_page() -> str:
         "<div class='card'>"
         "<p class='sys' style='text-align:left'>觸發:人在 HIL(End) "
         "<code>score_and_close</code> 或 HIL(Middle) <code>decision</code> 表單選"
-        "「改派下一棒」,再選種類 + 下一棒 profile(下拉,候選=載入的全部 profile)"
-        "+ 交接指示;或 agent 自發 <code>@agent next</code>(僅同票)。</p>"
+        "「改派下一棒」,再選換手種類 + 下一棒 profile(下拉,候選=載入的全部 profile)"
+        "+ 交接指示;或 agent 自發 <code>@agent next</code>(僅同票換手)。</p>"
         "<ul style='line-height:1.8'>"
-        "<li><b>同票 next → 回進行中</b>:<b>同一張 Jira</b>,重置 session"
+        "<li><b>同票換手(next)→ 回進行中</b>:<b>同一張 Jira</b>,重置 session"
         "(<code>session_id</code>=None、<code>attempts</code>=0)、pin 新 profile、"
         "重新 provision workspace(新 profile 的 template)→ 回「進行中」由新 profile "
         "接手。脈絡留在 Jira 票(留言/description/人類指示 → 新 TICKET.md);"
-        "**非 native resume**(新 profile 重新開始,不重跑舊 session)。</li>"
-        "<li><b>跨票 base → 舊票撤銷</b>:<b>系統</b>(非人手建)用 "
+        "<b>非 native resume</b>(新 profile 重新開始,不重跑舊 session)。</li>"
+        "<li><b>跨票換手(base)→ 舊票撤銷</b>:<b>系統</b>(非人手建)用 "
         "<code>create_ticket</code> 在同 project 開新票、預建其 session(pin 新 profile "
         "+ <code>base_ref</code> 指回本票),本票收成 <b>ABORTED(交接,非 failure)</b>。"
         "新票下輪首次佈建時 dispatcher 注入 base 脈絡(複製 base 的 TICKET.md/最後 "
         "envelope 進 <code>ws/BASE_&lt;key&gt;/</code> + 人類指示段指路)—— 適合"
         "「換引擎/走錯路/乾淨重來/跨專案,但要保留前輪脈絡」。</li>"
-        "<li class='sys'>一句話:<b>同票=同一張票換 profile 重跑;跨票=系統另開新票、"
-        "帶前輪敘事乾淨重來</b>。資料不完整 → fail-safe 降級續跑原 agent。</li>"
+        "<li class='sys'>一句話:<b>同票換手=同一張票換 profile 重跑;跨票換手=系統另開"
+        "新票、帶前輪敘事乾淨重來</b>。資料不完整 → fail-safe 降級續跑原 agent。</li>"
         "</ul></div>"
         "<h2>狀態存在哪(重要)</h2><div class='card'>"
         "<ul style='line-height:1.8'>"
