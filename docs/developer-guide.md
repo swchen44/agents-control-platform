@@ -96,6 +96,11 @@ uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改�
 `CommandGrader` / `JsonGrader`,`AllOf` 組合)。build/test/lint = `cmd` 型別;`json`
 (C1)= JSON 檔的形狀檢查(存在+可解析+必要鍵/型別),見 `tests/test_grader.py`。
 
+profile 收尾政策 `auto_close: off|on_success|all`(`ScoreGate._auto_close`):自動關時
+`human_score=agent_score`(contract `score`)、`transition("done")`、journal `closed(by=auto)`,
+outcome 保留、不覆寫 handoff。與 `require_approval` 是人機光譜兩端。見
+[design/agent-output.md §9](design/agent-output.md)。
+
 ## A/B 測試 / 自動選 profile
 
 首次派工可從同族候選裡自動選一個 profile(A/B 分流或條件式 triage)。實作在

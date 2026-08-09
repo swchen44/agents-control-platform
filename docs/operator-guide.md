@@ -81,6 +81,13 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   [設計/選擇](design/selection.md)。
 - **控管花費**:profile 的 `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月);超支交人。
 - **控管並發**:`outer_loop.concurrency`(global + per-engine + per-profile);超額 QUEUED。
+- **自動關單 `auto_close`(profile 欄,無人值守用)**:`off`(預設,正常 HIL 人評分)/
+  `on_success`(只 SUCCESS 自動關,FAILURE/UNKNOWN 仍發表單交人)/ `all`(全終態自動關)。
+  自動關時**跳過評分表單**、`human_score` 直接取 **agent 自評**(contract.score)、轉 Done、
+  journal `closed(by=auto)`;**outcome 保留**(FAILURE 仍算失敗、dashboard 失敗率照算)、
+  交付物 comment 照貼(事後可查)。它與 `require_approval`(開跑前門檻)是人機光譜兩端 ——
+  全自動 profile = 不審批 + `auto_close: all`;高風險 profile 維持 `off`。同一 profile 只能一種
+  行為,要兩種就開兩個 profile。詳見 [design/agent-output.md §9](design/agent-output.md)。
 
 ## 5. 備份與還原(Q4 runbook)
 
