@@ -105,8 +105,9 @@ class Store:
         # W3.4:內部觸發源(scheduled)的 last_run 水位
         self._db.execute("""
             CREATE TABLE IF NOT EXISTS trigger_state (
-                name     TEXT PRIMARY KEY,
-                last_run REAL NOT NULL DEFAULT 0
+                name      TEXT PRIMARY KEY,
+                last_run  REAL NOT NULL DEFAULT 0,
+                run_count INTEGER NOT NULL DEFAULT 0
             )""")
         # W11.2:互動請求(一次性 token 表單)。新表,不動既有 table。
         self._db.execute("""
@@ -160,6 +161,11 @@ class Store:
             if name not in wcols:
                 self._db.execute(f"ALTER TABLE ticket_watch ADD COLUMN"
                                  f" {name} TEXT NOT NULL DEFAULT ''")
+        tcols = {r[1] for r in self._db.execute(
+            "PRAGMA table_info(trigger_state)")}
+        if "run_count" not in tcols:               # jobs P2:次數上限記數
+            self._db.execute("ALTER TABLE trigger_state ADD COLUMN"
+                             " run_count INTEGER NOT NULL DEFAULT 0")
 
     def get(self, issue_id: int) -> TicketWatch | None:
         with self._lock:
@@ -327,6 +333,25 @@ class Store:
             self._db.execute("""
                 INSERT INTO trigger_state (name, last_run) VALUES (?,?)
                 ON CONFLICT(name) DO UPDATE SET last_run=excluded.last_run
+            """, (name, ts))
+
+    def trigger_run_count(self, name: str) -> int:
+        """job 已觸發幾次(count 上限用)。"""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT run_count FROM trigger_state WHERE name=?",
+                (name,)).fetchone()
+        return int(row[0]) if row and row[0] is not None else 0
+
+    def bump_trigger_run(self, name: str, ts: float) -> None:
+        """記水位 + run_count+1(at-most-once:先記再跑)。"""
+        with self._lock, self._db:
+            self._db.execute("BEGIN IMMEDIATE")
+            self._db.execute("""
+                INSERT INTO trigger_state (name, last_run, run_count)
+                VALUES (?,?,1)
+                ON CONFLICT(name) DO UPDATE SET last_run=excluded.last_run,
+                    run_count=trigger_state.run_count+1
             """, (name, ts))
 
     # -- W11.2 互動請求(一次性 token 表單)------------------------------------ #

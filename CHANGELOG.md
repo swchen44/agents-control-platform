@@ -6,6 +6,16 @@
 ## [Unreleased]
 
 ### Added
+- **泛化 job(P2):週期/單次執行 agent → 開真 Jira 票**。`outer_loop.triggers[]` 加
+  `count`(次數上限:1 單次 / 0 無上限需 cron / N 次;預設 1;持久化 `trigger_state.run_count`)
+  + `task`(靜態→票 description)/ `task_script`(腳本 stdout JSON 多筆→每筆開一張,如
+  「掃 CQ→每張開票」)+ `labels`(對 route)。**agent-job 走 `triggers.fire_agent_job`**:
+  `create_ticket` + 預建 pinned session(直接指定 profile、跳過 routing/HIL)→ 票由 poller
+  正常派工 → 自動有 HIL/交付物/評分;無人值守配 profile `auto_close`。**script-job 維持
+  inline 不開 Jira**。poller `_run_due_triggers` 改:count 上限 + cron/every 時機(count=1
+  無排程→首輪立刻)+ 先 bump 再跑(at-most-once)。新事件 `job_fired`(共 46)。
+  `tests/test_jobs.py`(14);設計見 [lifecycle.md §5.1](docs/design/lifecycle.md)。
+- **profile `auto_close`(P1;jobs 的收尾)**:見下方 Changed。
 - **Agent 產出契約 + 人機介面(agent-output,Q1–Q6 決策樹定案)**:agent 完成時**結構化
   回傳產出**,harness 貼回 Jira + HIL 評分頁自足呈現。設計見
   [design/agent-output.md](docs/design/agent-output.md)。

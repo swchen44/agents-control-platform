@@ -206,34 +206,53 @@ def test_cron_wins_over_every_with_warning():
     assert t.every_sec is None                        # cron 優先,every 忽略
 
 
-def test_poller_skips_when_quota_full():
+def test_poller_agent_job_fires_and_creates_ticket():
+    """P2:agent-job 不再受額度擋(它只開票);開的票由 dispatch 時才 F1 gate。
+    count=1 首輪立刻 fire → create_ticket + pinned session + job_fired,run_count→1。"""
     from arcp.poller import OuterLoop
+    from arcp.ticket import Ticket
 
     class FakeSource:
+        def __init__(self):
+            self.created = []
+
         def search(self, jql, max_results=50):
             return []
 
         def get_comments(self, iid):
             return []
 
+        def create_ticket(self, project, summary, description="",
+                          issue_type_id="10003", labels=None):
+            self.created.append(project)
+            return Ticket(id=999, key="SCRUM-999", summary=summary, state="待辦",
+                          assignee=None, assignee_id=None, labels=labels or [],
+                          description=description)
+
     class FakeDispatcher:
         profiles = PROFILES
         root = tempfile.mkdtemp()
 
     store = Store(tempfile.mkdtemp())
-    for i in (1, 2):                                # 佔滿 max_running=2
+    for i in (1, 2):                                # 就算額滿也不擋 job 開票
         store.upsert_session(TicketSession(
             issue_id=i, key=f"P-{i}", profile="maint", workspace="ws",
             session_id="s", attempts=1, outcome=None, pending_reason=None,
             cost_usd=0.0))
-    tr = Trigger("t", "maint", "job", "x", every_sec=60)
-    loop = OuterLoop(FakeSource(), store, [], "jql",
-                     dispatcher=FakeDispatcher(),
-                     concurrency={"max_running": 2, "per_engine": {},
-                                  "per_profile": {}}, triggers=[tr])
+    tr = Trigger("t", "maint", "job", "x", every_sec=None, count=1)  # 無排程 count=1
+    src = FakeSource()
+    loop = OuterLoop(src, store, [], "jql", dispatcher=FakeDispatcher(),
+                     concurrency={"max_running": 2}, triggers=[tr],
+                     project="SCRUM")
     ev = loop.poll_once()
-    assert all(e["type"] != "trigger_started" for e in ev)   # 額滿跳過
-    assert store.trigger_last_run("t") == 0.0                # 水位沒動
+    assert any(e["type"] == "job_fired" for e in ev)         # 有開票
+    assert src.created == ["SCRUM"]                          # create_ticket 到 SCRUM
+    assert store.get_session(999) is not None                # 預建 pinned session
+    assert store.get_session(999).profile == "maint"
+    assert store.trigger_run_count("t") == 1                 # count 記數
+    # 再 poll 一次 → count 用完不再 fire
+    ev2 = loop.poll_once()
+    assert all(e["type"] != "job_fired" for e in ev2)
 
 
 if __name__ == "__main__":

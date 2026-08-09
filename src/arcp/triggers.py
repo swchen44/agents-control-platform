@@ -24,7 +24,7 @@ from __future__ import annotations
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import yaml
 
@@ -130,6 +130,11 @@ class Trigger:
     timeout_sec: float = 600.0        # script 用
     cron: str | None = None           # W4.6:原始 cron 字串(顯示/journal 用)
     cron_spec: dict | None = None     # 解析後(parse_cron);優先於 every
+    # -- jobs P2(泛化 job:agent 開真 Jira 票)-------------------------------
+    count: int = 1                    # 次數上限(0=無上限,需 cron;1=單次;N=N 次)
+    task: str | None = None           # 靜態任務(→ Jira 票 description)
+    task_script: list[str] | None = None  # 動態:跑腳本 → stdout JSON(多筆→每筆開一票)
+    labels: list[str] = field(default_factory=list)  # 開票帶的 labels(對到 route)
 
 
 def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
@@ -158,8 +163,12 @@ def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
         else:
             if prof not in profiles:
                 raise ConfigError(f"trigger {name}: profile 不存在: {prof!r}")
-            if not str(t.get("prompt") or "").strip():
-                raise ConfigError(f"trigger {name}: prompt 必填")
+            # agent-job(P2):task(靜態)或 task_script(動態)或舊 prompt(相容)擇一必填
+            if not (str(t.get("task") or "").strip()
+                    or t.get("task_script")
+                    or str(t.get("prompt") or "").strip()):
+                raise ConfigError(f"trigger {name}: task / task_script / prompt "
+                                  f"至少一個(agent-job 的任務內容)")
         every = t.get("every")
         every_sec = None
         if every is not None:
@@ -175,12 +184,25 @@ def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
             log.warning("trigger %s: cron 與 every 並存 → cron 優先"
                         "(every=%s 忽略)", name, every)
             every_sec = None
+        count = int(t.get("count", 1))
+        if count < 0:
+            raise ConfigError(f"trigger {name}: count 不可為負(拿到 {count})")
+        if count != 1 and cron_spec is None and every_sec is None:
+            raise ConfigError(f"trigger {name}: count={count}(循環/多次)需要 "
+                              f"cron 或 every 排程")
+        task_script = t.get("task_script")
+        if isinstance(task_script, str):
+            import shlex
+            task_script = shlex.split(task_script)
         out.append(Trigger(name=name, profile=prof, run_name=run_name,
                            prompt=str(t.get("prompt") or ""),
                            every_sec=every_sec, script=script,
                            timeout_sec=float(t.get("timeout_sec", 600)),
                            cron=str(cron) if cron is not None else None,
-                           cron_spec=cron_spec))
+                           cron_spec=cron_spec, count=count,
+                           task=(t.get("task") or t.get("prompt") or None),
+                           task_script=task_script,
+                           labels=list(t.get("labels") or [])))
     return out
 
 
@@ -253,9 +275,78 @@ def run_script_trigger(trigger: Trigger, store, root: str,
     return events
 
 
+def _resolve_tasks(trigger: Trigger) -> list[dict]:
+    """回 [{summary, description, labels}]。task_script:跑腳本 → stdout JSON(list 或
+    單 obj,每項 {summary?, description, labels?})→ 每筆一票;否則用靜態 task/prompt。"""
+    if trigger.task_script:
+        import json as _json
+        import subprocess
+        try:
+            r = subprocess.run(trigger.task_script, capture_output=True,
+                               text=True, timeout=trigger.timeout_sec,
+                               stdin=subprocess.DEVNULL)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log.warning("job %s task_script 無法執行:%s", trigger.name, e)
+            return []
+        if r.returncode != 0:
+            log.warning("job %s task_script rc=%s:%s", trigger.name,
+                        r.returncode, (r.stderr or "")[-200:])
+            return []
+        try:
+            data = _json.loads(r.stdout or "[]")
+        except ValueError as e:
+            log.warning("job %s task_script stdout 非 JSON:%s", trigger.name, e)
+            return []
+        items = data if isinstance(data, list) else [data]
+        out = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            desc = str(it.get("description") or it.get("summary") or "").strip()
+            if not desc:
+                continue
+            out.append({
+                "summary": str(it.get("summary")
+                               or f"job:{trigger.run_name}")[:200],
+                "description": desc,
+                "labels": list(it.get("labels") or trigger.labels)})
+        return out
+    task = (trigger.task or trigger.prompt or "").strip()
+    head = task.splitlines()[0][:120] if task else trigger.run_name
+    return [{"summary": f"[job:{trigger.run_name}] {head}",
+             "description": task, "labels": list(trigger.labels)}]
+
+
+def fire_agent_job(trigger: Trigger, source, store, profiles: dict[str, Profile],
+                   project: str, now: float | None = None) -> list[dict]:
+    """agent-job(P2):解析 task(s)→ 每筆 create_ticket + 預建 pinned session
+    (直接指定 profile、跳過 routing/HIL)。票帶 labels 對到 route → poller 正常派工 →
+    自動有 HIL/交付物/評分。**不 bump run_count**(呼叫者 poller 負責 at-most-once)。"""
+    events: list[dict] = []
+    for idx, tk in enumerate(_resolve_tasks(trigger)):
+        try:
+            t = source.create_ticket(project, tk["summary"], tk["description"],
+                                     labels=tk["labels"])
+        except Exception as e:  # noqa: BLE001 — 單筆建票失敗不擋其餘
+            log.warning("job %s create_ticket 失敗:%s", trigger.name, e)
+            events.append(store.journal("trigger_error", 0, trigger.run_name,
+                                        error=str(e)[:200]))
+            continue
+        store.upsert_session(TicketSession(   # pinned:dispatcher 直接用此 profile
+            issue_id=t.id, key=t.key, profile=trigger.profile,
+            workspace="(handoff)", session_id=None, attempts=0, outcome=None,
+            pending_reason=None, cost_usd=0.0))
+        events.append(store.journal("job_fired", t.id, t.key,
+                                    job=trigger.name, run_name=trigger.run_name,
+                                    profile=trigger.profile, task_idx=idx))
+        log.info("job %s → 開票 %s(profile=%s)",
+                 trigger.name, t.key, trigger.profile)
+    return events
+
+
 def run_trigger(trigger: Trigger, profiles: dict[str, Profile], store,
                 root: str, now: float | None = None) -> list[dict]:
-    """跑一輪 trigger:pseudo-ticket → provision → 證據迴圈 → journal。
+    """(legacy)跑一輪 trigger:pseudo-ticket → provision → 證據迴圈 → journal。
 
     迷你派工(dispatcher 減去 Jira 面):同 grader/三態語意;session 存
     TicketSession(issue_id=timestamp,不與 Jira id 衝突)→ dashboard 可見、

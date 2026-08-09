@@ -81,6 +81,25 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   [設計/選擇](design/selection.md)。
 - **控管花費**:profile 的 `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月);超支交人。
 - **控管並發**:`outer_loop.concurrency`(global + per-engine + per-profile);超額 QUEUED。
+- **排程 / 單次 job(週期或一次執行 agent)**:`outer_loop.triggers[]` 每個 job:
+  `run_name` + `profile`(agent-job)或 `script`(script-job)+ **`count`**(次數上限:
+  1=單次、0=無上限需 cron、N=N 次;預設 1)+ **`cron`/`every`**(時機)。**agent-job 會開
+  一張真 Jira 票**(`create_ticket` + 直接指定 profile,跳過 routing/HIL)—— 任務內容給
+  `task`(靜態字串)或 `task_script`(跑腳本→stdout JSON,可多筆→每筆開一張,如「掃 CQ 新
+  CR」);票帶 `labels` **須對到一條 create_or_resume route** 才會被派工。無人值守就讓該
+  profile 設 `auto_close`。**script-job 不開 Jira**(inline 跑、結果進 dashboard;簡易排程
+  也可直接用 crontab)。看 journal `job_fired`(profile/task_idx)。範例:
+  ```yaml
+  outer_loop:
+    triggers:
+      - run_name: daily-scan
+        profile: scanner          # agent-job → 開真 Jira 票
+        count: 0                  # 0=無上限(需 cron);1=單次;N=N 次
+        cron: "0 3 * * *"
+        labels: [agent]           # 須對到 create_or_resume route
+        task: "巡檢昨日失敗票並回報"
+        # task_script: 'uv run gen_tasks.py'   # 改動態:stdout JSON [{summary,description,labels?}]
+  ```
 - **自動關單 `auto_close`(profile 欄,無人值守用)**:`off`(預設,正常 HIL 人評分)/
   `on_success`(只 SUCCESS 自動關,FAILURE/UNKNOWN 仍發表單交人)/ `all`(全終態自動關)。
   自動關時**跳過評分表單**、`human_score` 直接取 **agent 自評**(contract.score)、轉 Done、

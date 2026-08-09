@@ -21,7 +21,7 @@ from .logutil import get_logger
 from .retention import reclaim
 from .routing import Route, match
 from .store import Store, TicketWatch
-from .triggers import due, run_trigger
+from .triggers import due, fire_agent_job, run_script_trigger
 
 log = get_logger("poller")
 
@@ -31,9 +31,10 @@ class OuterLoop:
                  routes: list[Route], jql: str, dispatcher=None,
                  commands=None, external=None, max_running: int = 1,
                  concurrency: dict | None = None, triggers=None,
-                 scoregate=None):
+                 scoregate=None, project: str = ""):
         self.source = source
         self.store = store
+        self.project = project          # jobs P2:agent-job create_ticket 的 project
         self.routes = routes
         self.jql = jql
         self.dispatcher = dispatcher   # None = pure grey mode (Phase 1)
@@ -164,39 +165,34 @@ class OuterLoop:
         return events
 
     def _run_due_triggers(self) -> list[dict]:
-        """W3.4:due 的 scheduled trigger 與票共用 F1 額度(global+per-engine);
-        額滿跳過本輪(不標 QUEUED,下輪重評——trigger 沒有票面可展示排隊)。"""
+        """jobs P2:到期的 job → 觸發。**agent-job 開真 Jira 票**(fire_agent_job:
+        create_ticket + pinned session,票走正常 dispatch 由 F1 gate 管額度);
+        **script-job inline 跑**(run_script_trigger,不開 Jira)。count 上限 + cron/every
+        時機(count=1 無排程 → 首輪立刻一次);先 bump 再跑(at-most-once)。"""
+        import time as _t
         evs: list[dict] = []
         profiles = self.dispatcher.profiles
         for tr in self.triggers:
-            if not due(tr, self.store):
+            run_count = self.store.trigger_run_count(tr.name)
+            if tr.count > 0 and run_count >= tr.count:
+                continue                              # 次數用完
+            scheduled = due(tr, self.store)           # cron/every 到期
+            immediate = (tr.cron_spec is None and tr.every_sec is None
+                         and run_count == 0)          # 無排程 + count=1 → 首輪立刻
+            if not (scheduled or immediate):
                 continue
-            if tr.script is not None:               # W4.4:script 非 agent
-                try:                                # 進程,不占引擎額度
-                    evs.extend(run_trigger(tr, profiles, self.store,
-                                           self.dispatcher.root))
-                except Exception as e:
-                    evs.append(self.store.journal(
-                        "trigger_error", 0, tr.name, error=str(e)[:200]))
-                    log.warning("trigger %s 失敗:%s", tr.name, e)
-                continue
-            active = self.store.active_sessions()
-            prof = profiles.get(tr.profile)
-            eng = engine_of(prof) if prof is not None else "claude"
-            cap = (self.concurrency.get("per_engine") or {}).get(eng)
-            eng_used = sum(1 for s in active if s.profile in profiles
-                           and engine_of(profiles[s.profile]) == eng)
-            if (len(active) >= self.concurrency.get("max_running", 1)
-                    or (cap is not None and eng_used >= cap)):
-                log.debug("trigger %s due 但額滿,下輪再試", tr.name)
-                continue
+            self.store.bump_trigger_run(tr.name, _t.time())   # 先記(at-most-once)
             try:
-                evs.extend(run_trigger(tr, profiles, self.store,
-                                       self.dispatcher.root))
-            except Exception as e:      # 單一 trigger 壞不擋 poll
+                if tr.script is not None:             # script-job:inline、不開 Jira
+                    evs.extend(run_script_trigger(tr, self.store,
+                                                  self.dispatcher.root))
+                else:                                 # agent-job:開真 Jira 票
+                    evs.extend(fire_agent_job(tr, self.source, self.store,
+                                              profiles, self.project))
+            except Exception as e:      # 單一 job 壞不擋 poll
                 evs.append(self.store.journal(
                     "trigger_error", 0, tr.name, error=str(e)[:200]))
-                log.warning("trigger %s 失敗:%s", tr.name, e)
+                log.warning("job %s 失敗:%s", tr.name, e)
         return evs
 
     def _gate(self, to_dispatch, events):

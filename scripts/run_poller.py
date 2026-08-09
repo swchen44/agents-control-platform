@@ -178,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         dispatcher=disp, commands=cmds, external=ext,
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
+        project=source_cfg.get("project", ""),             # jobs P2:agent-job 開票用
         triggers=load_triggers(cfg_path, profiles),        # W3.4 scheduled
         # W11:HIL(End) 表單。Q13:agent 數字自評 hook = self_score_fn(session)->0..10,
         # 只在關單首發 score_and_close 時呼叫一次(含一次真 agent resume+prompt,故屬

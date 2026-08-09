@@ -85,6 +85,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py` |
 | `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py` |
 | `jira_write` | `action`, `detail` | `scripts/run_poller.py` |
+| `job_fired` | `job`, `profile`, `run_name`, `task_idx` | `src/arcp/triggers.py` |
 | `new_issue` | `state`, `summary` | `src/arcp/poller.py` |
 | `pending` | `cause`, `cost_usd`, `reason`, `scope` | `src/arcp/dispatcher.py` |
 | `profile_selected` | `chosen`, `method`, `original` | `src/arcp/dispatcher.py` |
@@ -98,13 +99,13 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `session_created` | `profile`, `workspace` | `src/arcp/dispatcher.py` |
 | `status_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py`, `src/arcp/dispatcher.py` |
-| `trigger_error` | `error` | `src/arcp/poller.py` |
+| `trigger_error` | `error` | `src/arcp/poller.py`, `src/arcp/triggers.py` |
 | `trigger_finished` | `attempts`, `cost_usd`, `human_minutes_saved`, `outcome` | `src/arcp/triggers.py` |
 | `trigger_started` | `profile`, `trigger`, `workspace` | `src/arcp/triggers.py` |
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 45 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 46 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -169,7 +170,11 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   ⚠️ `hil_stalled`(`reminders` 達上限仍沒人回)。**票停在等人**時看這串:停在
   `hil_requested`/`score_requested` 沒有後續 = 在等人填表單(正常等待,非 bug)。
 
-**F. 排程觸發(triggers.py)** —— 無票的 scheduled/oneshot 任務:
+**F. 排程觸發 / jobs(triggers.py)** —— 內部 job(P2):
+- `job_fired`(`job`/`run_name`/`profile`/`task_idx`):**agent-job 開了一張真 Jira 票**
+  (count 上限內、逢 cron/every 或 count=1 首輪);該票預建 pinned session(直接指定 profile),
+  之後走正常 dispatch。task_script 多筆 → 同一輪多個 `job_fired`(task_idx 遞增)。
+  script-job 走下面 script_run_* 系列(不開 Jira)。
 - `trigger_started` → `script_run_started`/`script_run_finished`(script 型)或
   `attempt_finished`(agent 型)→ `trigger_finished`(`outcome`)。
 - ⚠️ `trigger_error` / `dispatch_error`(`error`):觸發或派工時擲例外。連看 `error`

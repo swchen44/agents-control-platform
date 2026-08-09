@@ -116,9 +116,10 @@ param:                                # ← 選填
 profile 不只被 Jira 票驅動,還能被**內部 job(觸發器)**啟動。現況(W3.4)= 內部觸發器
 用 pseudo-ticket inline 跑、不開 Jira。
 
-### 5.1 泛化 job 設計(2026-08-09,Q1–Q6 決策樹定案;**待實作 = P2**)
+### 5.1 泛化 job 設計(2026-08-09,Q1–Q6 決策樹定案;**已實作**)
 
-把「週期執行」與「單次執行」合併成**一個泛化 job**(現況 §5.2 是舊版)。決策:
+把「週期執行」與「單次執行」合併成**一個泛化 job**(舊版 pseudo-ticket 內跑見 §5.2,
+agent-job 已改開真 Jira)。決策:
 
 - **`count`=次數上限、`cron`/`every`=時機**:count=1 單次(無 cron→下輪立刻一次;有 cron→
   下個 cron 點一次後停)、count=0 無上限(需 cron,每逢 cron)、count=N 跑 N 個 cron 點後停。
@@ -135,7 +136,9 @@ profile 不只被 Jira 票驅動,還能被**內部 job(觸發器)**啟動。現�
   自動關)。auto_close 是 profile 欄,與 job 解耦。
 - **script-job 維持不開 Jira**(Q1):跑腳本、結果進 journal/dashboard;簡易排程也可直接用 crontab。
 
-新事件(P2 落地時):`job_fired`(run_name/ticket/profile/task_idx)。config 形狀(草案):
+新事件:`job_fired`(job/run_name/profile/task_idx)。實作:`triggers.fire_agent_job`
+(create_ticket + pinned session)、`store.trigger_run_count`/`bump_trigger_run`、poller
+`_run_due_triggers`;`tests/test_jobs.py`。config 形狀:
 ```yaml
 outer_loop:
   jobs:                      # (現 triggers 演進)
