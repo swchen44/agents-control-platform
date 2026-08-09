@@ -75,6 +75,7 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 資�
 - **ticket 頁** — 四層 trace(L0/L1/L2/L3)、Conversation、事件時間軸、transcript 下載。
 - **Introduction** — HIL 狀態機、模組架構圖 + 職責表、概念說明(皆可拖曳/縮放)。
 - **Server / Control / Agent Detail / DB Browser** — 系統資訊 / 控制 / 設定 / 唯讀 DB。
+- **效能監控(在 Server 頁)** — 8 個紅黃綠燈(失敗率/排隊/最舊等待/evict/花費速率/錯誤/系統資源/journal 大小)+ 各 profile 效能表 + bottleneck 說明。
 
 ⚠️ dashboard 綁 `0.0.0.0` 會對內網開放(顯示系統/程序資訊);鎖本機用
 `ARCP_DASH_HOST=127.0.0.1`。內網零外部依賴(不吃 CDN)。

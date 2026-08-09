@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Added
+- **效能監控(Q5)**:整合進 dashboard `/server` 頁 —— 8 個紅黃綠燈指標(attempt 失敗率 /
+  排隊深度 / 最舊未終態票等待 / evict 次數 / 花費速率 / 錯誤事件 / 系統資源 / journal 大小,
+  門檻見 `perf_metrics`)+ per-profile 細節表(attempts/失敗率/平均時長/累計$/最後活動)+
+  bottleneck 說明。全用內部資料(journal/store/sysinfo),`perf_metrics` 純函式 + `test_perf.py`。
+
 ### Changed
 - **config 改名 + profile 拆檔(Q15)**:`config/routes.yaml`→`config/config.yaml`、
   `routes.example.yaml`→`config.example.yaml`(未 release,不做相容;`config_path` 預設改

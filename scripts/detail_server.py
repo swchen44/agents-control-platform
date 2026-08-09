@@ -29,6 +29,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 from collections import Counter, deque
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -730,6 +731,113 @@ _CONTROL_JS = ("<script>"
     "</script>")
 
 
+def _light(value, yellow, red, reverse=False) -> str:
+    """value 對門檻回燈色。reverse=False:越大越糟(≥red 紅、≥yellow 黃)。"""
+    if value is None:
+        return "gray"
+    if not reverse:
+        return "red" if value >= red else ("yellow" if value >= yellow else "green")
+    return "red" if value <= red else ("yellow" if value <= yellow else "green")
+
+
+def perf_metrics(journal: list[dict], sessions: dict, watch: dict,
+                 sysinfo: dict | None, journal_bytes: int,
+                 now: float | None = None) -> dict:
+    """Q5 效能指標(紅黃綠燈)+ per-profile 細節。純函式(可離線單測)。
+    全用內部資料:journal / ticket_session / ticket_watch / sysinfo / journal 大小。"""
+    now = time.time() if now is None else now
+    HR = 3600.0
+    fin = [e for e in journal if e.get("type") == "attempt_finished"]
+    recent_fin = fin[-50:]
+    fails = sum(1 for e in recent_fin
+                if e.get("raw") in ("error", "unknown"))
+    fail_rate = (100.0 * fails / len(recent_fin)) if recent_fin else 0.0
+
+    queued = sum(1 for s in sessions.values() if s.get("queued"))
+    evict_1h = sum(1 for e in journal if e.get("type") == "evicted"
+                   and now - e.get("ts", 0) <= HR)
+    cost_1h = sum(float(e.get("cost") or 0) for e in fin
+                  if now - e.get("ts", 0) <= HR)
+    err_1h = sum(1 for e in journal
+                 if e.get("type") in ("dispatch_error", "trigger_error")
+                 and now - e.get("ts", 0) <= HR)
+
+    # 最舊未終態票等待(小時):非 SUCCESS/ABORTED 的 session,取 watch first_seen 最早
+    open_ages = []
+    for iid, s in sessions.items():
+        if s.get("outcome") in ("SUCCESS", "ABORTED"):
+            continue
+        fs = (watch.get(iid) or {}).get("first_seen_ts")
+        if fs:
+            open_ages.append((now - fs) / HR)
+    oldest_h = max(open_ages) if open_ages else 0.0
+
+    # 系統資源:mem/disk/cpu-load 取最糟 %
+    res_pct = None
+    res = (sysinfo or {}).get("resources") or {}
+    pcts = []
+    mem = res.get("mem") or {}
+    if mem.get("total"):
+        pcts.append(100.0 * mem.get("used", 0) / mem["total"])
+    disk = res.get("disk") or {}
+    if disk.get("total"):
+        pcts.append(100.0 * disk.get("used", 0) / disk["total"])
+    la = res.get("loadavg") or []
+    if la and res.get("cpus"):
+        pcts.append(100.0 * la[0] / res["cpus"])
+    if pcts:
+        res_pct = max(pcts)
+
+    jmb = journal_bytes / 1e6
+    ind = [
+        {"key": "fail_rate", "label": "attempt 失敗率(近 50)",
+         "value": f"{fail_rate:.0f}%", "light": _light(fail_rate, 10, 30)},
+        {"key": "queue", "label": "排隊深度",
+         "value": str(queued), "light": _light(queued, 1, 6)},
+        {"key": "oldest", "label": "最舊未終態票等待",
+         "value": f"{oldest_h:.1f}h", "light": _light(oldest_h, 1, 24)},
+        {"key": "evict", "label": "evict 次數(近 1h)",
+         "value": str(evict_1h), "light": _light(evict_1h, 1, 4)},
+        {"key": "cost", "label": "花費速率(近 1h)",
+         "value": f"${cost_1h:.2f}", "light": _light(cost_1h, 1, 5)},
+        {"key": "errors", "label": "錯誤事件(近 1h)",
+         "value": str(err_1h), "light": _light(err_1h, 1, 4)},
+        {"key": "sysres", "label": "系統資源(最糟)",
+         "value": (f"{res_pct:.0f}%" if res_pct is not None else "—"),
+         "light": _light(res_pct, 70, 90)},
+        {"key": "journal", "label": "journal 大小",
+         "value": f"{jmb:.0f}MB", "light": _light(jmb, 50, 200)},
+    ]
+
+    # per-profile 細節:attempts / 失敗率 / 平均時長 / 累計$ / 最後活動
+    starts = {}          # (issue,attempt) → start ts
+    for e in journal:
+        if e.get("type") == "attempt_started":
+            starts[(e.get("issue_id"), e.get("attempt"))] = e.get("ts")
+    prof: dict = {}
+    for e in fin:
+        p = e.get("profile") or "-"
+        d = prof.setdefault(p, {"attempts": 0, "fails": 0, "cost": 0.0,
+                                "durs": [], "last": 0.0})
+        d["attempts"] += 1
+        if e.get("raw") in ("error", "unknown"):
+            d["fails"] += 1
+        d["cost"] += float(e.get("cost") or 0)
+        d["last"] = max(d["last"], e.get("ts", 0))
+        st = starts.get((e.get("issue_id"), e.get("attempt")))
+        if st and e.get("ts"):
+            d["durs"].append(e["ts"] - st)
+    profiles = []
+    for p, d in sorted(prof.items()):
+        avg = (sum(d["durs"]) / len(d["durs"])) if d["durs"] else None
+        profiles.append({
+            "profile": p, "attempts": d["attempts"],
+            "fail_rate": round(100.0 * d["fails"] / d["attempts"]) if d["attempts"] else 0,
+            "avg_sec": round(avg) if avg is not None else None,
+            "cost": round(d["cost"], 4), "last": d["last"]})
+    return {"indicators": ind, "profiles": profiles}
+
+
 def render_control_page() -> str:
     """W5.8 Control 獨立頁:poller 全域控制(Pause/Resume/Reload/Shutdown)+
     即時狀態。作用於正在跑的 poller 進程(REST /8787,W2.6/W4.5)。"""
@@ -798,8 +906,13 @@ def _workspace_info(s: dict, journal_starts: dict) -> dict:
 
 
 def build_server_data() -> dict:
-    """W6.1/6.2/6.6 Server 頁單一資料源。"""
+    """W6.1/6.2/6.6 Server 頁單一資料源(+ Q5 效能指標)。"""
     data = {"sys": sysinfo_collect() if sysinfo_collect else None}
+    # Q5:效能監控(紅黃綠燈 + per-profile 細節),整合進 Server 頁
+    _jp = os.path.join(ROOT, "events.jsonl")
+    _jb = os.path.getsize(_jp) if os.path.exists(_jp) else 0
+    data["perf"] = perf_metrics(read_journal(), read_sessions(), read_watch(),
+                                data["sys"], _jb)
     data["conns"] = list(_CONNS)[-30:][::-1]        # W6.6 近期連線(新→舊)
     # W6.2:進程 + per-workspace(只掃 active session,省成本)
     procs = []
@@ -854,6 +967,29 @@ _SERVER_JS = ("<script>"
     "const badge=b=>b?\"<span style='color:var(--s-success)'>✓</span>\":"
     "\"<span style='color:var(--s-failure)'>✗</span>\";"
     "let h='';"
+    # Q5 效能監控(紅黃綠燈 + per-profile 細節),整合在 Server 頁
+    "const pf=d.perf||{indicators:[],profiles:[]};"
+    "const lc={green:'var(--s-success)',yellow:'var(--s-pending)',"
+    "red:'var(--s-failure)',gray:'var(--muted)'};"
+    "const dot=c=>`<span style='color:${lc[c]||lc.gray}'>●</span>`;"
+    "h+='<h2>效能監控(Performance)</h2>';"
+    "h+=\"<div class='stats'>\"+pf.indicators.map(i=>"
+    "`<div class='stat' style='border-left:3px solid ${lc[i.light]||lc.gray}'>"
+    "<div class='n'>${dot(i.light)} ${esc(i.value)}</div>"
+    "<div class='l'>${esc(i.label)}</div></div>`).join('')+'</div>';"
+    "h+=\"<p style='color:var(--muted);font-size:12px'>瓶頸幾乎都在 ① agent 執行時長"
+    "(model,非 ARCP)② Jira API 延遲/降級 ③ 並發飽和(排隊)。看上面的燈 + 下方各 "
+    "profile 時長/$ 找熱點。</p>\";"
+    "if(pf.profiles.length){h+='<h2>各 profile 效能</h2>';"
+    "h+=\"<style>.ptbl td,.ptbl th{border-bottom:1px solid var(--line);"
+    "padding:4px 8px;text-align:left;font-size:13px}</style>\";"
+    "h+=\"<table style='width:100%;border-collapse:collapse' class='ptbl'>"
+    "<tr><th>profile</th><th>attempts</th><th>失敗率</th><th>平均時長</th>"
+    "<th>累計$</th><th>最後活動</th></tr>\"+pf.profiles.map(p=>"
+    "`<tr><td>${esc(p.profile)}</td><td>${p.attempts}</td><td>${p.fail_rate}%</td>"
+    "<td>${p.avg_sec!=null?dur(p.avg_sec):'—'}</td><td>$${p.cost}</td>"
+    "<td>${p.last?new Date(p.last*1000).toLocaleString():'—'}</td></tr>`).join('')"
+    "+'</table>';}"
     # 強制驅逐統計(W6.3)
     "const ev=d.evict||{total:0,by_ticket:[]};"
     "if(ev.total)h+=\"<div class='card' style='border-color:var(--s-pending)'>\"+"

@@ -30,6 +30,12 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 `@agent hold`→evict+HIL 表單→resume(Q11)、ScoreGate `self_score_fn` hook(Q13,真自評
 呼叫留 live/V1)。橫跨 interaction/hil/scoring/commands/workspace/run_poller。
 
+## ★ C 群 效能監控(2026-08-09)
+
+| # | 項目 | 狀態 |
+|---|---|---|
+| **Q5** | 效能監控(bottleneck 在哪/怎麼找 + dashboard 紅黃綠燈) | ✅ 已建:整合進 `/server` 頁 —— 8 燈(失敗率/排隊/最舊等待/evict/花費速率/錯誤事件/系統資源/journal 大小,門檻見 `perf_metrics`)+ per-profile 細節表 + bottleneck 說明。`perf_metrics` 純函式 + `test_perf.py`(13 檢查) |
+
 ## ★ B 群 profile 選擇 / config(2026-08-09)
 
 | # | 項目 | 狀態 |

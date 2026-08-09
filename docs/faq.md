@@ -29,6 +29,11 @@ A:都支援(profile 的 `agent.engine`)。共用同一 envelope 契約,換引擎
 A:「強制驅逐」(ticket 頁按鈕或 `POST /evict/<id>`)→ killpg 釋放資源、不耗 attempt、
 下輪自動 native resume 續跑(不重花錢)。
 
+**Q:效能瓶頸在哪?怎麼找?**
+A:ARCP 本身開銷小(poll + diff + SQLite);瓶頸幾乎都在 ① **agent 執行時長**(model,非
+ARCP)② **Jira API 延遲/降級** ③ **並發飽和**(排隊)。看 dashboard **Server 頁的效能監控**
+(8 個紅黃綠燈 + 各 profile 時長/花費表),紅/黃燈就是熱點;單票細節看 ticket 頁 trace。
+
 **Q:會不會燒錢?**
 A:有預算閘:profile `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月),達上限交人;
 人可在表單放寬。model 也可選(haiku 省、opus 強)。
