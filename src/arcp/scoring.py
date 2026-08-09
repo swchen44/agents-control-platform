@@ -105,10 +105,11 @@ class ScoreGate:
     def __init__(self, source, store, base_url: str = "", mention: str = "",
                  interval_sec: float = REMIND_INTERVAL_SEC, ttl_sec: float = 0.0,
                  stall_after: int = STALL_REMINDERS, self_score_fn=None,
-                 profiles_fn=None):
+                 profiles_fn=None, jira_base_url: str = ""):
         self.source = source
         self.store = store
-        self.base_url = base_url
+        self.base_url = base_url                 # 表單服務 base(人開連結用)
+        self.base_url_jira = jira_base_url       # Jira base(組 /browse/<key> 連結)
         self.mention = mention
         self.interval = interval_sec
         self.ttl = ttl_sec
@@ -137,13 +138,29 @@ class ScoreGate:
                 except Exception as e:     # noqa: BLE001 — 取不到自評不擋關單流程
                     log.warning("agent 自評取得失敗 ticket=%s: %s", ticket.key, e)
                     agent_score = None
+            # W(agent-output):交付物快照進 payload,讓評分表單頁自足呈現
+            # (summary_md/code/references/附件 meta;bytes 由 /files/<token> 服務)。
+            from .deliverables import snapshot_for_form
+            deliv = None
+            try:
+                deliv = snapshot_for_form(session.workspace)
+            except Exception as e:  # noqa: BLE001 — 交付物是加值,取不到不擋評分
+                log.warning("交付物快照失敗 ticket=%s: %s", ticket.key, e)
+            jira_url = (f"{self.base_url_jira.rstrip('/')}/browse/{ticket.key}"
+                        if getattr(self, "base_url_jira", "") else "")
             req = request_human(
                 self.source, self.store, ticket.id, ticket.key,
-                "score_and_close", question="請評分並裁決:關單或續跑",
+                "score_and_close", question="請評分並裁決:關單 / 續跑 / 換手",
                 payload_extra={"title": (ticket.summary or "")[:120],
                                "agent_state": "HIL(End)",
                                "grader": session.outcome,
                                "agent_score": agent_score,
+                               "cost_usd": round(session.cost_usd or 0, 4),
+                               "attempts": session.attempts,
+                               "jira_url": jira_url,
+                               "clearquest_id": getattr(
+                                   session, "clearquest_id", None),
+                               "deliverables": deliv,
                                "profiles": (list(self.profiles_fn())
                                             if self.profiles_fn else [])},
                 base_url=self.base_url, mention=self.mention,

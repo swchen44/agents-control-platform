@@ -25,6 +25,7 @@ from .interaction import (
     validate_submission,
 )
 from .logutil import get_logger
+from .output import _safe_resolve, load_output, resolve_attachments
 
 log = get_logger("form")
 
@@ -47,6 +48,11 @@ padding:9px 12px;margin:10px 0;font-size:13px}.err ul{margin:4px 0 0 18px;paddin
 .warn{background:#fff5e0;border:1px solid #e6cd8a;color:#8a6a1a;border-radius:8px;
 padding:10px 12px;margin:10px 0;font-size:13px}.ok{color:#2f7d45}
 .rid{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8b857a}
+.md{font-size:14px;line-height:1.6}.md h3,.md h4{margin:10px 0 4px}
+.md code{background:rgba(0,0,0,.06);padding:1px 4px;border-radius:4px;
+font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.md pre{background:#f0ede4;padding:10px;border-radius:8px;overflow:auto}
+.md pre code{background:none;padding:0}.md ul{margin:4px 0 4px 18px}
 @media(prefers-color-scheme:dark){body{background:#1e1c19;color:#e8e3d8}
 .card{background:#26241f;border-color:#3a362e}.ctx,.hint,.rid{color:#a49d8f}
 .ctx b{color:#e8e3d8}input,textarea,select{background:#1e1c19;color:#e8e3d8;
@@ -92,6 +98,123 @@ def _field_html(f: dict, req, val=None) -> str:
     return f"<label>{_esc(label)}{req_mark}</label>{inp}{hint}"
 
 
+def _md_to_html(md: str) -> str:
+    """極簡**安全** markdown→HTML(agent 內容可能含惡意 → 先 escape 再套格式)。
+    支援:# 標題、- / * 清單、``` 區塊、**粗體**、`code`、[t](http…) 連結、段落。"""
+    import re
+    out: list[str] = []
+    state = {"ul": False, "code": False}
+
+    def _close_ul():
+        if state["ul"]:
+            out.append("</ul>")
+            state["ul"] = False
+
+    for raw in (md or "").splitlines():
+        if raw.strip().startswith("```"):          # code fence 切換
+            _close_ul()
+            out.append("<pre><code>" if not state["code"] else "</code></pre>")
+            state["code"] = not state["code"]
+            continue
+        if state["code"]:
+            out.append(_esc(raw))
+            continue
+        line = _esc(raw)
+        # inline(在已 escape 的字串上做;連結只放行 http/https)
+        line = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
+        line = re.sub(r"`([^`]+?)`", r"<code>\1</code>", line)
+        line = re.sub(r"\[([^\]]+?)\]\((https?://[^)\s]+?)\)",
+                      r"<a href='\2' rel='noopener noreferrer'>\1</a>", line)
+        m = re.match(r"^(#{1,6})\s+(.*)$", raw)
+        if m:
+            _close_ul()
+            lvl = min(6, max(3, len(m.group(1)) + 2))   # 內嵌 → 從 h3 起
+            out.append(f"<h{lvl}>{_esc(m.group(2))}</h{lvl}>")
+            continue
+        if re.match(r"^\s*[-*]\s+", raw):
+            if not state["ul"]:
+                out.append("<ul>")
+                state["ul"] = True
+            out.append("<li>" + re.sub(r"^\s*[-*]\s+", "", line) + "</li>")
+            continue
+        _close_ul()
+        out.append(f"<p>{line}</p>" if raw.strip() else "")
+    _close_ul()
+    if state["code"]:
+        out.append("</code></pre>")
+    return "\n".join(out)
+
+
+def _deliverables_html(req) -> str:
+    """交付物駕駛艙(自足評分):渲染 summary_md + code + 附件下載 + references + 連結。"""
+    p = req.payload or {}
+    tok = req.token
+    parts = []
+    # 連結列:Jira ticket / transcript / ClearQuest
+    links = []
+    if p.get("jira_url"):
+        links.append(f"<a href='{_esc(p['jira_url'])}' rel='noopener'>Jira 票</a>")
+    if p.get("dashboard_url"):
+        links.append(f"<a href='{_esc(p['dashboard_url'])}' rel='noopener'>"
+                     f"agent transcript / trace</a>")
+    if p.get("clearquest_id"):
+        cq = p.get("cq_url") or ""
+        links.append(f"<a href='{_esc(cq)}' rel='noopener'>ClearQuest "
+                     f"{_esc(p['clearquest_id'])}</a>" if cq
+                     else f"ClearQuest {_esc(p['clearquest_id'])}(連結格式待補)")
+    meta = []
+    if p.get("cost_usd") is not None:
+        meta.append(f"花費 ${_esc(p['cost_usd'])}")
+    if p.get("attempts") is not None:
+        meta.append(f"attempts {_esc(p['attempts'])}")
+    d = p.get("deliverables")
+    if not d and not links and not meta:
+        return ""
+    parts.append("<div class='card'><h2>交付物(供評分參考)</h2>")
+    if meta:
+        parts.append(f"<div class='ctx'>{' · '.join(meta)}</div>")
+    if links:
+        parts.append(f"<div class='ctx'>{' · '.join(links)}</div>")
+    if not d:
+        parts.append("<div class='ctx'>(agent 未產出 OUTPUT.json;"
+                     "以上方對照與自報為準)</div></div>")
+        return "".join(parts)
+    if d.get("summary_md"):
+        parts.append("<h3>成果敘事</h3><div class='md'>"
+                     + _md_to_html(d["summary_md"]) + "</div>")
+    if d.get("code"):
+        parts.append("<h3>程式碼(Gerrit)</h3><ul>")
+        for c in d["code"]:
+            url = c.get("url") or ""
+            lab = _esc(c.get("note") or c.get("ref") or url or "(change)")
+            parts.append(f"<li><a href='{_esc(url)}' rel='noopener'>{lab}</a></li>"
+                         if url.startswith("http") else f"<li>{lab}</li>")
+        parts.append("</ul>")
+    atts = d.get("attachments") or []
+    if atts:
+        note = ("(小於 6MB,亦已附到 Jira 本票)" if d.get("mode") == "attach"
+                else "(檔案較大,由此下載)")
+        parts.append(f"<h3>附件 {note}</h3><ul>")
+        for a in atts:
+            kb = f"{a.get('size', 0) / 1024:.0f} KB"
+            url = f"/files/{tok}?f={urllib.parse.quote(a.get('rel', ''))}"
+            parts.append(f"<li><a href='{url}'>{_esc(a.get('name'))}</a> "
+                         f"<span class='rid'>{kb}</span></li>")
+        parts.append("</ul>")
+    if d.get("references"):
+        parts.append("<h3>參考(指標)</h3><ul>")
+        for r in d["references"]:
+            tgt = r.get("path_or_url") or ""
+            lab = _esc(r.get("label") or tgt)
+            note = f" — {_esc(r['note'])}" if r.get("note") else ""
+            parts.append(f"<li><a href='{_esc(tgt)}' rel='noopener'>{lab}</a>{note}"
+                         "</li>" if tgt.startswith("http")
+                         else f"<li>{lab}: {_esc(tgt)}{note}</li>")
+        parts.append("</ul>")
+    parts.append("</div>")
+    return "".join(parts)
+
+
 def _ctx_html(req) -> str:
     p = req.payload or {}
     rows = [f"<div class='ctx'><b>票</b> {_esc(req.key)}"
@@ -128,6 +251,7 @@ def render_form_page(req, jira_up: bool = True, errors=None,
                      for f in schema["fields"])
     body = (f"<h1>{_esc(schema.get('title'))}</h1>"
             f"<div class='card'>{_ctx_html(req)}</div>"
+            f"{_deliverables_html(req)}"           # 自足評分駕駛艙(交付物)
             f"{warn}{err}"
             f"<form method='POST' class='card'>{fields}"
             f"<button type='submit'>送出</button></form>")
@@ -207,9 +331,53 @@ class FormServer:
                 return parts[1] if len(parts) >= 2 and parts[0] == "form" \
                     else None
 
+            def _binary(self, data: bytes, ctype: str, filename: str):
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Content-Disposition",
+                                 f'attachment; filename="{filename}"')
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
+                self.wfile.write(data)
+
+            def _files(self):
+                """交付物下載:/files/<token>[?f=<rel>]。token→session.workspace,
+                只服務 OUTPUT.json 宣告且存在於 workspace 內的附件(路徑安全)。"""
+                import mimetypes
+                from urllib.parse import parse_qs, urlparse
+                u = urlparse(self.path)
+                parts = u.path.strip("/").split("/")
+                tok = parts[1] if len(parts) >= 2 else None
+                req = api.store.get_interaction(tok) if tok else None
+                if req is None or req.is_expired():
+                    return self._html(404, render_message_page(
+                        "找不到", "無效或已逾期的下載連結。"))
+                code, atts, ws = api._deliverable_files(req)
+                if code != 200:
+                    return self._html(code, render_message_page(
+                        "找不到", "此連結沒有可下載的交付物。"))
+                rel = (parse_qs(u.query).get("f") or [""])[0]
+                if not rel:                          # 無 f → 列表頁
+                    return self._html(200, api._files_listing(tok, atts))
+                match = next((a for a in atts if a.rel == rel), None)
+                if match is None:                    # 不在宣告清單 → 擋
+                    return self._html(404, render_message_page(
+                        "找不到", "檔案不在此票的交付清單中。"))
+                path = _safe_resolve(ws, rel)
+                if path is None:
+                    return self._html(404, render_message_page(
+                        "找不到", "檔案不存在。"))
+                ctype = mimetypes.guess_type(match.name)[0] \
+                    or "application/octet-stream"
+                return self._binary(open(path, "rb").read(), ctype, match.name)
+
             def do_GET(self):  # noqa: N802
                 if self.path == "/health":
                     return self._html(200, "ok")
+                if self.path.split("?")[0].startswith("/files/"):
+                    return self._files()
                 tok = self._token()
                 if not tok:
                     return self._html(404, render_message_page(
@@ -240,6 +408,27 @@ class FormServer:
         self._server = ThreadingHTTPServer((host, port), _H)
         self._server.daemon_threads = True
         self._thread: threading.Thread | None = None
+
+    def _deliverable_files(self, req):
+        """(code, attachments, ws):解析此 req 對應票的可下載附件(從 workspace 現讀)。
+        code!=200 表無檔可下。只回 OUTPUT.json 宣告且在 workspace 內存在的檔。"""
+        sess = self.store.get_session(req.issue_id)
+        ws = getattr(sess, "workspace", "") if sess else ""
+        if not ws or ws.startswith("("):
+            return 404, [], ""
+        output = load_output(ws)
+        if output is None:
+            return 404, [], ws
+        atts, _total, _skipped = resolve_attachments(ws, output)
+        return (200 if atts else 404), atts, ws
+
+    def _files_listing(self, tok: str, atts) -> str:
+        rows = "".join(
+            f"<li><a href='/files/{tok}?f={urllib.parse.quote(a.rel)}'>"
+            f"{_esc(a.name)}</a> <span class='rid'>{a.size / 1024:.0f} KB</span></li>"
+            for a in atts)
+        return _page("交付物下載", f"<h1>交付物下載</h1><div class='card'><ul>{rows}"
+                                    f"</ul></div>")
 
     def _view(self, req) -> tuple[int, str]:
         """依請求狀態決定 GET 顯示(open→表單 / submitted→唯讀 / 逾期/失效→訊息)。"""

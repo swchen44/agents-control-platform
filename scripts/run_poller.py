@@ -185,7 +185,8 @@ def main(argv: list[str] | None = None) -> int:
         # ScoreGate 對 None / 例外都 fail-safe,不擋關單)。
         scoregate=ScoreGate(src, store, base_url=form_base,
                             mention=mention, self_score_fn=None,
-                            profiles_fn=lambda: profiles))  # W10.3 handoff 下拉候選
+                            profiles_fn=lambda: profiles,     # W10.3 handoff 下拉候選
+                            jira_base_url=getattr(src, "base_url", "")))
     loop.poll_interval = interval                            # W9.1 control 顯示
 
     _reload = make_reload(loop, disp, cmds, ext, cfg_path)  # W13/W4.5 hot reload

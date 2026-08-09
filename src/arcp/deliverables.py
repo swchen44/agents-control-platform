@@ -23,6 +23,25 @@ def _mb(n: int) -> str:
     return f"{n / 1024 / 1024:.1f}MB"
 
 
+def snapshot_for_form(ws: str) -> dict | None:
+    """把 workspace 的 OUTPUT.json 濃縮成「表單頁顯示用」快照(進 interaction payload)。
+    只帶顯示資料(summary_md / code / references / 附件 metadata + mode);檔案 bytes 不進
+    payload,由 form_server /files/<token> 於下載時從 ws 讀。缺 OUTPUT.json → None。"""
+    output = load_output(ws)
+    if output is None:
+        return None
+    atts, total, _skipped = resolve_attachments(ws, output)
+    return {
+        "summary_md": output.summary_md,
+        "code": output.code,
+        "references": output.references,
+        "attachments": [{"name": a.name, "rel": a.rel, "size": a.size}
+                        for a in atts],
+        "total_bytes": total,
+        "mode": attach_mode(total, len(atts)),
+    }
+
+
 def build_comment_adf(*, outcome: str, attempt: int, cost_usd: float,
                       self_summary: str, output: Output | None,
                       attach_names: list[str], mode: str,
