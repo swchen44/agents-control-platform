@@ -37,6 +37,20 @@ caffeinate。詳 [需求與理由](requirements.md)。
 - **狀態·觀測·控制**:`store`(SQLite + journal)、`control_api`、`transcript`、`retention`
   (`detail_server.py` 唯讀 dashboard 在 `scripts/`)
 
+### agent↔agent 交接(W10.3)在哪
+
+- **HIL 表單驅動**:`hil._do_handoff`(被 `apply_submission` 呼叫)。表單欄位(`handoff_kind`
+  next/base + `next_profile` + `handoff_prompt`)定義在 `interaction.FORM_SCHEMAS` 的
+  `score_and_close`/`decision`;下拉候選由 `scoring.ScoreGate.profiles_fn` 注入 payload。
+- **同票 next**:reset session + pin profile + `workspace="(handoff)"` 哨值(與 `dispatcher`
+  裡 agent 自發換手同一套機制)。
+- **跨票 base**:`hil._do_handoff` 用 `source.create_ticket` 建新票 + 預建 pinned session
+  (`store.TicketSession.base_ref` = 來源票 issue_id);`dispatcher._inject_base` 於新票首次
+  佈建後呼 `workspace.inject_base_context` 複製脈絡進 `ws/BASE_<key>/`,一次性後清 `base_ref`。
+- **測試**:`tests/test_handoff.py`(指令式 @agent next)+ `tests/test_handoff_hil.py`(HIL 表單
+  next/base/fail-safe/注入,免真 Jira 用 FakeSource.create_ticket)。真 `create_ticket` 寫入
+  屬 V1 付費路徑(見 `scripts/reverify_v1.py` 清單)。設計見 [design/architecture.md §4](design/architecture.md)。
+
 ## 測試
 
 測試在 `tests/`(自訂 runner,亦 pytest-相容),從 repo root 執行:

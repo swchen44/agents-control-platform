@@ -56,6 +56,17 @@ A:HIL(End) 有三訊號並列(grader / agent 自評 / 你的評分)。你可選�
 A:能看能填,但送出會提示「稍後再試」且不落地(不做 queue,避免不同步)。Jira 恢復後
 poller 自動解除降級。
 
+**Q:一次性表單連結存哪?重啟會失效嗎?**
+A:存 `runtime/harness.db` 的 `interactions` 表(**永久儲存,非記憶體**),表單服務無狀態、
+每次用 token 查 DB;靠 status 狀態機保證一次性。重啟完全還原(未填可填、已填唯讀、逾期仍逾期)。
+唯一風險是 wipe `runtime/`。設計見 [管理者手冊 §10](operator-guide.md)。
+
+**Q:我可以把票交給另一個 agent/profile 嗎(handoff)?**
+A:可以。在 `score_and_close` / `decision` 表單選「改派下一棒」→ 選種類 + 下一棒 profile:
+**同票 next**(同一票換 profile,脈絡全留)或 **跨票 base**(系統自動另開新票交接,把本票脈絡
+複製進新票 `ws/BASE_<票>/`,本票標為交接非失敗)。也可留言 `@agent next <profile>` 做同票換手。
+見 [使用者手冊 §7](user-guide.md)、[design/architecture.md §4](design/architecture.md)。
+
 ## 開發
 
 **Q:怎麼跑測試?**

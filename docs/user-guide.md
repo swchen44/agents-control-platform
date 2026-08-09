@@ -84,15 +84,25 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 資�
 
 - **通知**:agent 需要你時,在票上留言並 `@mention` 你,附一次性表單連結(不改 assignee)。
 - **表單型別**:`need_info`(補資訊)/ `decision`(選項核可)/ `score_and_close`
-  (評分 0–10 + 裁決:關單 or 續跑)。
+  (評分 0–10 + 裁決:關單 / 續跑 / **改派下一棒**)。
 - 你填完送出 → 系統回寫 Jira description 的 human 段 + 貼稽核 comment,並讓 agent
   resume;`score_and_close` 選「關單」→ 系統幫你把 Jira 轉 Done。
+- **改派下一棒(handoff,W10.3)**:裁決選 `handoff` 後,再選種類 + 下一棒 profile
+  (下拉,候選=系統載入的全部 profile)+ 交接指示:
+  - **同票 next**:同一張票換一個 profile/引擎接手,脈絡全留在這張票。
+  - **跨票 base**:系統**自動另開一張新票**交給選定 profile,並把本票的脈絡
+    (TICKET.md + 產出)複製進新票的工作區(`ws/BASE_<本票>/`)供它參考;本票就此
+    結束(標記為「交接」,不算失敗)。適合換引擎/重開/跨專案但要保留前輪脈絡時。
+  - 沒選種類/profile → 系統自動改回「續跑原 agent」(不會弄壞本票)。
 - Jira 暫時異常時,表單會提示「暫勿送出」;送出也會回「稍後再試」(不會假裝成功)。
+- **連結是一次性的**:填過一次後同一連結只會顯示唯讀結果;連結**重啟後仍有效**
+  (存在資料庫,非記憶體),所以你晚點再開也還在。
 
 ## 8. 留言指令(輔助路徑,保留)
 
 在票上留言(需在白名單):`@agent run` / `retry` / `stop` / `cancel` /
-`next <profile>`(換手)/ `handoff`。
+`next <profile>`(同票換手)/ `hold`(立即中斷回 HIL)。
+> 換手也可走上面的 HIL 表單(§7 改派下一棒);表單能選「跨票 base」,留言 `next` 則只做同票換手。
 
 ## 9. 常見操作
 
