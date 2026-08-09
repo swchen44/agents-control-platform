@@ -61,6 +61,7 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py
 | 對象 | 文件 |
 |---|---|
 | 使用者 | [使用者手冊](docs/user-guide.md) |
+| 管理者 | [管理者手冊](docs/operator-guide.md)(起停/控制/監控/備份/多實例) |
 | 開發者 | [開發者手冊](docs/developer-guide.md) · [專案檔案介紹](docs/project-overview.md) |
 | 想懂為什麼 | [需求與理由](docs/requirements.md) · [決策記錄](docs/decisions.md) · [FAQ](docs/faq.md) |
 | 設計細節 | [生命週期](docs/design/lifecycle.md) · [架構](docs/design/architecture.md) · [互動服務](docs/design/interaction.md) · [其餘](docs/index.md) |

@@ -30,6 +30,13 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 `@agent hold`→evict+HIL 表單→resume(Q11)、ScoreGate `self_score_fn` hook(Q13,真自評
 呼叫留 live/V1)。橫跨 interaction/hil/scoring/commands/workspace/run_poller。
 
+## ★ D 群 文件 + hooks(2026-08-09)
+
+| # | 項目 | 狀態 |
+|---|---|---|
+| **Q8** | workspace hooks 佈建(`.claude/hooks` / `.agents/hooks`,比照 skills) | ✅ 已建:`config/hooks/` 庫 + profile `common_hooks` 選子集 + `_copy_bundle` 統一目標解析(見 C 群上方 commit) |
+| **Q1** | 三視角操作手冊(使用者/管理者/開發者,各含日常操作+use case+FAQ) | ✅ 已建:新增 [管理者手冊](docs/operator-guide.md)(起停/控制/監控/備份還原/多實例/異常/安全 + Operator FAQ,含 Q4 backup runbook + Q2/3/6 現況);index/README 呈現三視角 |
+
 ## ★ C 群 效能監控(2026-08-09)
 
 | # | 項目 | 狀態 |

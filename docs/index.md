@@ -5,10 +5,13 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 
 ## 從這裡開始
 
+**三視角操作手冊**(依你的角色開對應的一份;各自含日常操作 + use case + FAQ):
+
 | 你是… | 讀這份 |
 |---|---|
-| **想跑起來的使用者** | [使用者手冊](user-guide.md) — 安裝、設定、跑 poller、看 dashboard、人機互動 |
-| **想改程式的開發者** | [開發者手冊](developer-guide.md) — 架構、模組、測試、加 backend、CI/CD |
+| **用它辦事的使用者** | [使用者手冊](user-guide.md) — 開票/貼標籤、HIL 表單、`@agent` 指令、看 dashboard |
+| **營運平台的管理者** | [管理者手冊](operator-guide.md) — 起停、控制面、監控、調設定、備份還原、多實例、異常處置 |
+| **改程式的開發者** | [開發者手冊](developer-guide.md) — 架構、模組、測試、加 backend/profile、CI/CD |
 | **想看全貌** | [專案檔案介紹](project-overview.md) — 目錄地圖、每個檔案在幹嘛 |
 | **想懂「為什麼這樣設計」** | [需求與理由](requirements.md) — 每個能力的 What / Why / 現狀 |
 | **想懂重大決策** | [決策記錄](decisions.md) — 關鍵取捨與理由(ADR-lite) |

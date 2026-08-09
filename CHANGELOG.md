@@ -6,6 +6,10 @@
 ## [Unreleased]
 
 ### Added
+- **三視角操作手冊(Q1)**:新增 [管理者手冊](docs/operator-guide.md)(起停 / 控制面
+  pause-resume-reload-evict-recover / 監控 Server 效能頁 / 調設定 / **備份還原 runbook**(Q4)
+  / 多實例 / 異常處置 / 安全 / Operator FAQ,收斂 Q2/3/6 現況)。index/README 以「三視角」
+  呈現使用者/管理者/開發者三份 MD。
 - **workspace common hooks(Q8)**:比照 common_skills —— `config/hooks/<名>/` 庫 + profile
   `common_hooks` 選子集,佈建時整包複製到 `.claude/hooks` / `.agents/hooks`(統一目標解析,
   與 skills 共用 `_copy_bundle`)。加 `config/hooks/`(README + example-hook)、`common_hooks_dir`。
