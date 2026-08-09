@@ -11,7 +11,7 @@
 L3(非空);UNKNOWN(runner 死/無 envelope)**依設計可缺**,不算失敗(只記 info)。
 缺任一該有的層 → 列出 + rc!=0(供 CI/審計)。
 
-用法:python3 scripts/trace_lint.py [runtime_dir]   (預設 arcp.paths.runtime_dir())
+用法:uv run python scripts/trace_lint.py [runtime_dir]   (預設 arcp.paths.runtime_dir())
 """
 from __future__ import annotations
 

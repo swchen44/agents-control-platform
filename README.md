@@ -47,7 +47,7 @@ uv run python scripts/smoke_jira.py       # 唯讀冒煙:驗 Jira 連線
 uv run python scripts/run_poller.py       # 起 poller(+ control 8787 + 表單服務 8790)
 
 # 另開一個 terminal 看 dashboard(runtime 資料預設 runtime/)
-ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py
+uv run python scripts/detail_server.py --host 127.0.0.1
 # → http://127.0.0.1:8788
 ```
 
@@ -142,8 +142,8 @@ Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)�
 | **實例名 `name`** | `config.yaml` → `outer_loop.source.name`(或 env `ARCP_NAME`) | 顯示在 dashboard 標題/瀏覽器分頁,分辨是哪個實例 |
 | **Jira project + jql**(最重要) | `config.yaml` → `source.project` / `source.jql` | ⚠️ **兩個實例絕不可 poll 同一 project/重疊 jql** —— 否則兩個 poller 互搶同一批票、覆寫彼此狀態(這正是我們 e2e 併發時撞到的 flaky 來源)。用不同 project,或至少用不重疊的 label/JQL 濾條 |
 | **control API port** | `config.yaml` → `control.port`(預設 8787) | 每實例的 REST 控制面要獨立 port |
-| **dashboard port** | 啟動 `detail_server.py <runtime> <port>` 的 `<port>`(預設 8788) | 每實例的 dashboard 要獨立 port |
-| **dashboard→control 指向** | `detail_server.py` 第三引數或 env `ARCP_CONTROL_URL` | dashboard 的 Evict/狀態按鈕要打到**自己這個**實例的 control port,不能指到別台 |
+| **dashboard port** | `detail_server.py --port N`(預設 8788) | 每實例的 dashboard 要獨立 port |
+| **dashboard→control 指向** | `detail_server.py --control-url http://127.0.0.1:<control-port>` | dashboard 的 Evict/狀態按鈕要打到**自己這個**實例的 control port,不能指到別台 |
 
 **共用、但要留意的:**
 
@@ -160,7 +160,7 @@ Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)�
 - **agent session / transcript 檔**(`~/.claude/projects`、`~/.codex/sessions`)全域:
   session id 唯一不衝突;transcript 與月花費彙總各讀自己實例的 journal,per-instance OK。
 - **dashboard 綁定**:預設 `0.0.0.0`(內網開放)。多實例只要 port 不同即可並存;要鎖
-  本機用 `ARCP_DASH_HOST=127.0.0.1`。
+  本機加 `--host 127.0.0.1`。
 
 **快速範例(起第二個實例 "ops"):**
 
@@ -168,8 +168,8 @@ Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)�
 cp -R agents-control-platform arcp-ops && cd arcp-ops
 # 編輯 config/config.yaml:source.name: ops、source.project/jql 改別的專案、control.port: 8797
 uv run python scripts/run_poller.py &                    # 用 config.yaml 的 control.port
-ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py \
-  runtime 8798 http://127.0.0.1:8797        # dashboard 8798 → 指自己的 control 8797
+uv run python scripts/detail_server.py --host 127.0.0.1 \
+  --port 8798 --control-url http://127.0.0.1:8797   # dashboard 8798 → 指自己的 control 8797
 ```
 
 > 一句話:**分資料夾、分 name、分 Jira project/jql、分 port(control + dashboard)、

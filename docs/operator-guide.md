@@ -17,22 +17,23 @@
 uv sync                                             # 一次
 # ~/.env: JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN
 uv run python scripts/smoke_jira.py                 # 唯讀冒煙:驗 Jira 連線
-uv run python scripts/run_poller.py [分鐘] [間隔秒] # 常駐 poller(預設 30 分、15 秒)
-ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # 另開:dashboard
+uv run python scripts/run_poller.py                 # 常駐 poller(預設 30 分、每 15 秒)
+uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖本機)
 ```
 
-- **poller 參數化**:`python3 scripts/run_poller.py [minutes] [interval] [--control-port N]
-  [--form-port N] [--log-level DEBUG|INFO|WARNING|ERROR]`。**`minutes=0` → 無限常駐**
-  (24h+,靠外部排程 / Ctrl-C / `POST /shutdown` 停);預設 30 分、15 秒。例:`run_poller.py 0`
-  (24 小時常駐)、`run_poller.py 0 15 --form-port 8899 --log-level DEBUG`。
-- **dashboard 參數化**:`python3 scripts/detail_server.py [--port N] [--host H] [--runtime DIR]
-  [--control-url URL] [--log-level LEVEL]`;`--host 127.0.0.1` 鎖本機;相容舊式位置參數
-  `[runtime] [port] [control_url]`。
-- **log 層級**:`--log-level` 等同設環境變數 `ARCP_LOG_LEVEL`(預設 INFO)。兩個服務都可用
-  `-h` / `--help` 看完整說明。
+- **一律用 `uv run` 執行**(專案用 uv 管環境);兩個服務都可用 `-h` / `--help` 看完整說明。
+- **poller 參數化**:`uv run python scripts/run_poller.py [-m MINUTES] [-i INTERVAL]
+  [--control-port N] [--form-port N] [--log-level DEBUG|INFO|WARNING|ERROR]`。
+  **`-m 0`(`--minutes 0`)→ 無限常駐**(24h+,靠外部排程 / Ctrl-C / `POST /shutdown` 停);
+  預設 30 分、每 15 秒。例:`run_poller.py -m 0`(24 小時常駐)、
+  `run_poller.py -m 0 -i 15 --form-port 8899 --log-level DEBUG`。
+- **dashboard 參數化**:`uv run python scripts/detail_server.py [--port N] [--host H]
+  [--runtime DIR] [--control-url URL] [--log-level LEVEL]`;`--host 127.0.0.1` 鎖本機、
+  `--control-url` 指向本實例的 control API。**全走 CLI flag(不再讀 env)**。
+- **log 層級**:`--log-level` 等同設環境變數 `ARCP_LOG_LEVEL`(預設 INFO)。
 - **優雅停**:`curl -X POST :8787/shutdown`(當前輪跑完退出);或直接 Ctrl-C。
 - poller 是**時間盒**:到時自動退,靠外部(cron / 迭代)重起;重起不重跑(冪等靠 `runtime/`)。
-  要 24h+ 常駐請用 `minutes=0`。
+  要 24h+ 常駐請用 `-m 0`。
 
 ## 2. 日常控制(control API,或 dashboard Control 頁)
 
@@ -111,8 +112,9 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # 另開:dashb
 ## 8. 安全(內網)
 
 - dashboard/control **預設綁 `0.0.0.0`(內網開放、無認證)**:唯讀 dashboard 會顯示系統/程序
-  資訊;control API 有寫入端點(pause/shutdown/evict)。**要鎖本機**:`ARCP_DASH_HOST=127.0.0.1`
-  + control `host: 127.0.0.1`。這是信任邊界的取捨,見 [requirements §7](requirements.md)。
+  資訊;control API 有寫入端點(pause/shutdown/evict)。**要鎖本機**:dashboard 加
+  `--host 127.0.0.1`、control 設 `config.yaml` 的 `source.control.host: 127.0.0.1`。
+  這是信任邊界的取捨,見 [requirements §7](requirements.md)。
 - 憑證只在 `~/.env`,永不進 git、dashboard 只顯示「有/無/到期」不顯示值。
 - 互動表單的一次性 token 是機密,勿記入共用日誌。
 

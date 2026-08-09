@@ -16,11 +16,11 @@ W2.7 dashboard 擴充(F2 排隊 + C4 總覽 + 控制):index 加總覽卡(cost/ou
 控制列(Pause/Resume/Reload → fetch POST 到 W2.6 control API,離線顯示提示);
 審批門 ticket 顯示審批狀態卡(sections 表單本體在 Jira description)。
 
-Usage(-h 看完整說明):
-    python3 detail_server.py [--port N] [--host H] [--runtime DIR]
-                             [--control-url URL] [--log-level LEVEL]
+Usage(-h 看完整說明;一律用 uv run 執行):
+    uv run python scripts/detail_server.py [--port N] [--host H]
+        [--runtime DIR] [--control-url URL] [--log-level LEVEL]
   預設 :8788、綁 0.0.0.0(內網開放)、runtime=repo/runtime、control=127.0.0.1:8787。
-  相容舊式位置參數 [runtime] [port] [control_url];env ARCP_DASH_HOST/ARCP_CONTROL_URL 仍可用。
+  全走 CLI flag(不再讀 env;--host 127.0.0.1 鎖本機、--control-url 指向 control API)。
 """
 
 from __future__ import annotations
@@ -55,14 +55,15 @@ except Exception:  # noqa: BLE001  (arcp 缺 → 退回 cwd 相對)
     _VENDOR = os.path.dirname(os.path.abspath(__file__))
     _RUNTIME = os.path.abspath("./runtime")
 
-# 預設值(可被 __main__ 的 argparse 覆寫;import 時不吃 sys.argv,才不會擋 -h/--flag)。
-# 被 import 當模組時(如 e2e_dashboard / 測試)保持預設;實際起服務時 __main__ 覆寫。
+# 預設值(可被 __main__ 的 argparse flag 覆寫;import 時不吃 sys.argv,才不會擋 -h/--flag)。
+# 被 import 當模組時(如 e2e_dashboard / 測試)保持預設;實際起服務時 __main__ 用 flag 覆寫。
+# 全走 CLI flag,不再讀 env(ARCP_DASH_HOST / ARCP_CONTROL_URL 已移除)。
 ROOT = _RUNTIME
 PORT = 8788                                              # 8787 讓給 control API
-CONTROL = os.environ.get("ARCP_CONTROL_URL", "http://127.0.0.1:8787")
+CONTROL = "http://127.0.0.1:8787"                        # --control-url 覆寫
 # W6.1:綁定 host,預設 0.0.0.0(內網開放,使用者 2026-08-07 決定;⚠️ dashboard 唯讀
-# 但會顯示系統/程序資訊,內網任何人可見)。設 127.0.0.1(或 --host)可鎖本機。
-HOST = os.environ.get("ARCP_DASH_HOST", "0.0.0.0")
+# 但會顯示系統/程序資訊,內網任何人可見)。--host 127.0.0.1 可鎖本機。
+HOST = "0.0.0.0"
 
 
 def _instance_name() -> str:
@@ -3627,22 +3628,19 @@ def _parse_args(argv):
         description="ARCP 唯讀觀測 dashboard(狀態機 / KPI 圖表 / DB 瀏覽 / 概念頁 / "
                     "REST /api/v1)。零外部依賴、內網可跑。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="範例:\n"
-               "  python3 detail_server.py                       # 預設 :8788、內網開放\n"
-               "  python3 detail_server.py --port 9000 --host 127.0.0.1  # 換 port、鎖本機\n"
-               "  python3 detail_server.py --runtime /data/runtime --log-level DEBUG\n"
-               "相容舊式位置參數:detail_server.py [runtime] [port] [control_url]")
-    p.add_argument("runtime", nargs="?", default=None,
-                   help="runtime 目錄(harness.db/events/workspaces;預設 repo/runtime)")
-    p.add_argument("port_pos", nargs="?", type=int, default=None,
-                   help=argparse.SUPPRESS)          # 舊式位置參數(相容,不列 help)
-    p.add_argument("control_pos", nargs="?", default=None, help=argparse.SUPPRESS)
+        epilog="範例(一律用 uv run):\n"
+               "  uv run python scripts/detail_server.py                    "
+               "# 預設 :8788、內網開放\n"
+               "  uv run python scripts/detail_server.py --port 9000 --host 127.0.0.1"
+               "  # 換 port、鎖本機\n"
+               "  uv run python scripts/detail_server.py --runtime /data/runtime"
+               " --log-level DEBUG")
     p.add_argument("--port", type=int, default=None, metavar="PORT",
                    help="dashboard 埠(預設 8788)")
     p.add_argument("--host", default=None, metavar="HOST",
                    help="綁定 host(預設 0.0.0.0 內網開放;127.0.0.1 鎖本機)")
-    p.add_argument("--runtime", dest="runtime_opt", default=None, metavar="DIR",
-                   help="runtime 目錄(等同位置參數 runtime)")
+    p.add_argument("--runtime", default=None, metavar="DIR",
+                   help="runtime 目錄(harness.db/events/workspaces;預設 repo/runtime)")
     p.add_argument("--control-url", default=None, metavar="URL",
                    help="control API URL(狀態頁連它;預設 http://127.0.0.1:8787)")
     p.add_argument("--log-level", default=None,
@@ -3655,18 +3653,15 @@ if __name__ == "__main__":
     _a = _parse_args(sys.argv[1:])
     if _a.log_level:
         os.environ["ARCP_LOG_LEVEL"] = _a.log_level
-    # flag 優先於舊式位置參數;都沒給則沿用 module 層預設(env / 內建)
-    _rt = _a.runtime_opt or _a.runtime
-    if _rt:
-        ROOT = os.path.abspath(_rt)
-    PORT = _a.port or _a.port_pos or PORT
-    CONTROL = _a.control_url or _a.control_pos or CONTROL
+    if _a.runtime:
+        ROOT = os.path.abspath(_a.runtime)
+    PORT = _a.port or PORT
+    CONTROL = _a.control_url or CONTROL
     HOST = _a.host or HOST
-    _apply_control()                     # CONTROL 可能被覆寫 → 重算 CSP(_CONTROL_JS 於 render 代入)
+    _apply_control()                 # CONTROL 可能被覆寫 → 重算 CSP(_CONTROL_JS 於 render 代入)
     where = "所有介面(內網開放)" if HOST == "0.0.0.0" else HOST
     print(f"[detail] serving {ROOT} on {HOST}:{PORT} — {where}", flush=True)
     if HOST == "0.0.0.0":
         print("[detail] ⚠️ 內網開放:dashboard 唯讀但會顯示系統/程序資訊;"
-              "control API(寫入端點)風險見 /docs。鎖本機:"
-              "--host 127.0.0.1(或 ARCP_DASH_HOST=127.0.0.1)", flush=True)
+              "control API(寫入端點)風險見 /docs。鎖本機:--host 127.0.0.1", flush=True)
     HTTPServer((HOST, PORT), Handler).serve_forever()

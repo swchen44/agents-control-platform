@@ -55,7 +55,9 @@ cp config/config.example.yaml config/config.yaml
 ## 5. 跑起來
 
 ```bash
-uv run python scripts/run_poller.py [分鐘] [間隔秒]   # 預設 30 分、15 秒;時間盒到自動退
+uv run python scripts/run_poller.py                 # 預設 30 分、每 15 秒;時間盒到自動退
+uv run python scripts/run_poller.py -m 0            # 無限常駐(24h+;靠 Ctrl-C / POST /shutdown 停)
+# 可選:-m/--minutes 分鐘、-i/--interval 秒、--control-port/--form-port/--log-level(見 -h)
 ```
 
 啟動時會「認養」當下已存在的票(只對之後的新票/新留言反應,不重跑歷史)。同時起:
@@ -66,8 +68,8 @@ uv run python scripts/run_poller.py [分鐘] [間隔秒]   # 預設 30 分、15 
 ## 6. 看 dashboard(唯讀觀測)
 
 ```bash
-ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 資料預設 runtime/
-# 開 http://127.0.0.1:8788
+uv run python scripts/detail_server.py --host 127.0.0.1   # runtime 資料預設 runtime/
+# 開 http://127.0.0.1:8788(-h 看 --port/--runtime/--control-url/--log-level)
 ```
 
 - **Dashboard** — KPI(進行中/排隊/HIL(Middle)/HIL(End)/成功/失敗/失敗率)、時間圖、
@@ -78,7 +80,7 @@ ARCP_DASH_HOST=127.0.0.1 uv run python scripts/detail_server.py   # runtime 資�
 - **效能監控(在 Server 頁)** — 8 個紅黃綠燈(失敗率/排隊/最舊等待/evict/花費速率/錯誤/系統資源/journal 大小)+ 各 profile 效能表 + bottleneck 說明。
 
 ⚠️ dashboard 綁 `0.0.0.0` 會對內網開放(顯示系統/程序資訊);鎖本機用
-`ARCP_DASH_HOST=127.0.0.1`。內網零外部依賴(不吃 CDN)。
+`--host 127.0.0.1`。內網零外部依賴(不吃 CDN)。
 
 ## 7. 人怎麼介入(HIL)
 

@@ -104,9 +104,12 @@ uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改�
 
 ## 服務 CLI 參數
 
-`run_poller.py` 與 `detail_server.py` 都支援 `-h` 看用法:可設 port(poller 用
-`--control-port` / `--form-port`;dashboard 用 `--port`)與 `--log-level`;`run_poller.py`
-給 `minutes=0` 即**無限常駐**(靠外部排程 / Ctrl-C / `POST /shutdown` 停)。
+一律用 `uv run python scripts/<script>.py` 執行;兩支都 argparse、支援 `-h`、**無位置參數**
+(全 flag)、**不讀 env**(除 `--log-level` 等同 `ARCP_LOG_LEVEL`):
+- `run_poller.py`:`-m/--minutes`(`-m 0` = 無限常駐,靠外部排程 / Ctrl-C / `POST /shutdown` 停)、
+  `-i/--interval`、`--control-port`、`--form-port`、`--log-level`。
+- `detail_server.py`:`--port`、`--host`(`--host 127.0.0.1` 鎖本機)、`--runtime`、
+  `--control-url`、`--log-level`。
 
 ## CI / CD
 

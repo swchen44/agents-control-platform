@@ -13,8 +13,8 @@
 在真 agent 下如預期。
 
 用法:
-  python3 scripts/reverify_v1.py            # 全跑(含 Jira 唯讀;無 ~/.env 則跳過該項)
-  python3 scripts/reverify_v1.py --offline  # 只跑不需憑證的本機檢查
+  uv run python scripts/reverify_v1.py            # 全跑(含 Jira 唯讀;無 ~/.env 則跳過該項)
+  uv run python scripts/reverify_v1.py --offline  # 只跑不需憑證的本機檢查
 """
 from __future__ import annotations
 

@@ -106,11 +106,12 @@ ctl = ControlAPI(FakePoller(), store, host="127.0.0.1", port=0)
 ctl.start()
 ctl_url = f"http://127.0.0.1:{ctl.port}"
 
-# -- subprocess 起 dashboard ------------------------------------------------ #
+# -- subprocess 起 dashboard(用 uv run;全走 CLI flag,--host 綁本機免防火牆彈窗)-- #
 port = free_port()
 proc = subprocess.Popen(
-    [sys.executable, find_script("detail_server.py"), root, str(port), ctl_url],
-    env=dict(os.environ, ARCP_DASH_HOST="127.0.0.1"),  # 測試綁本機免防火牆彈窗
+    ["uv", "run", "python", find_script("detail_server.py"),
+     "--runtime", root, "--port", str(port), "--control-url", ctl_url,
+     "--host", "127.0.0.1"],
     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     for _ in range(50):                       # 等 server 起來(最多 5s)

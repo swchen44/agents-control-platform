@@ -146,9 +146,9 @@
 
 ## 9. dashboard
 
-- **打不開**:確認 `scripts/detail_server.py` 有在跑、port 沒被占、`<runtime>` 引數指到
-  對的 runtime 目錄(預設 `runtime`)。綁定預設 `0.0.0.0`(內網開放);要鎖
-  本機設 `ARCP_DASH_HOST=127.0.0.1`。
+- **打不開**:確認 `scripts/detail_server.py` 有在跑(用 `uv run python scripts/detail_server.py`)、
+  port 沒被占、`--runtime` 指到對的 runtime 目錄(預設 `runtime`)。綁定預設 `0.0.0.0`
+  (內網開放);要鎖本機加 `--host 127.0.0.1`。
 - **多實例數字混在一起/互相覆寫**:兩個實例 poll 了**同一 Jira project/重疊 jql** →
   互搶同批票、覆寫彼此狀態(併發 flaky 來源)。**分 project 或用不重疊的 label/JQL**;
   各實例分 name、分 control/dashboard port(見 README「多實例部署」)。

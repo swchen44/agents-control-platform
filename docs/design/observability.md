@@ -52,7 +52,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 ## 3. 事件字典
 
 **「有哪些事件 + 欄位」由 `scripts/gen_event_dict.py` 掃 code 自動產生(防漂移);
-「每個事件的語意」手寫在下方分組。** 更新自動表:`python3 scripts/gen_event_dict.py`
+「每個事件的語意」手寫在下方分組。** 更新自動表:`uv run python scripts/gen_event_dict.py`
 覆蓋下方標記區塊;`--check` 可比對是否漂移(CI/pre-commit 用)。
 
 <!-- BEGIN gen_event_dict -->
@@ -297,7 +297,7 @@ completed|error)+ L3(`attempts/aN.events.jsonl`,非空);UNKNOWN(runner 死/無 e
 **依設計可缺**,不算失敗。缺任一該有的層 → 列出 + rc!=0(供審計)。
 
 ```bash
-python3 scripts/trace_lint.py [runtime_dir]   # 預設 runtime/;無資料視為通過
+uv run python scripts/trace_lint.py [runtime_dir]   # 預設 runtime/;無資料視為通過
 ```
 
 邏輯由 `tests/test_trace_lint.py` 在 CI 驗證(合成 runtime 六情境)。這是 v5 唯一的 P1
@@ -308,8 +308,8 @@ python3 scripts/trace_lint.py [runtime_dir]   # 預設 runtime/;無資料視為�
 事件字典的自動表對應 code；改了 `store.journal(...)` 的事件名/欄位後:
 
 ```bash
-python3 scripts/gen_event_dict.py            # 看新表
-python3 scripts/gen_event_dict.py --check    # 比對本文內嵌區塊是否一致(不一致回非 0)
+uv run python scripts/gen_event_dict.py            # 看新表
+uv run python scripts/gen_event_dict.py --check    # 比對本文內嵌區塊是否一致(不一致回非 0)
 ```
 
 把新輸出貼回 §3 的 `BEGIN/END gen_event_dict` 標記區塊即可。語意分組(§3 手寫段)請

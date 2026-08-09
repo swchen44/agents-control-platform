@@ -6,6 +6,13 @@
 ## [Unreleased]
 
 ### Changed
+- **CLI 全 flag 化 + 一律 `uv run`**:`run_poller.py` 的 minutes/interval 位置參數改成
+  `-m/--minutes`、`-i/--interval`(`-m 0` = 無限常駐);`detail_server.py` **移除位置參數與
+  `ARCP_DASH_HOST`/`ARCP_CONTROL_URL` 環境變數**(不再相容),改 `--host`/`--control-url`
+  等 flag。兩支 help/docstring、7 份手冊 + README 的執行範例一律用 `uv run python scripts/…`;
+  `python3 scripts/…` 全數改掉。**測試也用 uv run**:`e2e_dashboard` 的 subprocess 改
+  `uv run python … --runtime/--port/--control-url/--host`(移除 `ARCP_DASH_HOST` env)。
+  (`ARCP_CONFIG`、`ARCP_LOG_LEVEL` 保留:前者選 config、後者為 `--log-level` 的底層機制。)
 - **換手術語統一為「同票換手 / 跨票換手」**(表明 ticket 是同一張還是換新的;全站 + 全文件 +
   程式面向人字串)。內部資料鍵維持 `next`/`base`(穩定、journal 相容),文件首次出現標
   「同票換手(next)」「跨票換手(base)」對照。HIL 表單 `handoff_kind` 下拉改顯示中文

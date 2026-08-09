@@ -3,8 +3,8 @@
 事件名與其欄位 —— 供 docs/design/observability.md 的「事件字典」自動部分(防漂移)。
 
 用法:
-    python3 scripts/gen_event_dict.py            # 印 Markdown 表格到 stdout
-    python3 scripts/gen_event_dict.py --check     # 與 observability.md 內嵌區塊比對,
+    uv run python scripts/gen_event_dict.py            # 印 Markdown 表格到 stdout
+    uv run python scripts/gen_event_dict.py --check     # 與 observability.md 內嵌區塊比對,
                                                   # 不一致回非 0(給 CI/pre-commit 用)
 
 事件語意(何時發、正常 vs 異常、該連看哪個證據)是**手寫**在 observability.md;本工具

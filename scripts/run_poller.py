@@ -7,10 +7,10 @@ session——**只對啟動之後的新票與新留言反應**,不重跑歷史�
 
 store 用 runtime_live/(持久,重啟不清——冪等靠它)。
 
-Usage(-h 看完整說明):
-    python3 run_poller.py [minutes] [interval] [--control-port N]
-                          [--form-port N] [--log-level LEVEL]
-  minutes=0 → 無限常駐(24h+,靠外部排程 / Ctrl-C / POST /shutdown 停);預設 30 分。
+Usage(-h 看完整說明;一律用 uv run 執行):
+    uv run python scripts/run_poller.py [-m MINUTES] [-i INTERVAL]
+        [--control-port N] [--form-port N] [--log-level LEVEL]
+  -m/--minutes 0 → 無限常駐(24h+,靠外部排程 / Ctrl-C / POST /shutdown 停);預設 30 分。
 """
 
 from __future__ import annotations
@@ -98,13 +98,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         description="時間盒常駐 poller:Jira 事件驅動派工;同時起 control API "
                     "(pause/resume/reload/evict…)與一次性表單服務。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="範例:\n"
-               "  python3 run_poller.py 30 15   # 跑 30 分、每 15 秒一輪\n"
-               "  python3 run_poller.py 0       # 無限常駐(24h+,靠外部/Ctrl-C 停)\n"
-               "  python3 run_poller.py 0 15 --form-port 8899 --log-level DEBUG")
-    p.add_argument("minutes", nargs="?", type=float, default=30.0,
-                   help="時間盒分鐘數;0=無限常駐(24h+)。到時自動退,重起不重跑")
-    p.add_argument("interval", nargs="?", type=float, default=15.0,
+        epilog="範例(一律用 uv run):\n"
+               "  uv run python scripts/run_poller.py               # 30 分、每 15 秒\n"
+               "  uv run python scripts/run_poller.py -m 0          # 無限常駐(24h+)\n"
+               "  uv run python scripts/run_poller.py -m 0 -i 15 "
+               "--form-port 8899 --log-level DEBUG")
+    p.add_argument("-m", "--minutes", type=float, default=30.0,
+                   help="時間盒分鐘數;0=無限常駐(24h+,靠外部/Ctrl-C/POST /shutdown 停)。"
+                        "到時自動退,重起不重跑")
+    p.add_argument("-i", "--interval", type=float, default=15.0,
                    help="每輪 poll 間隔秒")
     p.add_argument("--control-port", type=int, default=None, metavar="PORT",
                    help="control API port(覆寫 config source.control.port;預設 8787)")
