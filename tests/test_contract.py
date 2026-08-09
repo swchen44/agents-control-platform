@@ -54,8 +54,14 @@ check("C1 summarize 含 status/reason/next",
           {"reason": "交給人", "status": "handoff",
            "next": {"to": "swchen44", "kind": "human"}}))
       and "交給人" in s and "human:swchen44" in s)
-check("C1 schema required 列全欄位(OpenAI strict,W3.1)",
-      set(CONTRACT_SCHEMA["required"]) == {"reason", "status", "next"})
+check("C1 schema required 列全欄位(OpenAI strict,W3.1;含 summary)",
+      set(CONTRACT_SCHEMA["required"]) == {"reason", "status", "next", "summary"})
+check("C1 summarize 帶 agent 自報 summary",
+      "summary:做完 A、未做 B" in summarize(
+          {"reason": "r", "status": "done", "next": None,
+           "summary": "做完 A、未做 B"}))
+check("C1 缺 summary 不算不合契約(資訊非控制)",
+      validate_structured({"reason": "r", "status": "done", "next": None})[0])
 check("C1 巢狀 next 也 strict(additionalProperties:false)",
       CONTRACT_SCHEMA["properties"]["next"]["additionalProperties"] is False
       and set(CONTRACT_SCHEMA["properties"]["next"]["required"])
