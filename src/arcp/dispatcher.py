@@ -17,6 +17,7 @@ import os
 import uuid
 
 from .contract import summarize
+from .deliverables import post_deliverables
 from .grader import AllOf, CommandGrader, FileChecklistGrader, JsonGrader
 from .inner_runner import run_attempt
 from .jira_source import JiraCloudSource
@@ -66,6 +67,20 @@ class Dispatcher:
         self.root = root
         self.server_manager = server_manager   # conc.3 long-lived shared server
         self.approval = approval               # W2.3 ApprovalGate | None
+
+    def _post_deliverables(self, sess: TicketSession, ticket: Ticket,
+                           outcome: str, res, events: list[dict]) -> None:
+        """終態貼交付物(OUTPUT.json → ADF comment + 附件)。best-effort,不擋流程。
+        download_url(≥6MB 下載頁)由 Phase 3 form_server 接;此處先 None。"""
+        self_summary = ((res.structured or {}).get("summary", "")
+                        if res is not None else "")
+        try:
+            events.extend(post_deliverables(
+                self.source, self.store, ticket, sess, outcome=outcome,
+                self_summary=self_summary,
+                base_url=getattr(self.source, "base_url", None)))
+        except Exception as e:  # noqa: BLE001 — 交付物是加值,壞了不擋
+            log.warning("%s 貼交付物失敗:%s", ticket.key, e)
 
     def _pack_transcript(self, sess: TicketSession, profile: Profile,
                          ticket: Ticket, events: list[dict]) -> None:
@@ -365,6 +380,7 @@ class Dispatcher:
                 events.append(self.store.journal(
                     "pending", ticket.id, ticket.key, reason="unknown"))
                 self._pack_transcript(sess, profile, ticket, events)  # W4.2
+                self._post_deliverables(sess, ticket, "UNKNOWN", res, events)
                 return events
 
             # F3/G1(W2.5):agent 自報 handoff(status=handoff + next)→ 不
@@ -441,6 +457,7 @@ class Dispatcher:
                 log.info("%s SUCCESS attempt=%d cost=$%.4f",
                          ticket.key, sess.attempts, sess.cost_usd)
                 self._pack_transcript(sess, profile, ticket, events)  # W4.2
+                self._post_deliverables(sess, ticket, "SUCCESS", res, events)
                 # W11:HIL(End) 評分改由 ScoreGate 發 score_and_close 表單
                 return events
 
@@ -471,5 +488,6 @@ class Dispatcher:
         log.info("%s FAILURE (max-attempts=%d, cost=$%.4f)",
                  ticket.key, profile.max_attempts, sess.cost_usd)
         self._pack_transcript(sess, profile, ticket, events)          # W4.2
+        self._post_deliverables(sess, ticket, "FAILURE", res, events)
         # W11:HIL(End) 評分改由 ScoreGate 發 score_and_close 表單
         return events

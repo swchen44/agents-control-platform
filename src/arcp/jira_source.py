@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import ssl
 import time
 import urllib.error
@@ -212,6 +213,45 @@ class JiraCloudSource:
         self._request("POST", f"/rest/api/3/issue/{id_or_key}/comment",
                       body={"body": text_to_adf(text)})
         self._notify_write("comment", id_or_key, text)
+
+    def add_comment_adf(self, id_or_key: str | int, adf_doc: dict,
+                        detail: str = "") -> None:
+        """貼一則已組好的 ADF comment(交付物用結構化 ADF,見 arcp/adf.py)。"""
+        self._request("POST", f"/rest/api/3/issue/{id_or_key}/comment",
+                      body={"body": adf_doc})
+        self._notify_write("comment", id_or_key, detail or "(adf)")
+
+    def add_attachment(self, id_or_key: str | int, filepath: str) -> dict:
+        """上傳一個檔到 issue 附件(multipart;需 X-Atlassian-Token: no-check)。
+        回傳 Jira 附件 metadata(含 id/filename/size/content URL)。"""
+        import mimetypes
+        import uuid as _uuid
+        fname = os.path.basename(filepath)
+        with open(filepath, "rb") as f:
+            data = f.read()
+        ctype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+        boundary = "----arcp" + _uuid.uuid4().hex
+        crlf = b"\r\n"
+        body = (
+            b"--" + boundary.encode() + crlf
+            + ('Content-Disposition: form-data; name="file"; filename="%s"'
+               % fname).encode() + crlf
+            + ("Content-Type: %s" % ctype).encode() + crlf + crlf
+            + data + crlf
+            + b"--" + boundary.encode() + b"--" + crlf)
+        url = self.base_url + f"/rest/api/3/issue/{id_or_key}/attachments"
+        req = urllib.request.Request(url, data=body, method="POST", headers={
+            "Authorization": self._auth,
+            "Accept": "application/json",
+            "X-Atlassian-Token": "no-check",      # Jira 附件端點必需
+            "Content-Type": "multipart/form-data; boundary=" + boundary,
+        })
+        with urllib.request.urlopen(req, timeout=self.timeout,
+                                    context=self._ssl) as resp:
+            payload = resp.read()
+        self._notify_write("attachment", id_or_key, fname)
+        out = json.loads(payload) if payload.strip() else []
+        return out[0] if isinstance(out, list) and out else {}
 
     def create_ticket(self, project_key: str, summary: str,
                       description: str = "", issue_type_id: str = "10003",

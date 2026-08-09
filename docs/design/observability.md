@@ -73,6 +73,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `command_rejected` | `command`, `target` | `src/arcp/commands.py` |
 | `command_unknown` | `body` | `src/arcp/commands.py` |
 | `comment_added` | `author`, `body`, `comment_id` | `src/arcp/poller.py` |
+| `deliverables_posted` | `has_output`, `mode`, `n_attachments`, `skipped` | `src/arcp/deliverables.py` |
 | `dispatch_error` | `error` | `src/arcp/poller.py` |
 | `evicted` | `count`, `session` | `src/arcp/dispatcher.py` |
 | `external_abort` | `state` | `src/arcp/commands.py` |
@@ -103,7 +104,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 44 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 45 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -129,6 +130,11 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - `approval`:起點審批門的決策(pass/退回)。
 - `resolved`:grader 終審通過 → 成功關閉一輪(帶 `attempts`/`cost_usd`/
   `human_minutes_saved`)。
+- `deliverables_posted`(`has_output`/`mode`/`n_attachments`/`skipped`):終態貼交付物
+  (agent 的 OUTPUT.json → Jira comment + 附件)。`has_output=false`=agent 沒寫 OUTPUT.json
+  (只有 structured 自報);`mode=attach`(<6MB 附 issue)/`link`(≥6MB 下載頁)/`none`;
+  `skipped`>0 = 有附件不存在或越界 workspace 被跳過(查 agent 宣告的路徑)。見
+  [agent-output.md](agent-output.md)。
 - ⚠️ `pending`:進入非終態等待,`cause`/`scope`/`reason` 說明為何(預算超限、額度閘
   QUEUED、需人、外部變更…)。**這是「卡住/沒進展」的核心線索** —— 讀 `reason`。
 - ⚠️ `workspace_unhealthy`(`reason`):workspace 檢查不過。連看 `tickets/<id>/`。
