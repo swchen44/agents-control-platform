@@ -99,13 +99,16 @@
 
 ### 1. 起 poller(終端 A)
 
+> ⚠️ 命令已更新為現行 CLI(此為歷史測試記錄):harness/ 已消除、一律 `uv run`、
+> minutes/interval 改 `-m/-i` flag、dashboard 全 flag。**不用 caffeinate**(耗電;睡眠假
+> stall 見下方注意事項與 [LESSONS](../lessons.md))。
+
 ```bash
-cd harness
-caffeinate -i python3 run_poller.py 20 15      # 20 分鐘 timebox、15s 間隔
+uv run python scripts/run_poller.py -m 20 -i 15   # 20 分鐘 timebox、15s 間隔
 ```
 
 確認輸出:`adopted N pre-existing ticket(s)` + `control API on http://127.0.0.1:8787`。
-(選配)終端 B 起 dashboard:`python3 detail_server.py runtime_live 8788`
+(選配)終端 B 起 dashboard:`uv run python scripts/detail_server.py --port 8788`
 → 開 http://127.0.0.1:8788/ 看徽章/總覽。
 
 ### 2. 建測試票(終端 C,poller 起來「之後」)
@@ -179,6 +182,6 @@ assignee 改回 **swchen.tw(bot)**。下一輪 poll:
 
 - **票被標 adopted / 沒反應** → 建票時 poller 還沒起。開著 poller 重建一張新票。
 - **port 8787 被占** → 舊 detail_server(改用 8788 了)或殘留進程:`lsof -i :8787`。
-- **假 stall / 沒下一輪** → 筆電睡眠凍結計時器;確認有 `caffeinate`,異常先查
-  `pmset -g log | grep -i sleep`。
+- **假 stall / 沒下一輪** → 筆電睡眠凍結計時器(**非真 hang**)。**不用 caffeinate**(耗電);
+  poller 是迭代計時盒、睡醒續跑即可;異常先查 `pmset -g log | grep -i sleep`(見 [LESSONS](../lessons.md))。
 - **hash WARNING** → ADF 往返失真;留 log + Jira description 原文,回報。

@@ -29,7 +29,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 - **[除錯 runbook](troubleshooting.md)** — 症狀導向:票沒被處理、卡住、假完成、runner
   失敗、resume/冪等、Jira 降級、指令、花費、dashboard。
 - **[可觀測性](design/observability.md)** — 證據地圖(journal/db/transcript/dashboard)、
-  怎麼讀 journal、**42 種事件字典**、典型事件序列。
+  怎麼讀 journal、**44 種事件字典**、典型事件序列。
 - **[LESSONS](lessons.md)** — 歷史踩坑全紀錄(症狀 → 根因 → 對策)。
 
 ## 研究與對照(Research)

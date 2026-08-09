@@ -86,7 +86,7 @@
   `scripts/inner_*_runner.py`,由 `src/arcp/inner_runner.py` 經 `arcp.paths.find_script`
   定位。快速驗:
   ```bash
-  python3 -c "from arcp.inner_runner import RUNNERS; import os; print({k: os.path.exists(v) for k,v in RUNNERS.items()})"
+  uv run python -c "from arcp.inner_runner import RUNNERS; import os; print({k: os.path.exists(v) for k,v in RUNNERS.items()})"
   ```
   全 `True` 才正常。**這正是 W12.1 曾踩的 bug**(套件搬進 `src/arcp/` 後路徑解析指錯),
   W12.4 已用 `arcp.paths` 修掉 —— 若你改動了資料夾結構,先跑這行確認(見 BACKLOG V1)。

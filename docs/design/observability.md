@@ -174,10 +174,32 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - `transcript_packed`(`reason`):打包 transcript(換手/交人/evict/close/按鈕觸發)。
 - `workspace_reclaimed`(`age_days`/`outcome`):保留策略回收老 workspace。
 
-### 3.1 高風險事件詳解(除錯常追的十個)
+### 3.1 高風險事件詳解(除錯常追的)
 
-分組概述已在 §3;這裡把最常導致「卡住/失敗/沒預期行為」的事件逐一展開,格式統一
-**何時發 / 正常樣態 / 異常訊號 / 連看哪個證據**。
+分組概述已在 §3(**每個事件都在那裡有一句話語意**,grep 事件名即可查);這裡把最常導致
+「卡住/失敗/沒預期行為/看不懂」的事件逐一展開,格式統一 **何時發 / 正常樣態 /
+異常訊號 / 連看哪個證據**。
+
+**`session_created`** — 首次為某票建 workspace + session(dispatcher)
+- 何時:一張票**首次真的派工**(通過 route + gate + 審批門)。
+- 正常:每票只出現一次;之後都是 resume(不再有 session_created)。`workspace` 欄=實體路徑。
+- 異常:同一票**反覆** session_created = workspace 一直被判不健康重建(見 `workspace_unhealthy`)
+  或 session 被誤清。連看 `workspace` 路徑 + `tickets/<id>/`。
+- 注意:換手後 workspace 設哨值「(handoff)」→ 下輪重建屬正常(見 §C 換手)。
+
+**`profile_selected`** — Q16 首次派工選了不同 profile(dispatcher)
+- 何時:main profile 設了 `select`(A/B 測試 / 自動選 profile),首次派工選出 `chosen`。
+- 正常:每票至多一次;`chosen` 就是這票**實際跑**的 profile(已 pin 進 session,resume 不重選)。
+  `method=random` 剛好選回 main 時**不發**此事件(屬正常,不是漏)。
+- 異常:以為設了 script triage 卻選到非預期 profile → 對照 `original`/`chosen`/`method`,
+  再看 script 的 stderr(以 `[select:<key>]` 記錄)。fail-safe 會回 main(見 selection.md)。
+- 連看:`chosen` + 該 profile 的後續 attempt;設計/除錯見 [selection.md](selection.md)。
+
+**`queued`** — F1 分層額度滿 → 排隊(poller)
+- 何時:同時在跑的 agent 達 global / per-engine / per-profile 上限,新候選排 FIFO。
+- 正常:短暫排隊、隨額度釋出即派工(下輪不再 queued 而是 session_created/attempt_started)。
+- 異常:**大量堆積、長時間卡在 queued** = 併發設太低,或 agent 跑太久沒釋放額度。
+  連看 `engine`/`profile` + dashboard Server 頁「排隊深度」燈 + 各 profile 平均時長。
 
 **`pending`** — 進入非終態等待(dispatcher)
 - 何時:一輪結束但不能收尾,要等某條件。
