@@ -26,6 +26,8 @@ class VerifyStep:
     name: str
     files: dict[str, str | None] = field(default_factory=dict)
     cmd: list[str] | None = None
+    # C1:JSON 形狀檢查 {file, require:[鍵/點號路徑], types:{鍵:型別}}
+    json: dict | None = None      # 見 grader.JsonGrader
 
 
 @dataclass
@@ -103,12 +105,17 @@ def load_profiles(path: str) -> dict[str, Profile]:
                 f"UNKNOWN 不可自動重試,只有人能解除)")
         steps = []
         for v in p.get("verify") or []:
+            jspec = v.get("json") or None
             step = VerifyStep(name=v.get("name", "verify"),
                               files=dict(v.get("files") or {}),
-                              cmd=list(v["cmd"]) if v.get("cmd") else None)
-            if not step.files and not step.cmd:
+                              cmd=list(v["cmd"]) if v.get("cmd") else None,
+                              json=dict(jspec) if jspec else None)
+            if not step.files and not step.cmd and not step.json:
                 raise ConfigError(f"profile {name}: verify '{step.name}' "
-                                  f"需要 files 或 cmd 其中之一")
+                                  f"需要 files / cmd / json 其中之一")
+            if step.json and not step.json.get("file"):
+                raise ConfigError(f"profile {name}: verify '{step.name}' 的 "
+                                  f"json 需指定 file")
             steps.append(step)
         appr = p.get("approval") or {}
         agent = p.get("agent") or {}

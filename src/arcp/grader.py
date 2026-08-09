@@ -83,6 +83,65 @@ class CommandGrader:
         return Verdict(False, [f"{' '.join(self.argv)} rc={proc.returncode}: {tail}"])
 
 
+class JsonGrader:
+    """A produced JSON file must exist, parse, and match a *shape* spec:
+       require = ["key", "a.b"]  → 這些(可用點號的)路徑必須存在且非 null;
+       types   = {"key": "str|int|float|number|bool|list|dict"} → 選填型別檢查。
+    刻意是務實的「形狀」檢查、**非完整 JSON Schema**(零依賴):覆蓋「agent 產出一個
+    結構對的 JSON 檔」這個最常見需求(C1)。要完整 JSON Schema 再另接 lib。"""
+
+    name = "json"
+    _T = {"str": str, "int": int, "float": float, "bool": bool,
+          "list": list, "dict": dict, "number": (int, float)}
+
+    def __init__(self, file: str, require: list[str] | None = None,
+                 types: dict[str, str] | None = None):
+        self.file = file
+        self.require = require or []
+        self.types = types or {}
+
+    @staticmethod
+    def _dig(obj, path: str):
+        """點號路徑取值 → (found, value)。"""
+        cur = obj
+        for part in path.split("."):
+            if isinstance(cur, dict) and part in cur:
+                cur = cur[part]
+            else:
+                return False, None
+        return True, cur
+
+    def grade(self, workdir: str) -> Verdict:
+        import json as _json
+        p = os.path.join(workdir, self.file)
+        if not os.path.isfile(p):
+            return Verdict(False, [f"missing {self.file}"])
+        try:
+            data = _json.load(open(p))
+        except (ValueError, OSError) as e:
+            return Verdict(False, [f"{self.file}: 不是合法 JSON({e})"])
+        reasons: list[str] = []
+        for path in self.require:
+            found, val = self._dig(data, path)
+            if not found or val is None:
+                reasons.append(f"{self.file}: 缺鍵 {path}")
+        for key, tname in self.types.items():
+            found, val = self._dig(data, key)
+            if not found or val is None:
+                continue                       # 缺鍵由 require 管;型別只驗已存在的
+            want = self._T.get(tname)
+            if want is None:
+                continue
+            # bool 是 int 的子類,數字型別不接受 bool
+            bad = not isinstance(val, want) or (
+                tname in ("int", "float", "number") and isinstance(val, bool))
+            if bad:
+                reasons.append(
+                    f"{self.file}: {key} 應為 {tname}(得 {type(val).__name__})")
+        return Verdict(not reasons,
+                       reasons or [f"{self.file}: JSON shape ok"])
+
+
 class AllOf:
     """All sub-graders must pass; reasons are concatenated for the journal."""
 

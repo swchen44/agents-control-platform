@@ -6,6 +6,27 @@
 ## [Unreleased]
 
 ### Added
+- **grader JSON 形狀檢查(C1)**:`grader.JsonGrader` + profile `verify` 新增 `json` 型別
+  (`{file, require:[鍵/點號路徑], types:{鍵:型別}}`)—— JSON 檔存在 + 可解析 + 必要鍵
+  + 選填型別的務實 shape 檢查(零依賴,非完整 JSON Schema)。build/test/lint 仍用 `cmd`
+  型別表達。dispatcher `_grader` 接線、workspace 驗收標準渲染、`tests/test_grader.py`(15 檢查)。
+- **dashboard `/db` schema 視圖**:每張表加 schema 面板(PRAGMA table_info:欄名/型別/
+  notnull/預設/pk)—— 即使 0 列也看得到全部欄位(最近常加欄位如 `base_ref`,方便 debug);
+  新增 `/db/schema/<table>` 端點 + `db_schema()`。資料檢視本就 `SELECT *` 動態列全欄。
+- **dashboard `/concepts` 模組架構補全**:加入 W11 HIL 三模組(`interaction`/`hil`/
+  `form_server`)到分層架構圖/graph/職責表;`_arch_svg` chip 寬度隨該層模組數自適應(免溢出)。
+
+### Changed
+- **`/concepts` a2a 交接說明對齊 W10.3 實作**:原描述「同票=保留半成品換大腦、跨票=人自建
+  Jira」已過時 → 更正為「同票 next=重置 session+pin 新 profile+重新 provision(非 native
+  resume);跨票 base=**系統** create_ticket 建票 + 注入 BASE_ 脈絡」。狀態機 SVG 本已含
+  `hil_end→aborted`(base)/`hil_end→running`(next),僅修 docstring。
+- **pre-commit hook 更新**:`.githooks/pre-commit` 原檢已消除的 `harness/*.py` → 改檢
+  `src/arcp`/`scripts`/`tests` 的 staged `.py`(ruff)+ 動到 code 時補跑
+  `gen_event_dict --check`(本機早一步擋事件字典漂移;缺工具則警告放行)。
+- **BACKLOG 校正**:加「實作現況對照」表 —— 標明 F1/F2/F3/G1/G2/A3/A4/C1–C4 等已落地、
+  B3 改設計、B1/D1/D2/E1/E2/A1/V1 仍待真環境;避免內網凍結版讀者被 2026-08-04 原始規劃誤導。
+
 - **a2a 跨票 base 交接(W10.3)**:HIL(End) `score_and_close` 與 HIL(Middle) `decision`
   表單內嵌 handoff 欄位(`handoff_kind` next/base + `next_profile` 下拉 + `handoff_prompt`);
   人在裁決時把票交給下一棒(下拉候選=載入的全部 profile,由 `ScoreGate.profiles_fn` 注入)。

@@ -17,7 +17,7 @@ import os
 import uuid
 
 from .contract import summarize
-from .grader import AllOf, CommandGrader, FileChecklistGrader
+from .grader import AllOf, CommandGrader, FileChecklistGrader, JsonGrader
 from .inner_runner import run_attempt
 from .jira_source import JiraCloudSource
 from .logutil import get_logger
@@ -42,6 +42,10 @@ def _grader(profile: Profile):
             parts.append(FileChecklistGrader(step.files))
         if step.cmd:
             parts.append(CommandGrader(step.cmd))
+        if step.json:                          # C1:JSON 形狀檢查
+            parts.append(JsonGrader(step.json.get("file"),
+                                    step.json.get("require"),
+                                    step.json.get("types")))
     return AllOf(*parts)
 
 

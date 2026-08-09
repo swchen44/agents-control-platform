@@ -211,8 +211,19 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - 異常:非預期的狀態變更把跑到一半的票中止。
 - 連看:`state` 欄位 + 該票的 `status_changed`/`assignee_changed` + Jira 端操作記錄。
 
-**`handoff_invalid`** — 換手目標無效(dispatcher)
-- 異常訊號:`to` 指的 profile 不存在/不合法 → 換手沒生效。連看 `config.yaml` profiles。
+**`handoff` / `base_injected`** — agent↔agent 交接(dispatcher/hil,W10.3)
+- 何時:人在 HIL 表單選「改派下一棒」或 agent 自發換手。`kind=next`(同票)/ `base`
+  (跨票)/ `agent`(自發同票)/ `human`(交人);`via=hil` 表人在表單觸發。
+- 正常(跨票 base):`handoff(kind=base, new_ticket=SCRUM-N, via=hil)` → 下一輪新票出現
+  `base_injected(base=舊票, dest=BASE_<key>)`(來源脈絡已注入)→ 新票照常 `session_created`
+  …;舊票同時 `outcome=ABORTED`(非 failure)。
+- 異常:有 `handoff(kind=base)` 但新票遲遲沒 `base_injected` → 新票沒被 poller 撿到
+  (labels/route 不符?)或來源 session 找不到(看 hil 警告 log);查新票是否在 jql 視野內。
+- 連看:兩票的 `key` 各篩一條時間線對照;新票 workspace 的 `BASE_<key>/`(TICKET.md+envelope)。
+
+**`handoff_invalid`** — 換手目標無效(dispatcher/hil)
+- 異常訊號:`to` 指的 profile 不存在、或 `kind` 空 → 換手沒生效。`via=hil` 時已 fail-safe
+  降級為續跑原 agent(不硬失敗)。連看 `to`/`kind` + `config.yaml` profiles(名字對不對)。
 
 **`hil_stalled`** — 評分/需人表單催了 N 次仍無人回(scoring)
 - 正常:確實在等人(非 bug)。
@@ -241,6 +252,10 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   `hil_stalled`。停在這串沒後續 = 等人填表單(去看 Jira 那張票的 @mention + 表單連結)。
 - **crash 後續跑**:… → `attempt_started` →(崩)→ 下輪 `attempt_crash_recovered
   (resume=true)` → `attempt_finished`。`truly_resumed=true` 代表沒重工。
+- **跨票 base 交接**(W10.3):舊票 … → `score_requested` →(人填 handoff base)→
+  `handoff(kind=base, new_ticket=SCRUM-N, via=hil)` + 舊票 `outcome=ABORTED`;新票下一輪
+  → `base_injected(base=舊票)` → `session_created` → `attempt_started` …(帶 BASE_ 脈絡)。
+  同票 next 則舊票不 ABORTED,而是同 `key` 直接 `handoff(kind=next)` → 下輪換 profile 重跑。
 - **被驅逐後回收**:`evicted` →(下輪)`attempt_crash_recovered` 續跑。evict 不耗
   attempt、不重花錢。
 

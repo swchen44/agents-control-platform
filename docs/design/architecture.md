@@ -64,8 +64,8 @@ prompt。也保留 agent 自發(`@agent next` 指令 / envelope `status=handoff`
 | | **同票 next** | **跨票 base** |
 |---|---|---|
 | 做法 | 同一張 Jira,重置 session、pin 新 profile | **系統**在 agent 自己 project 建新票(`create_ticket`,一步完成)、預建其 session(pin 新 profile + `base_ref` 指回本票),本票收成 ABORTED(交接) |
-| 脈絡 | 全留在同一票(留言/description/transcript 都在) | dispatcher 於新票首次佈建後複製 base 的 `TICKET.md`+最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路 |
-| 舊工作 | 就地接續(可 native resume) | 新票重新開始,但帶 base 脈絡 |
+| 脈絡 | 全留在同一票(留言/description/人類指示 → 新 TICKET.md) | dispatcher 於新票首次佈建後複製 base 的 `TICKET.md`+最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路 |
+| 舊工作 | 同票由新 profile 重新開始(session 重置=session_id None/attempts 0,**非** native resume);workspace 重新 provision 為新 profile 的 template | 新票重新開始,但帶 base 脈絡 |
 | 開新票? | 否 | 是(**系統建**,非人手建;沿用本票 labels → 新票走同 route) |
 | **適合場景** | 小幅換手、**同一件事繼續**、換 profile 但引擎/脈絡相容 | 換**引擎**、重開、跨專案、人策展重啟、任何要「乾淨重來但保留前輪脈絡」的泛化場景 |
 

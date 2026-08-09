@@ -266,6 +266,21 @@ def db_table(name: str, limit: int, offset: int) -> dict:
         con.close()
 
 
+def db_schema(name: str) -> dict:
+    """表的欄位定義(PRAGMA table_info):即使 0 列也看得到有哪些欄位/型別/預設。
+    最近常加欄位(base_ref/human_score/…),schema 視圖方便 debug 對照。"""
+    if name not in {t["name"] for t in db_tables()}:   # 白名單=真實表名
+        return {"error": "no such table"}
+    con = _db_ro()
+    try:
+        cols = [{"name": r[1], "type": r[2] or "", "notnull": bool(r[3]),
+                 "default": r[4], "pk": bool(r[5])}
+                for r in con.execute(f'PRAGMA table_info("{name}")')]
+        return {"table": name, "columns": cols}
+    finally:
+        con.close()
+
+
 def db_query(sql: str) -> dict:
     """唯讀查詢:連線 mode=ro(引擎層擋寫)+ 單語句 + SELECT/WITH/PRAGMA 前綴。"""
     s = (sql or "").strip().rstrip(";")
@@ -1580,15 +1595,30 @@ async function loadTables(){
     `<span style='color:var(--muted);float:right'>${x.rows}</span></div>`).join('');
 }
 async function openT(name){CUR=name;OFF=0;$('qbox').value='';showTable();}
+// schema 視圖:欄名/型別/notnull/預設/pk —— 即使 0 列也看得到全部欄位(debug 用)
+function schemaHtml(cols){
+  if(!cols||!cols.length)return '';
+  const h="<tr><td><b>欄位</b></td><td><b>型別</b></td><td><b>notnull</b></td>"+
+    "<td><b>預設</b></td><td><b>pk</b></td></tr>";
+  const b=cols.map(c=>`<tr><td>${esc(c.name)}</td><td>`+
+    `<span style='color:var(--muted)'>${esc(c.type||'-')}</span></td>`+
+    `<td>${c.notnull?'✓':''}</td><td>${c.default==null?'':esc(c.default)}</td>`+
+    `<td>${c.pk?'🔑':''}</td></tr>`).join('');
+  return "<details style='margin-bottom:10px' open><summary style='cursor:pointer;"+
+    `color:var(--muted)'>schema · ${cols.length} 欄</summary>`+
+    `<div style='overflow:auto'><table id='tix'><thead>${h}</thead>`+
+    `<tbody>${b}</tbody></table></div></details>`;
+}
 async function showTable(){
-  const d=await (await fetch(`/db/table/${CUR}?limit=${LIM}&offset=${OFF}`))
-    .json();
+  const [d,sc]=await Promise.all([
+    (await fetch(`/db/table/${CUR}?limit=${LIM}&offset=${OFF}`)).json(),
+    (await fetch(`/db/schema/${CUR}`)).json()]);
   if(d.error){$('dbout').innerHTML="<p style='color:var(--s-failure)'>"+esc(d.error)+
     "</p>";return;}
   DBMODE='table';
   $('dbtitle').textContent='📋 '+CUR;
   $('dbpg').style.display=d.total>LIM?'flex':'none';
-  $('dbout').innerHTML=tbl(d.columns,d.rows,d.total);
+  $('dbout').innerHTML=schemaHtml(sc.columns)+tbl(d.columns,d.rows,d.total);
   resizable(document.querySelector('#dbout table'),'db:'+CUR);  // W5.7
 }
 function dpg(dir){OFF=Math.max(0,OFF+dir*LIM);showTable();}
@@ -2493,7 +2523,8 @@ _SM_EDGES = [
 
 
 def _sm_svg() -> str:
-    """8 態狀態機 SVG:中心→中心連線裁切到矩形邊界 + 箭頭 + 雙向邊垂直偏移。"""
+    """狀態機 SVG(7 節點=6 態 + 概念終點 closed):中心→中心連線裁切到矩形邊界 +
+    箭頭 + 雙向邊垂直偏移。W10.3:aborted 節點兼「撤銷/交接」、hil_end→aborted=跨票 base。"""
     hw, hh = 62, 22           # 節點半寬/半高
     W, H = 1000, 490
     out = ["<svg id='smsvg' viewBox='0 0 %d %d' width='100%%' "
@@ -2629,15 +2660,31 @@ _ARCH_MODULES = {
                   "poller 週期(約每 240 輪 ≈ 每小時)",
                   "store session + profile 保留策略", "回收 workspace + journal",
                   "poller", "檔案系統 / store"),
+    "interaction": ("interaction", "受控表單 schema + 一次性 token + 提交驗證"
+                    "(純邏輯,零副作用)", "hil / form_server 呼叫時",
+                    "schema_id + 提交欄位", "InteractionRequest / 驗證結果",
+                    "hil·form_server", "(純函式)"),
+    "hil": ("hil", "HIL 整合膠水:發起一次性表單(@mention+連結)+ 套用提交"
+            "(回寫 human 段 + resume / 評分 / 關單 / handoff)",
+            "scoring·commands 發起時 · 表單提交回呼時",
+            "issue_id + schema + 提交資料",
+            "InteractionRequest + journal(hil_*/handoff/base_injected)",
+            "scoring·commands·form_server",
+            "interaction·store·jira_source·workspace"),
+    "form_server": ("form_server", "一次性 token 表單 HTTP 服務(人面向、獨立 port);"
+                    "Jira 健康把關,提交回呼 hil", "人開一次性連結(即時)",
+                    "HTTP GET/POST + token", "表單頁 / 提交 → on_submit",
+                    "人(瀏覽器)", "store·hil"),
 }
 _ARCH_LAYERS = [
     ("輸入層", "Jira / 觸發源", ["jira_source", "triggers"]),
     ("決策層", "輪詢 · 路由 · 額度閘", ["poller", "routing", "gate"]),
     ("執行層", "派工 · 執行 · 工作區", ["dispatcher", "inner_runner",
                                        "workspace", "contract"]),
-    ("人機協作層", "HIL(審批·評分·指令·離手)", ["approval", "scoring",
-                                                 "commands", "external",
-                                                 "sections"]),
+    ("人機協作層", "HIL(審批·評分·指令·離手·表單)", ["approval", "scoring",
+                                                     "commands", "external",
+                                                     "sections", "interaction",
+                                                     "hil", "form_server"]),
     ("狀態·觀測·控制層", "持久 · 觀測 · 控制", ["store", "control_api",
                                                "detail_server", "transcript",
                                                "retention"]),
@@ -2681,6 +2728,15 @@ _ARCH_EDGES = [
     ("control_api", "transcript", "gen_transcript"),
     ("store", "detail_server", "唯讀狀態/journal"),
     ("store", "control_api", "status 計數"),
+    # W11/W10.3:HIL 一次性表單(scoring/commands 發起 → form_server 提交 → hil 套用)
+    ("scoring", "hil", "發 score_and_close"),
+    ("commands", "hil", "發 hold 表單"),
+    ("form_server", "hil", "提交回呼"),
+    ("store", "form_server", "取請求(token)"),
+    ("hil", "interaction", "建請求/驗證"),
+    ("hil", "store", "interaction/journal"),
+    ("hil", "jira_source", "回寫 human 段/建票"),
+    ("hil", "workspace", "人類指示/base 注入"),
 ]
 
 
@@ -2688,7 +2744,9 @@ def _arch_svg() -> str:
     """W10.4:分層模組架構圖(手繪 SVG,隨明暗主題;svg-pan-zoom 於 W10.5 掛上)。
     5 個橫向分層帶,由上而下=資料流方向;左側層標籤軌,右側模組 chip。"""
     W, bandH, top = 1040, 96, 16
-    railW, chipW, chipH, gap = 150, 156, 46, 14
+    railW, chipWmax, chipH, gap = 150, 156, 46, 14
+    cx0 = 16 + railW + 20
+    avail = W - cx0 - 16                       # chip 可用寬(扣掉左軌與右邊距)
     H = top * 2 + len(_ARCH_LAYERS) * bandH
     out = ["<svg id='archsvg' viewBox='0 0 %d %d' width='100%%' "
            "preserveAspectRatio='xMinYMin meet' "
@@ -2709,8 +2767,9 @@ def _arch_svg() -> str:
             f"text-anchor='middle'>{esc(lname)}</text>"
             f"<text class='a-rdesc' x='{16 + railW / 2}' y='{by + 48}' "
             f"text-anchor='middle'>{esc(ldesc)}</text>")
-        # 模組 chip
-        cx0 = 16 + railW + 20
+        # 模組 chip:寬度隨該層模組數自適應(多模組層縮小以免溢出 viewBox)
+        n = len(mods)
+        chipW = min(chipWmax, (avail - gap * (n - 1)) / n) if n else chipWmax
         cy = by + (bandH - 12 - chipH) / 2
         for j, mk in enumerate(mods):
             x = cx0 + j * (chipW + gap)
@@ -2938,6 +2997,13 @@ _ARCH_META = {
     "transcript": ("arcp/transcript.py",
                    "finalize / engine_of_agent"),
     "retention": ("arcp/retention.py", "reclaim"),
+    "interaction": ("arcp/interaction.py",
+                    "FORM_SCHEMAS / build_request / validate_submission / "
+                    "gen_token"),
+    "hil": ("arcp/hil.py",
+            "request_human / apply_submission / _do_handoff"),
+    "form_server": ("arcp/form_server.py",
+                    "FormServer / process_submission"),
 }
 
 
@@ -3019,18 +3085,26 @@ def render_concepts_page() -> str:
         "<div class='card' style='overflow-x:auto'>" + _arch_doc_table()
         + "</div>"
         + render_graph_section()
-        + "<h2>agent↔agent 交接(兩機制對等,人依場景選;見 docs/design/architecture.md)</h2>"
-        "<div class='card'><ul style='line-height:1.8'>"
-        "<li><b>同票換手(swap)→ 回進行中</b>:<b>同一張 Jira、同一個 workspace</b>,"
-        "清掉舊 skills/hooks、copy 新 agent template 進原 workspace、重置 session → "
-        "回「進行中」。<b>保留 folder 內半成品</b>(只換 agent 大腦)—— 適合「前 agent "
-        "工作成果好、只是卡住,換(更強)agent 接手同一份半成品收尾」。</li>"
-        "<li><b>跨票 base 繼承 → 舊票撤銷</b>:人自建新 Jira,宣告 "
-        "<code>base:&lt;ref&gt;</code>;harness 登記 + 注入脈絡(複製 base transcript "
-        "進<b>全新</b> workspace + prompt 前置 + 貼 Jira 連結),舊票收成 <b>ABORTED"
-        "(交接,非 failure)</b> —— 適合「走錯路/亂了/乾淨重來/跨專案」。</li>"
-        "<li class='sys'>一句話:<b>同票=保住半成品換人接手;跨票=乾淨重來帶敘事</b>。"
-        "(行為 W10.3 / W11 實作)</li>"
+        + "<h2>agent↔agent 交接(W10.3,由 HIL 表單驅動;見 docs/design/architecture.md §4)</h2>"
+        "<div class='card'>"
+        "<p class='sys' style='text-align:left'>觸發:人在 HIL(End) "
+        "<code>score_and_close</code> 或 HIL(Middle) <code>decision</code> 表單選"
+        "「改派下一棒」,再選種類 + 下一棒 profile(下拉,候選=載入的全部 profile)"
+        "+ 交接指示;或 agent 自發 <code>@agent next</code>(僅同票)。</p>"
+        "<ul style='line-height:1.8'>"
+        "<li><b>同票 next → 回進行中</b>:<b>同一張 Jira</b>,重置 session"
+        "(<code>session_id</code>=None、<code>attempts</code>=0)、pin 新 profile、"
+        "重新 provision workspace(新 profile 的 template)→ 回「進行中」由新 profile "
+        "接手。脈絡留在 Jira 票(留言/description/人類指示 → 新 TICKET.md);"
+        "**非 native resume**(新 profile 重新開始,不重跑舊 session)。</li>"
+        "<li><b>跨票 base → 舊票撤銷</b>:<b>系統</b>(非人手建)用 "
+        "<code>create_ticket</code> 在同 project 開新票、預建其 session(pin 新 profile "
+        "+ <code>base_ref</code> 指回本票),本票收成 <b>ABORTED(交接,非 failure)</b>。"
+        "新票下輪首次佈建時 dispatcher 注入 base 脈絡(複製 base 的 TICKET.md/最後 "
+        "envelope 進 <code>ws/BASE_&lt;key&gt;/</code> + 人類指示段指路)—— 適合"
+        "「換引擎/走錯路/乾淨重來/跨專案,但要保留前輪脈絡」。</li>"
+        "<li class='sys'>一句話:<b>同票=同一張票換 profile 重跑;跨票=系統另開新票、"
+        "帶前輪敘事乾淨重來</b>。資料不完整 → fail-safe 降級續跑原 agent。</li>"
         "</ul></div>"
         "<h2>狀態存在哪(重要)</h2><div class='card'>"
         "<ul style='line-height:1.8'>"
@@ -3331,6 +3405,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/db/tables":              # W5.6 DB 瀏覽器
             self._send_json(db_tables())
+            return
+        if self.path.startswith("/db/schema/"):        # 欄位定義(含空表)
+            from urllib.parse import unquote
+            self._send_json(db_schema(unquote(self.path.rsplit("/", 1)[1])))
             return
         if self.path.startswith("/db/table/"):
             from urllib.parse import parse_qs, urlparse

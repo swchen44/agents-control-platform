@@ -144,7 +144,7 @@ agent prompt(dispatcher `BASE_PROMPT`)第一句就是「請先閱讀工作目錄
 | `common_hooks` | list[str] | 從 `config/hooks/` 選的資料夾名;預設 `[]`(機制同 skills) |
 | `inject_md` | bool | 是否注入 `inject_claude_md_end.md`;預設 `true`(檔不存在則自然跳過) |
 | `goal` | str? | profile 層總目標;渲染進 TICKET.md「目標」段 |
-| `verify` | list | 確定性驗收步驟(files/cmd);渲染進 TICKET.md「驗收標準」段,亦是 grader 的依據 |
+| `verify` | list | 確定性驗收步驟,每步 `files` / `cmd` / `json` 擇一(或並用);渲染進 TICKET.md「驗收標準」段,亦是 grader 依據。`json`={`file`, `require`:[鍵/點號路徑], `types`:{鍵:str\|int\|number\|bool\|list\|dict}}(C1:JSON 形狀檢查) |
 | `skills`(舊,逐檔) | list | 保留相容;`common_skills`(資料夾)為之後主推 |
 
 ## 與其他文件的關係

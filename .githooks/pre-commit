@@ -1,32 +1,50 @@
 #!/bin/sh
-# ARCP pre-commit — 對 staged 的 harness/*.py 跑 ruff check(擋不過的 import/lint)。
+# ARCP pre-commit — 對 staged 的 .py 跑 ruff;若動到會產 journal 事件的 code,
+# 再補跑 gen_event_dict --check(CI 也會跑,這裡是早一步在本機擋漂移)。
 #
 # 啟用(每台機器/每次 clone 各設一次;core.hooksPath 不進版控):
 #     git config core.hooksPath .githooks
 # 停用單次提交:git commit --no-verify
 #
 # 設計取捨:
-#  - 只檢 harness/(ruff 設定所在;examples/ 目前刻意不納管,見 harness/ruff.toml)。
-#  - 額外 grep 濾掉 vendored 路徑當保險:從 repo 根呼叫 ruff 時,force-exclude 對
-#    「明確傳入的路徑」錨定不可靠(實測仍會檢 claude_code_log),故雙保險。
-#  - ruff 缺席 → 警告放行(不因環境缺工具硬擋提交)。
-#  - 只檢查、不自動改(不偷改 staged 內容);不過就叫使用者自己 --fix。
+#  - 檢新版面 src/arcp/ · scripts/ · tests/(W14 已消除 harness/);濾掉 vendored。
+#  - 只檢查、不自動改(不偷改 staged);不過就叫使用者自己 --fix。
+#  - 環境缺工具(ruff/uv)→ 警告放行,不因缺工具硬擋提交。
 
-files=$(git diff --cached --name-only --diff-filter=ACM \
-  | grep -E '^harness/.*\.py$' \
-  | grep -vE '/claude_code_log/|/tools/vendor/')
+py=$(git diff --cached --name-only --diff-filter=ACM \
+  | grep -E '^(src/arcp|scripts|tests)/.*\.py$' \
+  | grep -vE '/vendor/|/claude_code_log/')
 
-[ -z "$files" ] && exit 0
-
-if ! command -v ruff >/dev/null 2>&1; then
-  echo "⚠ pre-commit: 找不到 ruff,略過 lint(要啟用檢查請 pip install ruff)"
-  exit 0
+# 1. ruff lint(有 staged .py 才跑)
+if [ -n "$py" ]; then
+  if command -v ruff >/dev/null 2>&1; then
+    if ! echo "$py" | xargs ruff check; then
+      echo ""
+      echo "✗ pre-commit: ruff 未過。修復後重新 git add:"
+      echo "    ruff check --fix <檔案>"
+      echo "  (要略過這次檢查:git commit --no-verify)"
+      exit 1
+    fi
+  else
+    echo "⚠ pre-commit: 找不到 ruff,略過 lint(pip install ruff 可啟用)"
+  fi
 fi
 
-if ! echo "$files" | xargs ruff check; then
-  echo ""
-  echo "✗ pre-commit: ruff 未過。修復後重新 git add:"
-  echo "    ruff check --fix <檔案>"
-  echo "  (要略過這次檢查:git commit --no-verify)"
-  exit 1
+# 2. journal 事件字典未漂移(動到 src/arcp 或 scripts 才需要;需 uv 才能 import arcp)
+code=$(echo "$py" | grep -E '^(src/arcp|scripts)/')
+if [ -n "$code" ]; then
+  if command -v uv >/dev/null 2>&1; then
+    if ! uv run python scripts/gen_event_dict.py --check >/dev/null 2>&1; then
+      echo ""
+      echo "✗ pre-commit: journal 事件字典與 code 不一致(observability.md 內嵌區塊)。"
+      echo "  重新產生並把輸出貼回 BEGIN/END gen_event_dict 標記區:"
+      echo "    uv run python scripts/gen_event_dict.py"
+      echo "  (要略過這次檢查:git commit --no-verify)"
+      exit 1
+    fi
+  else
+    echo "⚠ pre-commit: 找不到 uv,略過事件字典檢查(CI 仍會擋)"
+  fi
 fi
+
+exit 0

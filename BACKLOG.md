@@ -58,6 +58,31 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 |---|---|---|
 | **V1** | **真後端派工複驗** | 助手:`scripts/reverify_v1.py`。**免費部分已驗綠(2026-08-09)**:runner 路徑、config/profiles 載入、事件字典、**真 Jira 唯讀 auth+search(撈到 20 票)** —— 大重構未破真 Jira 接線。**剩付費部分**(真派一次 haiku 工,需充電):確認 runner spawn / Q16 select / W15 install / Q11 hold→resume / Q13 自評 / Q10 human-prompt 在真 agent 下如預期 + C3/C5 flaky。清單見 reverify_v1.py 輸出。 |
 
+## ★ 實作現況對照(2026-08-09 校正 —— 下方優先級是 2026-08-04 原始規劃,多數已落地)
+
+> ⚠️ 下面「使用者圈定優先級」與「主題 A–H」是**當時的規劃稿**,不是現況。多數 high
+> 項已隨 W1–W15 實作。內網凍結版讀者請以本對照表 + [CHANGELOG](CHANGELOG.md) 為準。
+
+| 原 ID | 現況 | 落點 |
+|---|---|---|
+| F1 分層資源閘門 | ✅ | `gate.py`(global + per_engine + per_profile,FIFO) |
+| F2 QUEUED 排隊可視化 | ✅ | `ticket_session.queued/queued_at` + dashboard 徽章 |
+| F3 換手進隊列 | ✅ | `@agent next`(指令)+ **W10.3 HIL 表單 handoff**(同票 next / 跨票 base) |
+| G1 結構化契約 | ✅ | `contract.py` + dispatcher 解析 `status/next`(handoff 驅動 F3) |
+| G2 可選 grader 雙保險 | ✅ | profile `verify`(files / cmd / **json**)可選;純自評亦可 |
+| A3 Jira rate limit 退避 | ✅ | `jira_source` write_retry(指數退避) |
+| A4 budget 花費上限 | ✅ | `dispatcher._budget_precheck`(單次 + human override + 月上限) |
+| C1 grader 擴展 | ✅ | 2026-08-09 加 `JsonGrader`(JSON 形狀:file/require/types);build/test/lint 用 `cmd` |
+| C2 L0–L3 trace 自檢 | ✅ | `scripts/trace_lint.py` + `test_trace_lint.py` |
+| C3 KPI + 人力估算 | ✅ | `resolved` 事件帶 `human_minutes_saved`(profile.est_minutes)+ dashboard |
+| C4 總覽 dashboard | ✅ | `/`(cost/狀態/失敗率)+ `/server`(8 燈效能) |
+| B3 Resolve 轉狀態 | ⤳ 改設計 | 不做「grader 過即自動轉 Done」;改由 **HIL(End) 人關單** → `transition("done")`(W11) |
+| B4 常駐服務化 | ◐ 部分 | run_poller 時間盒 + control API;systemd/daemon 化未做(operator 手冊有跑法) |
+| A2 冪等 ledger | ✅ 結論不建 | native resume + at-most-once + 一次性 token 已達目標(見 idempotency.md) |
+| D2 codex sandbox | ⏳ 真環境 | 需 codex quota;`--sandbox` 欄位已在 |
+| B1/D1/E1/E2/A1 | ⏳ 真環境 | 真 Jira Server / docker / codex 對照 / 長跑 resume / Postgres —— 需真環境,我不能替跑 |
+| V1 付費複驗 | ⏳ 真環境 | 免費部分已驗綠;付費(真派工)清單見 `scripts/reverify_v1.py` |
+
 ## ★ 使用者圈定優先級(2026-08-04,全 23 項逐項問過)
 
 **下一階段 high(現在做)** — 15 項,構成一個連貫系統:「資源受控 + 自動值班 +

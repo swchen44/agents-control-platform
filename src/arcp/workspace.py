@@ -59,6 +59,12 @@ def _render_acceptance(profile: Profile | None) -> str:
             lines.append(f"- [{s.name}] 必須產出檔案:`{fname}`{suffix}")
         if s.cmd:
             lines.append(f"- [{s.name}] 指令需通過:`{' '.join(s.cmd)}`")
+        js = getattr(s, "json", None)           # C1:JSON 形狀(getattr 防禦舊/部分物件)
+        if js:
+            req = js.get("require") or []
+            suffix = f"(必含鍵:{', '.join(req)})" if req else ""
+            lines.append(f"- [{s.name}] 必須產出 JSON:"
+                         f"`{js.get('file')}`{suffix}")
     return "\n".join(lines) or "(此 profile 無確定性驗收步驟)"
 
 

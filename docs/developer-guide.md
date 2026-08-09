@@ -90,6 +90,10 @@ uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改�
 `agent`(backend/engine/model/sandbox)、`verify`(確定性檢查)、`loop.max_attempts`、
 `goal` / 預算 / `human_minutes_est`;再在 `outer_loop.routes` 加比對規則指到它。
 
+`verify` 每步 `files` / `cmd` / `json` 擇一(grader 對應 `FileChecklistGrader` /
+`CommandGrader` / `JsonGrader`,`AllOf` 組合)。build/test/lint = `cmd` 型別;`json`
+(C1)= JSON 檔的形狀檢查(存在+可解析+必要鍵/型別),見 `tests/test_grader.py`。
+
 ## CI / CD
 
 - `.github/workflows/ci.yml`:push/PR → Python 3.10–3.13 矩陣 → `uv sync --extra dev`
