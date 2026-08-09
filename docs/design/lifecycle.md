@@ -111,15 +111,48 @@ param:                                # ← 選填
   (人審不該被機器催,也不該卡住機器資源)。
 - **退回上限**:`max_revisions`(default 3),超過 → **escalate**(標記需人工介入、停自動退回)。
 
-## 5. 任務源:Jira poller + 內部 scheduled/oneshot(Q6)
+## 5. 任務源:Jira poller + 內部 jobs(scheduled/oneshot)
 
-profile 不只被 Jira 票驅動,還能被**內部觸發器**啟動(非 Jira),兩者走**同一條
-provision→(審批)→fork 管線**:
+profile 不只被 Jira 票驅動,還能被**內部 job(觸發器)**啟動。現況(W3.4)= 內部觸發器
+用 pseudo-ticket inline 跑、不開 Jira。
 
-- **scheduled**:特別 profile 定時起來做 maintain(cron-like)。
-- **oneshot**:一次性任務,手動觸發。
-- 兩者**要求給 run name**;folder = `<agent名>__<run-name>__<timestamp>`。
-- (呼應 qm 的 cron scheduler / monitor-poller;我們新增一個內部 trigger 源。)
+### 5.1 泛化 job 設計(2026-08-09,Q1–Q6 決策樹定案;**待實作 = P2**)
+
+把「週期執行」與「單次執行」合併成**一個泛化 job**(現況 §5.2 是舊版)。決策:
+
+- **`count`=次數上限、`cron`/`every`=時機**:count=1 單次(無 cron→下輪立刻一次;有 cron→
+  下個 cron 點一次後停)、count=0 無上限(需 cron,每逢 cron)、count=N 跑 N 個 cron 點後停。
+  count≠1 但無 cron → ConfigError。**count 省略預設 1**。持久化 `run_count`(store.trigger_state)。
+- **agent-job 統一開真 Jira**(Q1):每次執行 = harness `create_ticket`(source project)+
+  **預建 pinned session**(直接指定 profile、跳過 routing/HIL 選 profile;approval 由 profile
+  自行決定)。票帶 **`labels`** → 對到既有 create_or_resume route(與 W10.3 跨票換手一致)→
+  poller 正常派工 → 自動獲得 HIL/交付物/評分/dashboard/trace 全套。**移除 agent 的 pseudo-ticket
+  inline 跑**。
+- **任務來源(Q5)兩者**:`task`(靜態字串 → 票 description)**或** `task_script`(跑腳本 →
+  stdout JSON,可多筆 → 每筆開一張 agent 票;泛化到「掃 CQ 新 CR → 每張開票」)。
+- **收尾**:job 開的票走正常終態;無人值守就讓 job 的 **profile 設 `auto_close`**(見
+  [agent-output.md §9](agent-output.md);on_success/all → 跳過 HIL、human_score=agent 自評、
+  自動關)。auto_close 是 profile 欄,與 job 解耦。
+- **script-job 維持不開 Jira**(Q1):跑腳本、結果進 journal/dashboard;簡易排程也可直接用 crontab。
+
+新事件(P2 落地時):`job_fired`(run_name/ticket/profile/task_idx)。config 形狀(草案):
+```yaml
+outer_loop:
+  jobs:                      # (現 triggers 演進)
+    - run_name: daily-scan
+      profile: scanner
+      count: 0               # 0=無上限;1=單次;N=N 次
+      cron: "0 3 * * *"
+      labels: [agent]        # 對到 create_or_resume route
+      task: "巡檢昨日失敗票並回報"          # 靜態;或改用 task_script
+      # task_script: 'uv run gen_tasks.py'  # stdout JSON:[{summary,description,labels?}]
+```
+
+### 5.2 現況(W3.4,將被 5.1 取代)
+
+- **scheduled**:profile 定時 maintain(`cron`/`every`);**oneshot**:CLI `run_trigger.py <名>`。
+- 兩者**要求 run name**;folder = `<agent名>__<run-name>__<timestamp>`;pseudo-ticket、不開 Jira。
+- (呼應 qm 的 cron scheduler / monitor-poller。)
 
 ## 6. assignee = 資源開關(使用者核心補充)
 
