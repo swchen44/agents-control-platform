@@ -89,3 +89,11 @@ uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改�
 - 新需求/決策**先更新 [requirements.md](requirements.md)**(保存 Why),再動工。
 - 核心套件 `src/arcp/` 維持 ruff 嚴格 clean。
 - 貢獻流程見 [CONTRIBUTING](../CONTRIBUTING.md)。
+
+## 已知限制 / 除錯 FAQ
+
+- **強制中斷(evict / `@agent hold`)是立即 killpg,不是優雅停**:進行中的工具步驟會被
+  硬殺。**不丟資料** —— 下輪 native resume 會從 session 接回、重跑被砍的那一步(檔案系統
+  真值 + grader 保證正確)。未做「SIGTERM→10s→SIGKILL」優雅停,因 native resume 已保進度、
+  grace 效益低。**debug 時若看到某工具步驟在 resume 後重跑一次,這是預期現象**,非 bug。
+  設計見 [interaction §13.4](design/interaction.md)。

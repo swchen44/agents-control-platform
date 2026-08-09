@@ -125,3 +125,35 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
   `DESIGN_lifecycle` 的「assignee=資源開關」改寫;`sections.py` human 段改系統寫+hash;
   poller 加 Jira 健康偵測 + 降級暫停/恢復 + 回寫執行。
 - **屬 runtime 行為 → W11,先不動碼**(與 W10.2 HIL 行為、W10.3 a2a 一併待實作)。
+
+## 13. 人機互動增修(2026-08-09 group A 定案,待實作)
+
+逐題決策樹(Q9–Q13)敲定,設計如下;實作為新功能,尚未動碼。
+
+### 13.1 control path / data path 模型(Q9/Q12)
+- **control path = 餵 CLI 的 prompt**(祈使、瞬時、harness 主動控制,含「TICKET.md 已更新,
+  請重讀」);**data path = TICKET.md**(落地、每輪刷新、agent 被指向後重讀);
+  **行為守則 = CLAUDE.md/AGENTS.md**(session 啟動自動載入)。
+- 事實:`claude -p`/`codex exec` **不會**自動監看檔案變更重讀;TICKET.md 不是特殊檔,
+  agent 讀它是因為 prompt 指向。→ 不能只靠 CLAUDE.md/AGENTS.md。
+- 「harness 主動在 resume prompt 提示 TICKET.md 更新、使用者無感」**不違反原則**:harness
+  本就是 prompt 單一控制者。守則:主動 prompt 不得造成重工(native resume 保證)、不得繞過 grader。
+
+### 13.2 agent 數字自評 0–10(Q13)
+- **只在關單時做一次**(非每 attempt):經過 HIL/handoff、不一定一次完成,只有人類要 close +
+  給分那刻才有意義。ScoreGate 產 `score_and_close` 表單前,**resume + prompt 問 agent 自評**,
+  連同 grader 判定、人類欄一起顯示三訊號。成本 = 每票關單一次 agent 呼叫。
+
+### 13.3 HIL 表單自由 prompt 欄(Q10)
+- HIL 表單加一個選填「給 agent 的補充指示」自由欄;submit 後**累加寫進 TICKET.md 的
+  「人類指示」段**(帶時間),resume prompt 指向重讀。
+- 儲存:TICKET.md 每輪由 code 重渲染,故人類指示存**sidecar `ws/.arcp_human.md`**(append-only)
+  ,`render_ticket_md` 讀它成「## 人類指示(累加)」段 → 不被重渲染蓋掉、可稽核、單一寫入者。
+
+### 13.4 人類強制中斷 → 回 HIL(Q11,`@agent hold`)
+- 新 `@agent hold` 指令(comment 通道)→ **立即 evict(沿用現有 killpg)** → HIL(Middle) →
+  開 need_info 表單(含 13.3 prompt 欄)→ submit 寫 TICKET.md 人類指示段 + resume 排隊。
+  **不耗 attempt**。九成沿用現有(evict + HIL 表單 + 指令通道),新增 = 指令 + 串接。
+- ⚠️ **限制(寫進開發者手冊 FAQ)**:立即 killpg = 進行中的工具步驟被硬殺;不丟資料
+  (native resume 下輪重跑那一步),但那一步會重跑。未做「SIGTERM→10s→SIGKILL」優雅停,因
+  native resume 已保進度、grace 效益低。此為已知現象,debug 時據此理解。
