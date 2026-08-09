@@ -55,6 +55,9 @@ class Profile:
     workspace_install: str | None = None
     common_skills: list[str] = field(default_factory=list)
     inject_md: bool = True
+    # Q16:首次派工選 profile(A/B 測試 / 泛化 triage)。None=不選、直接用本 profile。
+    # {candidates:[名], method:"random"|"script", script:"argv(method=script)"}
+    select: dict | None = None
 
     def est_minutes(self) -> float:
         """W7(R3):有效估時——未設回預設 240 分(4h),讓效益一律算得出來。"""
@@ -137,5 +140,37 @@ def load_profiles(path: str) -> dict[str, Profile]:
             workspace_install=(str(ws["install"])
                                if ws.get("install") else None),
             common_skills=list(ws.get("common_skills") or []),
-            inject_md=bool(ws.get("inject_md", True)))
+            inject_md=bool(ws.get("inject_md", True)),
+            select=_parse_select(name, p.get("select")))
+    # Q16:候選存在性要等全部 profile 載完才驗(候選可能定義在後面)。
+    for name, prof in profiles.items():
+        if not prof.select:
+            continue
+        for cand in prof.select["candidates"]:
+            if cand not in profiles:
+                raise ConfigError(
+                    f"profile {name}: select.candidates 的 '{cand}' 未定義")
     return profiles
+
+
+def _parse_select(name: str, sel: dict | None) -> dict | None:
+    """驗 select 區塊:candidates(prefix 須=本 profile 名)、method、script。"""
+    if not sel:
+        return None
+    cands = list(sel.get("candidates") or [])
+    if not cands:
+        raise ConfigError(f"profile {name}: select 需要非空 candidates")
+    for c in cands:
+        if not c.startswith(name):
+            raise ConfigError(
+                f"profile {name}: select 候選 '{c}' 的 prefix 須為 '{name}'"
+                f"(A/B 同族好管理)")
+    method = sel.get("method", "random")
+    if method not in ("random", "script"):
+        raise ConfigError(
+            f"profile {name}: select.method 須為 random|script(拿到 {method!r})")
+    script = sel.get("script")
+    if method == "script" and not script:
+        raise ConfigError(f"profile {name}: select.method=script 需要 script 命令")
+    return {"candidates": cands, "method": method,
+            "script": str(script) if script else None}

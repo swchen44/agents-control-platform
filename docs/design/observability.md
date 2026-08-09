@@ -85,6 +85,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `jira_write` | `action`, `detail` | `scripts/run_poller.py` |
 | `new_issue` | `state`, `summary` | `src/arcp/poller.py` |
 | `pending` | `cause`, `cost_usd`, `reason`, `scope` | `src/arcp/dispatcher.py` |
+| `profile_selected` | `chosen`, `method`, `original` | `src/arcp/dispatcher.py` |
 | `queued` | `engine`, `profile` | `src/arcp/poller.py` |
 | `resolved` | `attempts`, `cost_usd`, `human_minutes_saved` | `src/arcp/dispatcher.py` |
 | `route_matched` | `on_match`, `profile`, `route` | `src/arcp/poller.py` |
@@ -101,7 +102,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 42 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 43 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -118,6 +119,8 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   歷史)。啟動時大量出現屬正常。
 
 **B. 派工 + 證據迴路(dispatcher.py)** —— 內圈跑 agent:
+- `profile_selected`(`original`/`chosen`/`method`):Q16 首次派工選了不同 profile(A/B 測試 /
+  泛化 triage)。看到它 = 這票沒用 route 原 profile,而是 select 選出的 `chosen`。
 - `session_created`(建 workspace)→ `attempt_started` → `attempt_finished`
   (`raw`=completed/error/unknown、`cost`、`truly_resumed`、`error_kind`)。正常一輪。
 - `attempt_crash_recovered`(`resume`):偵測到上次 attempt 崩潰,這次靠 native resume

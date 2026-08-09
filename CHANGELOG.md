@@ -6,6 +6,12 @@
 ## [Unreleased]
 
 ### Added
+- **profile 選擇 / 泛化 triage(Q16)**:main profile 加 `select` 區塊
+  (`candidates` + `method: random|script` + `script`);首次派工從 [main+候選] 選一個實際
+  profile、pin 進 session(resume 不重選);`method=script` 吃 JSON stdin(ticket/clearquest/
+  候選+yaml)→ stdout 回 profile 名,可做條件式 triage;任何失敗 fail-safe 回 main;journal
+  記 `profile_selected`。候選 prefix 須 = main 名(fail-fast 驗證)。這同時泛化 triage(Q7):
+  選到 require_approval 的 profile=要人、否則直跑。`selection.py` + `test_selection.py`(11 檢查)。
 - **人機互動增修(group A)**:HIL 表單加「給 agent 補充指示」自由欄 → 累加寫進 workspace
   sidecar `.arcp_human.md` → `render_ticket_md` 出「人類指示」段(Q10);`@agent hold` 指令
   = 立即 evict(killpg)→ HIL(Middle)+ hold 表單(含 prompt 欄)→ submit 寫指示 + resume 排隊

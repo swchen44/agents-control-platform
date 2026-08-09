@@ -135,6 +135,17 @@ class Dispatcher:
         if (sess is not None and sess.profile != profile.name
                 and sess.profile in self.profiles):
             profile = self.profiles[sess.profile]
+        # Q16:首次派工(尚無 session)且 main profile 有 select → 選一個實際 profile
+        # (A/B 測試 / 泛化 triage);選中的由下方 session 建立時 pin 住,resume 不重選。
+        elif sess is None and getattr(profile, "select", None):
+            from .selection import select_profile
+            chosen, meta = select_profile(ticket, profile, self.profiles)
+            if chosen != profile.name and chosen in self.profiles:
+                events.append(self.store.journal(
+                    "profile_selected", ticket.id, ticket.key,
+                    original=profile.name, chosen=chosen,
+                    method=meta.get("method")))
+                profile = self.profiles[chosen]
         # auto-recover pending:external once infra is back (N1/N3): server
         # healthy again → clear the block and resume this poll (不漏)
         if (sess and sess.pending_reason == "external"

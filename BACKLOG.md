@@ -30,6 +30,14 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 `@agent hold`→evict+HIL 表單→resume(Q11)、ScoreGate `self_score_fn` hook(Q13,真自評
 呼叫留 live/V1)。橫跨 interaction/hil/scoring/commands/workspace/run_poller。
 
+## ★ B 群 profile 選擇 / config(2026-08-09)
+
+| # | 項目 | 狀態 |
+|---|---|---|
+| **Q16** | profile A/B 測試 / 泛化 triage:main profile 加 `select`(candidates+method random\|script);首次派工選一次 pin 進 session;script 吃 JSON stdin(ticket/crid/候選+yaml)→ stdout 回名;fail-safe 回 main | ✅ 已建(`selection.py` + `test_selection.py` 11 檢查;見 [design/selection.md](docs/design/selection.md)) |
+| **Q7** | triage(要不要人、選 profile) | ✅ **由 Q16 泛化涵蓋**:選到 require_approval 的 profile=要人、否則直跑;現行 per-profile require_approval 仍為基礎閘 |
+| **Q15** | config 改名 / 拆 config_{agent}.yaml(命名精準 + 分檔 owner) | ⏳ 待做(會影響 arcp.paths.config_path 的載入 + selection 的 yaml 路徑可 per-profile) |
+
 **仍待辦(需真 Jira/agent,我不能替跑):**
 
 | # | 項目 | 做法 |
