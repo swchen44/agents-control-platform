@@ -248,6 +248,9 @@ try:
     t1 = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/ticket/1", timeout=5).read().decode()
     check("非審批票:無審批卡", "審批門" not in t1)
+    check("詳情頁:來源・連結・用量卡",
+          "來源・連結・用量" in t1 and "本票用量 vs soft / hard" in t1
+          and "一次性連結" in t1)
     # W5.3/W6.3:強制驅逐按鈕只在 active session 顯示 + 正名 + hover 說明
     t3 = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/ticket/3", timeout=5).read().decode()

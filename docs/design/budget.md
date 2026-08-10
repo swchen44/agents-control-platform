@@ -97,8 +97,9 @@ Poller     ─▶ Dispatcher : 下輪 resume 續跑(precheck 用新 soft 過關)
   `attempt_finished(cost, tokens)`。
 - **dashboard**:①**Server 頁**燈號「budget 月用量(最高)」——全站 + 各 profile 月
   cost/tokens 對上限的最高利用率(綠<80%/黃≥80%/紅≥100%/無上限 gray);②**Agent Detail
-  頁**「budget 當月用量 vs 上限」卡(逐列全站 + 各 profile);各 Profile 卡列 per-ticket
-  soft/hard。
+  頁**「budget 當月用量 vs 上限」卡(逐列全站 + 各 profile);③**單票詳情頁**
+  (`/ticket/<key>`)「來源・連結・用量」卡的 **per-ticket 用量 bar**(cost/tokens vs
+  soft/hard)。各 Profile 卡列 per-ticket soft/hard 預設。
 - **排錯**:見 [troubleshooting](../troubleshooting.md);事件語意見
   [observability](observability.md)。
 

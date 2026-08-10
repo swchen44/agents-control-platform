@@ -158,6 +158,24 @@ def read_watch() -> dict[int, dict]:
     return out
 
 
+def read_interactions(iid: int) -> list[dict]:
+    """該票的一次性請求(interactions:HIL 表單 / 指令台 / budget 增額);舊庫容錯。"""
+    db = os.path.join(ROOT, "harness.db")
+    out: list[dict] = []
+    if not os.path.exists(db):
+        return out
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    try:
+        for r in con.execute("SELECT * FROM interactions WHERE issue_id=?"
+                             " ORDER BY created_at", (int(iid),)):
+            out.append(dict(r))
+    except sqlite3.OperationalError:
+        pass
+    con.close()
+    return out
+
+
 def fmt_ts(ts) -> str:
     """epoch → 'MM-DD HH:MM';0/None → '-'。"""
     if not ts:
@@ -2151,6 +2169,110 @@ def _iso_to_ms(iso) -> int:
         return 0
 
 
+_IX_SCHEMA_LABEL = {"command": "指令台", "score_and_close": "評分/裁決",
+                    "decision": "決策", "need_info": "補資訊",
+                    "hold": "hold 中斷", "budget_increase": "budget 增額"}
+_IX_STATUS_LABEL = {"pending": "待填/有效", "submitted": "已提交",
+                    "expired": "已逾期", "invalidated": "已失效"}
+
+
+def _usage_bar(used, cap, is_usd) -> str:
+    def _f(v):
+        return f"${v:.4f}" if is_usd else f"{int(v):,}"
+    if not cap:
+        return f"<span class='rid'>{_f(used)} / —(未設)</span>"
+    pct = 100.0 * used / cap
+    col = ("s-failure" if used >= cap else
+           "s-unknown" if used >= 0.8 * cap else "s-success")
+    return (f"<div style='background:var(--line);border-radius:4px;height:8px;"
+            f"overflow:hidden;max-width:200px'><div style='width:"
+            f"{min(100.0, pct):.0f}%;height:100%;background:var(--{col})'></div>"
+            f"</div><span class='rid'>{_f(used)} / {_f(cap)}({pct:.0f}%)</span>")
+
+
+def _ticket_meta_card(iid, s, evs) -> str:
+    """詳情頁『來源・連結・用量』卡:來源推導 + Jira/CR 連結 + 一次性連結清單(完整
+    token,dashboard 須鎖存取)+ per-ticket token/usd 用量 vs soft/hard。全唯讀。"""
+    key = s.get("key") or f"#{iid}"
+    form_base, cq_base, prof = "", "", None
+    try:                                    # 壞 config 不擋頁
+        from arcp.profiles import load_profiles
+        from arcp.routing import load_config
+        src, _ = load_config(_CONFIG_PATH)
+        f = src.get("form") or {}
+        form_base = (f.get("base_url")
+                     or f"http://{f.get('host', '127.0.0.1')}:"
+                        f"{f.get('port', 8790)}")
+        cq_base = ((src.get("cq_writeback") or {}).get("base_url") or "")
+        prof = load_profiles(_CONFIG_PATH).get(s.get("profile"))
+    except Exception:                       # noqa: BLE001
+        pass
+    jira_base = os.environ.get("JIRA_BASE_URL", "").rstrip("/")
+
+    if s.get("clearquest_id"):
+        origin = f"ClearQuest CR «{esc(s['clearquest_id'])}»"
+    elif s.get("base_ref"):
+        origin = f"跨票交接子票(base 母票 issue_id={esc(s['base_ref'])})"
+    else:
+        jf = next((e for e in evs if e.get("type") == "job_fired"), None)
+        origin = (f"排程 / 單次 job «{esc(jf.get('run_name') or jf.get('job') or '?')}»"
+                  if jf else "人開 / route 撿票")
+
+    links = [f"<a href='{jira_base}/browse/{esc(key)}' rel='noopener' "
+             f"target='_blank'>Jira {esc(key)}</a>" if jira_base
+             else f"Jira {esc(key)}(設 JIRA_BASE_URL 才成連結)"]
+    if s.get("clearquest_id"):
+        cid = esc(s["clearquest_id"])
+        links.append(f"<a href='{esc(cq_base)}/{cid}' rel='noopener' "
+                     f"target='_blank'>CR {cid}</a>" if cq_base
+                     else f"CR {cid}(CQ base_url 待設)")
+
+    ix_rows = ""
+    for r in read_interactions(iid):
+        kind, sid = r.get("kind") or "hil", r.get("schema_id") or ""
+        lab = (_IX_SCHEMA_LABEL.get(sid) or _IX_SCHEMA_LABEL.get(kind)
+               or sid or kind)
+        st_lab = _IX_STATUS_LABEL.get(r.get("status")) or r.get("status") or "?"
+        url = f"{form_base}/form/{r.get('token')}"
+        tok = str(r.get("token") or "")
+        ix_rows += (f"<tr><td>{esc(lab)}</td><td>{esc(st_lab)}</td>"
+                    f"<td>{esc(fmt_ts(r.get('created_at')))}</td>"
+                    f"<td><a href='{esc(url)}' rel='noopener' target='_blank'>開啟"
+                    f"</a> <span class='rid'>…{esc(tok[-8:])}</span></td></tr>")
+    ix_table = (("<table><thead><tr><td><b>類型</b></td><td><b>狀態</b></td>"
+                 "<td><b>建立</b></td><td><b>連結</b></td></tr></thead><tbody>"
+                 + ix_rows + "</tbody></table><div class='sys' style='text-align:"
+                 "left'>⚠️ 這些是 capability 連結(有連結即可操作/下載),dashboard "
+                 "請鎖本機/內網存取(見操作手冊 §8)。大檔下載頁在各表單內 "
+                 "/files/&lt;token&gt;。</div>")
+                if ix_rows else "<div class='sys'>(尚無一次性連結)</div>")
+
+    used_usd, used_tok = float(s.get("cost_usd") or 0), int(s.get("tokens") or 0)
+    soft_usd = s.get("soft_usd")
+    if soft_usd is None and prof is not None:
+        soft_usd = prof.ticket_soft_usd
+    soft_tok = s.get("soft_tokens")
+    if soft_tok is None and prof is not None:
+        soft_tok = prof.ticket_soft_tokens
+    hard_usd = prof.ticket_hard_usd if prof else None
+    hard_tok = prof.ticket_hard_tokens if prof else None
+
+    return ("<div class='card'><h2>來源・連結・用量</h2>"
+            f"<div class='row'><span class='kv'><b>來源</b> {origin}</span></div>"
+            f"<div class='row'><span class='kv'><b>連結</b> "
+            f"{' · '.join(links)}</span></div>"
+            "<h3 style='margin:10px 0 4px'>一次性連結(本票發過的)</h3>" + ix_table
+            + "<h3 style='margin:10px 0 4px'>本票用量 vs soft / hard</h3>"
+            f"<div class='row'><span class='kv'><b>USD soft</b> "
+            f"{_usage_bar(used_usd, soft_usd, True)}</span>"
+            f"<span class='kv'><b>USD hard</b> "
+            f"{_usage_bar(used_usd, hard_usd, True)}</span></div>"
+            f"<div class='row'><span class='kv'><b>token soft</b> "
+            f"{_usage_bar(used_tok, soft_tok, False)}</span>"
+            f"<span class='kv'><b>token hard</b> "
+            f"{_usage_bar(used_tok, hard_tok, False)}</span></div></div>")
+
+
 def render_ticket(iid, journal, sessions) -> str:
     s = sessions.get(iid, {})
     key = s.get("key") or f"#{iid}"
@@ -2254,6 +2376,7 @@ def render_ticket(iid, journal, sessions) -> str:
                if s and not s.get("outcome")
                and not str(s.get("workspace", "")).startswith("(") else "")
             + f"</div></div>"
+            f"{_ticket_meta_card(iid, s, evs)}"
             f"{render_transcript_card(iid, s)}"
             f"{render_approval(s, evs)}"
             f"<div class='tabs'>"

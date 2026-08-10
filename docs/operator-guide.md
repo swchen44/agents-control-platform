@@ -68,6 +68,20 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   錯誤事件 >3、系統資源 >90%、journal >200MB。
 - **bottleneck 心法**:ARCP 本身開銷小;慢幾乎都在 ① agent 執行時長(model)② Jira 延遲/降級
   ③ 並發飽和(排隊)。看燈 + 各 profile 時長/$ 找熱點;單票細節看 ticket 頁 trace。
+- **budget 燈**:Server 頁第 9 燈「budget 月用量(最高)」——全站/各 profile 月用量對上限的最高
+  利用率(見 §4 budget)。
+
+### 3.1 單票詳情頁(`/ticket/<key>`)
+
+主頁票表**保持精簡**(掃視用);點 key 進**詳情頁**看全部。詳情頁「**來源・連結・用量**」卡:
+- **來源**:人開/route、排程/單次 **job**、**跨票交接子票**、**ClearQuest CR** —— 由 journal +
+  session 推導(零額外欄位)。
+- **連結**:**Jira**(需環境變數 `JIRA_BASE_URL` 才成連結,不設則顯示 key)、**CR**
+  (`clearquest_id`;CQ base_url 設了才成連結)、以及**本票發過的一次性連結清單**(指令台 /
+  評分·決策·hold / budget 增額,含類型/狀態/建立時間/**完整可點 token URL** + 大檔 `/files`)。
+- **用量**:per-ticket cost/tokens vs soft/hard 的 bar。
+- ⚠️ **安全**:一次性連結是 **capability URL**(有連結即可操作/下載)。詳情頁會列出完整連結,
+  所以 **dashboard 必須鎖本機/內網存取**(見 §8);別把 dashboard 開給不該操作的人。
 - **票列過濾(dashboard 上方過濾列)**:profile / summary / description 三個關鍵字框,預設
   **一般字串包含比對(不分大小寫)**;勾「🔤 Regex」checkbox → 改**正則(regex,亦不分大小寫)**。
   無效正則該框標紅、暫不過濾;過濾狀態寫進 URL(可分享深連結)。對應 REST:
