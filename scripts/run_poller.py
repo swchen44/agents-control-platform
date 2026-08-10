@@ -224,7 +224,9 @@ def main(argv: list[str] | None = None) -> int:
     form = FormServer(store, host=form_host, port=form_port,
                       jira_health_fn=_jira_up,
                       on_submit=lambda r: apply_submission(
-                          src, store, r, profiles=profiles))  # W10.3 handoff 候選
+                          src, store, r, profiles=profiles),  # W10.3 handoff 候選
+                      command_fn=_command_fn,                 # 指令台(取代 comment)
+                      profiles_fn=lambda: profiles)           # next 下拉候選
     form.start()
     print(f"[poller] form service on {form_base} (一次性表單;/form/<token>)",
           flush=True)

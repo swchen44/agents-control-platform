@@ -16,14 +16,17 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .commands import COMMAND_INFO, DESTRUCTIVE, available_commands
 from .interaction import (
     EXPIRED,
     FORM_SCHEMAS,
+    INVALIDATED,
     PENDING,
     SUBMITTED,
     opt_pairs,
     validate_submission,
 )
+from .lifecycle_state import canonical_state
 from .logutil import get_logger
 from .output import _safe_resolve, load_output, resolve_attachments
 
@@ -274,6 +277,89 @@ def render_message_page(title: str, msg: str) -> str:
                         f"<div class='card'><p>{_esc(msg)}</p></div>")
 
 
+# ── 指令台(command console:綁票常駐、取代 @agent comment)──────────────── #
+_STATE_LABEL = {
+    "todo": "待處理", "running": "進行中", "queued": "排隊中",
+    "hil_middle": "等待人介入(過程中)", "hil_end": "等待評分 / 結案",
+    "aborted": "已取消", "closed": "已結案",
+}
+
+
+def _command_reference() -> str:
+    """全指令說明表(用途/時機/副作用/效果)——教育性,永遠顯示。"""
+    rows = "".join(
+        f"<tr><td><b>{_esc(i['label'])}</b></td><td>{_esc(i['purpose'])}</td>"
+        f"<td>{_esc(i['when'])}</td><td>{_esc(i['side_effect'])}</td>"
+        f"<td>{_esc(i['effect'])}</td></tr>"
+        for i in COMMAND_INFO.values())
+    return ("<div class='card'><h2>指令說明(全部)</h2>"
+            "<div style='overflow-x:auto'><table><thead><tr>"
+            "<td><b>指令</b></td><td><b>用途</b></td><td><b>時機</b></td>"
+            "<td><b>副作用</b></td><td><b>效果</b></td></tr></thead>"
+            f"<tbody>{rows}</tbody></table></div></div>")
+
+
+def render_command_console(req, sess, profiles, jira_up: bool = True,
+                           error=None, values=None) -> str:
+    """指令台頁:依當前推導狀態列可用指令 + email 欄 + 破壞性確認 + 全指令說明表。"""
+    values = values or {}
+    state = canonical_state(sess)
+    state_lbl = _STATE_LABEL.get(state, state)
+    prof = getattr(sess, "profile", "") if sess else ""
+    avail = available_commands(sess)
+    warn = ("" if jira_up else "<div class='warn'>⚠️ Jira 目前異常,指令可能"
+            "無法立即生效,請稍後再試。</div>")
+    err = f"<div class='err'>{_esc(error)}</div>" if error else ""
+    head = (f"<h1>指令台 · {_esc(req.key)}</h1><div class='card'>"
+            f"<div class='ctx'><b>目前狀態</b> {_esc(state_lbl)}"
+            f" · <b>agent profile</b> {_esc(prof or '—')}</div>"
+            "<div class='hint'>選一個指令送出即生效;此連結綁本票、可重複使用,"
+            "票結案後失效。</div></div>")
+    if not avail:
+        body = (head + warn + err + "<div class='card'><p>目前狀態("
+                + _esc(state_lbl) + ")沒有可下的指令。</p></div>"
+                + _command_reference())
+        return _page(f"指令台 {req.key}", body)
+    email_v = _esc(values.get("by", ""))
+    email = ("<label>你是誰(email)*</label>"
+             f"<input type='email' name='by' value='{email_v}' "
+             "autocomplete='email' required placeholder='you@company.com'>"
+             "<div class='hint'>供稽核;瀏覽器會記住,不用每次重打。</div>")
+    picked = values.get("cmd", "")
+    opts = "".join(
+        "<label style='font-weight:400;margin:6px 0'>"
+        f"<input type='radio' name='cmd' value='{c}'"
+        f"{' checked' if picked == c else ''}> "
+        f"<b>{_esc(COMMAND_INFO[c]['label'])}</b> — "
+        f"{_esc(COMMAND_INFO[c]['purpose'])}</label>" for c in avail)
+    prof_sel = ""
+    if "next" in avail and profiles:
+        po = "".join(f"<option value='{_esc(n)}'"
+                     f"{' selected' if values.get('profile') == n else ''}>"
+                     f"{_esc(n)}</option>" for n in profiles)
+        prof_sel = ("<label>換手(next)目標 profile</label>"
+                    f"<select name='profile'><option value=''>—</option>"
+                    f"{po}</select>")
+    confirm = ""
+    if any(c in DESTRUCTIVE for c in avail):
+        confirm = ("<label style='font-weight:400;margin-top:10px'>"
+                   "<input type='checkbox' name='confirm' value='yes'> "
+                   "我確認要執行破壞性指令(cancel / stop 用)</label>")
+    form = (f"<form method='POST' class='card'><h2>下指令</h2>{email}"
+            f"<div style='margin-top:10px'>{opts}</div>{prof_sel}{confirm}"
+            "<button type='submit'>送出指令</button></form>")
+    return _page(f"指令台 {req.key}", head + warn + err + form
+                 + _command_reference())
+
+
+def render_command_result(req, cmd: str, ok: bool, msg: str) -> str:
+    cls, icon, title = ("ok", "✓", "已送出") if ok else ("err", "✕", "未執行")
+    body = (f"<h1 class='{cls}'>{icon} {title}</h1><div class='card'>"
+            f"<p>{_esc(msg)}</p>"
+            f"<p><a href='/form/{_esc(req.token)}'>← 回到指令台</a></p></div>")
+    return _page("指令結果", body)
+
+
 def process_submission(store, req, data, jira_up: bool = True,
                        on_submit=None, now: float | None = None,
                        by: str = "") -> tuple[bool, list[str]]:
@@ -305,10 +391,15 @@ class FormServer:
     """一次性表單 HTTP 服務。jira_health_fn()→bool;on_submit(req) 為回寫/觸發掛勾。"""
 
     def __init__(self, store, host: str = "127.0.0.1", port: int = 8790,
-                 jira_health_fn=None, on_submit=None):
+                 jira_health_fn=None, on_submit=None,
+                 command_fn=None, profiles_fn=None):
         self.store = store
         self.jira_health_fn = jira_health_fn or (lambda: True)
         self.on_submit = on_submit
+        # 指令台:command_fn(issue_id,cmd,args,by)->(ok,msg,events)(在 poller 行程,
+        # 故 hold 能 killpg);profiles_fn 供 next 的 profile 下拉候選。
+        self.command_fn = command_fn
+        self.profiles_fn = profiles_fn
         api = self
 
         class _H(BaseHTTPRequestHandler):
@@ -395,6 +486,8 @@ class FormServer:
                 raw = self.rfile.read(n).decode("utf-8") if n else ""
                 data = {k: v[0] for k, v in
                         urllib.parse.parse_qs(raw, keep_blank_values=True).items()}
+                if getattr(req, "kind", "hil") == "command":
+                    return self._html(*api._command_submit(req, data))
                 jira_up = bool(api.jira_health_fn())
                 ok, errors = process_submission(
                     api.store, req, data, jira_up=jira_up,
@@ -430,10 +523,59 @@ class FormServer:
         return _page("交付物下載", f"<h1>交付物下載</h1><div class='card'><ul>{rows}"
                                     f"</ul></div>")
 
+    def profiles_list(self) -> list:
+        """next 的 profile 下拉候選(名字清單);未接 profiles_fn → 空。"""
+        try:
+            return sorted((self.profiles_fn() or {}).keys()) \
+                if self.profiles_fn else []
+        except Exception:      # noqa: BLE001 — 取不到候選不擋 console
+            return []
+
+    def _command_view(self, req) -> tuple[int, str]:
+        """指令台 GET:綁票常駐、依當前狀態列可用指令;close→失效唯讀。"""
+        if req.status == INVALIDATED:
+            return 410, render_message_page(
+                "已結案", "本票已結案,指令台已停用。")
+        sess = self.store.get_session(req.issue_id)
+        return 200, render_command_console(
+            req, sess, self.profiles_list(),
+            jira_up=bool(self.jira_health_fn()))
+
+    def _command_submit(self, req, data) -> tuple[int, str]:
+        """指令台 POST:驗 email + 可用性 + 破壞性確認 → command_fn。不翻 SUBMITTED
+        (綁票可重複用)。"""
+        if req.status == INVALIDATED:
+            return 410, render_message_page(
+                "已結案", "本票已結案,指令台已停用。")
+        sess = self.store.get_session(req.issue_id)
+        avail = available_commands(sess)
+        profs = self.profiles_list()
+
+        def _re(msg):
+            return 200, render_command_console(
+                req, sess, profs, jira_up=bool(self.jira_health_fn()),
+                error=msg, values=data)
+
+        by = (data.get("by") or "").strip()
+        cmd = (data.get("cmd") or "").strip()
+        if not by:
+            return _re("請填 email(你是誰),供稽核。")
+        if not cmd or cmd not in avail:
+            return _re("請選一個目前可用的指令(狀態可能已變更,已更新可用清單)。")
+        if cmd in DESTRUCTIVE and data.get("confirm") != "yes":
+            return _re(f"「{cmd}」是破壞性指令,請勾選下方確認框再送出。")
+        if self.command_fn is None:
+            return _re("指令核心未接線(command_fn)。")
+        ok, msg, _ = self.command_fn(
+            req.issue_id, cmd, {"profile": data.get("profile", "")}, by)
+        return 200, render_command_result(req, cmd, ok, msg)
+
     def _view(self, req) -> tuple[int, str]:
         """依請求狀態決定 GET 顯示(open→表單 / submitted→唯讀 / 逾期/失效→訊息)。"""
         if req is None:
             return 404, render_message_page("找不到", "無效或不存在的連結。")
+        if getattr(req, "kind", "hil") == "command":
+            return self._command_view(req)
         if req.status == SUBMITTED:
             return 200, render_submitted_page(req)
         if req.status == EXPIRED or req.is_expired():
