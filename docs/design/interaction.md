@@ -194,6 +194,7 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
   `form_server._deliverables_html` 渲染 summary_md(安全 md→html)+ code + 附件下載 +
   references + cost/attempts + Jira/transcript/CQ 連結。檔案由 `/files/<token>` 服務
   (只服務 OUTPUT.json 宣告且在 workspace 內的檔;路徑穿越防護)。
+- **降級**:無 OUTPUT.json → comment 只有 structured summary、表單頁仍可評分。不擋流程。
 
 ## 16. 指令台(command console;取代 @agent comment 指令通道)
 
@@ -226,4 +227,33 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
 - **已移除**:`CommandHandler`(comment 解析)、`commands.allowed_commenters` 白名單、事件
   `command_denied`/`command_unknown`/`command_rejected`。`ExternalChangePolicy`(assignee/status
   政策)保留。
-- **降級**:無 OUTPUT.json → comment 只有 structured summary、表單頁仍可評分。不擋流程。
+
+### 16.1 sequence chart(佈建 → 人下指令 hold → 執行 → 失效)
+
+參與者:**人** / **Poller** / **Dispatcher** / **claude code** / **指令台**(form_server)/
+**control_api** / **store**。`[event]` = journal 事件。整票生命週期見
+[walkthrough §9](../walkthrough-cr-to-agent.md)。
+
+```
+── 佈建(首次成 create_or_resume 候選)──────────────────────────────────
+Poller     ─▶ store      : 建常駐 command token(kind=command)
+Poller     ─▶ Jira       : 連結併入 description control 段 + 貼指路 comment  [command_link_posted]
+Dispatcher ─▶ claude     : 首次派工 provision + 跑 attempt(state=running)
+
+── 人下指令(綁票、可重複用)────────────────────────────────────────────
+人         ─▶ 指令台     : 開 /form/<token> → 依 state 列可用指令 + 全指令說明表
+人         ─▶ 指令台     : 填 email、選 hold(破壞性則需勾確認)、送出
+指令台     ─▶ control_api: POST /ticket/<id>/command {cmd:hold, by:email}
+control_api─▶ apply_cmd  : (poller 行程)available_commands 再驗 → 執行
+apply_cmd  ─▶ claude     : hold → 寫 EVICT → killpg(不耗 attempt);state→hil_middle [command_accepted]
+apply_cmd  ─▶ Jira       : 開 hold 表單(@mention + 一次性連結)              [hil_requested]
+人         ─▶ hold 表單  : 填新指示送出 → 寫 workspace 人類指示段 → 解 pending [hil_submitted][hil_resumed]
+                          (command token 不翻 SUBMITTED,仍可再用)
+
+── 收尾 ────────────────────────────────────────────────────────────────
+Poller     ─▶ Dispatcher : 下輪 resume 續跑 → grader 過 → 貼交付物 → 關單     [closed]
+close      ─▶ store      : invalidate_ticket_commands → 指令台顯示「已結案」
+```
+> 分支:**cancel**(破壞性、需確認)→ state→aborted;**next `<profile>`** → 同票換手
+> `[handoff kind=command]`;**run/retry** 只解 pending、下輪重派(不中斷)。人與自動化
+> (REST)都經同一 `apply_command`;在 poller 行程故 hold 能 killpg。
