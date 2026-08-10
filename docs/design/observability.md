@@ -143,6 +143,9 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   [agent-output.md](agent-output.md)。
 - ⚠️ `pending`:進入非終態等待,`cause`/`scope`/`reason` 說明為何(預算超限、額度閘
   QUEUED、需人、外部變更…)。**這是「卡住/沒進展」的核心線索** —— 讀 `reason`。
+  `reason=budget` 時 `scope` = `ticket-soft`(→發 budget_increase 表單自助增額)/
+  `ticket-hard`/`monthly`/`global`(→只管理者改 config+reload);帶 `cost_usd`+`tokens`。
+  見 [budget.md](budget.md)。
 - ⚠️ `workspace_unhealthy`(`reason`):workspace 檢查不過。連看 `tickets/<id>/`。
 - ⚠️ `evicted`(`count`/`session`):被強制驅逐(killpg 釋放資源)。人為(按鈕/`POST
   /evict`)屬正常;非預期出現要查誰觸發。

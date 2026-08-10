@@ -263,16 +263,17 @@ Agent Detail=設定檔內容。
   DB `ticket_session`、**不寫回 Jira**;harness **不主動 transition Jira 狀態**(只留言)。
 - **Why**:搞定系統先搞定資料流生命週期;新人/使用者要有一頁看懂設計。
 
-### 12.6 預算:單次 + 月上限 + spawn 前預檢(R7)
-- 既有:`Profile.max_budget_usd`(單次/累計,達標→pending:budget,**attempt 後**檢查)。
-- 新增:`Profile.max_budget_monthly_usd`(**日曆月**、跨票、per-profile)。
-- **spawn 前預檢**:每次要 spawn claude/codex 前,檢查 (a) 此票累計 vs 單次上限
-  (或 `budget_override`)、(b) 此 profile 當月累計 vs 月上限;任一達標→不 spawn、
-  pending:budget、交人。
-- **單次放寬**:human 段填 `budget_override`(USD),per-ticket、下次 dispatch 吃、
-  不改 Profile、不影響月上限。**月上限只能改 Profile 設定**(hot reload)才續跑。
-- 月彙總資料源:`attempt_finished` journal 補 `cost`+`profile`(現在只有時間戳、無 cost)。
-- **Why**:怕燒錢失控;「跑前檢查」才不會多燒一個 attempt(現況是跑完才擋)。
+### 12.6 Budget:token/usd 6 層上限 + spawn 前預檢(R7,2026-08-10 重設計)
+- **6 限** = {per-ticket, 月/agent, 全站} × {token, usd}。per-ticket **soft + hard**;
+  月/全站單一 hard。設計見 [budget.md](design/budget.md)。
+- **spawn 前預檢**(每輪 attempt/resume 前):per-ticket(hard→soft)→ 月/agent → 全站,
+  誰先破誰卡 → pending:budget(`scope`)。**兩 metric 都量到就都檢查**;不可量的(codex 無
+  cost)用量讀 0、不誤卡。
+- **soft 破 = 使用者自助**:發 `budget_increase` 表單調高本票 soft(≤hard);**hard/月/全站 =
+  只管理者**改 config + hot reload。soft 存 session、hard 即時讀 profile。
+- **token 統計**:串流 `usage`(input+output+cache)→ envelope/`session.tokens`/
+  `attempt_finished.tokens`;月/全站掃 journal 加總。**CLI 無上限輸入參數 → harness 外部卡**。
+- **Why**:怕 token/成本失控(code review agent 教訓);跑前檢查才不多燒一個 attempt。
 
 ### 12.7 給 LLM 監控用的 REST API(R8)
 人用 Claude Code/codex 當監控 LLM,需要**完整唯讀查詢 API**:給 ticket 就能拿狀態 +

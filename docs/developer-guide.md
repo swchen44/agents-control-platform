@@ -56,6 +56,16 @@ caffeinate。詳 [需求與理由](requirements.md)。
 prefer_status=cancel_status)`(Jira 取消,workflow 沒有則退回 done)。無效名/腳本錯 → fallback
 main。設計見 [selection.md](design/selection.md)。
 
+### budget(token / usd 上限)機制
+
+`dispatcher._budget_precheck` 在 **`while attempts` 迴圈內、每輪 attempt/resume 前**跑,
+檢查 per-ticket(hard→soft)→ 月/agent → 全站,誰先破誰卡 → `pending:budget`
+(`scope`)。**CLI 沒有 token/usd 上限的輸入參數**能中途硬停 → 靠 harness 外部 precheck。
+**token 從串流 `usage` 抽**(`rawcli/agent._sum_tokens`→ envelope `tokens`→ `session.tokens`
++ `attempt_finished.tokens`);codex 可能只有 token 無 cost → **不可量的 metric 用量讀 0、不
+誤卡**。soft 存 session(可經 `budget_increase` 表單調高≤hard)、hard 即時讀 profile。月/全站
+用量 = `store._monthly_sum`(掃 journal)。完整見 [budget.md](design/budget.md)。
+
 ### agent↔agent 交接(W10.3)在哪
 
 - **HIL 表單驅動**:`hil._do_handoff`(被 `apply_submission` 呼叫)。表單欄位(`handoff_kind`

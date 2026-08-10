@@ -49,7 +49,7 @@ cp config/config.example.yaml config/config.yaml
   `ignore` / `notify_only`(灰度只記錄)/ `create_or_resume`(真的派工)。
 - `inner_loop.profiles.<name>` — agent 設定:`agent.backend`(rawcli 免 venv)、
   `engine`(claude/codex)、`model`、`verify`(確定性檢查)、`loop.max_attempts`、
-  `goal`、`max_budget_usd` / `max_budget_monthly_usd`、`human_minutes_est`。
+  `goal`、`budget`(token/usd soft/hard + 月上限,見 §8.5)、`human_minutes_est`。
 - `control` / `form` — 控制面與互動表單服務的 host/port。
 
 ## 5. 跑起來
@@ -133,6 +133,20 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # runtime 資料預設
 
 > 自動化 / 程式要下指令走 **REST API**:`POST /ticket/<id>/command`(見管理者手冊),
 > 與指令台同一套核心。
+
+## 8.5 碰到 token / 花費上限(自助增額)
+
+每張票有 **soft / hard** 兩層 token 與 USD 上限(default 由管理者在 profile 設)。agent 每
+輪開跑前會檢查累計用量:
+
+- **達 soft 上限** → 系統暫停(`pending:budget`)並發你一張**增額表單**(@mention + 一次性
+  連結):上面顯示**已用多少 token/USD、soft/hard 是多少、目前做到哪的 summary**。你可以
+  **自助把本票上限調高**(填新值,**不得超過 hard**)→ 送出後 agent 下輪繼續跑。
+- **達 hard 上限 / 月或全站上限** → 你**不能自助**;系統會留言請你**通知管理者**改設定
+  (profile / 全站 yaml)後 hot reload,調好本票就自動續跑。
+
+> token 與 USD **兩個都會檢查、哪個先破就卡**;某引擎(如 codex)可能只有 token 統計,那就
+> 由 token 卡。詳見 [設計/Budget](design/budget.md)。
 
 ## 9. 常見操作
 

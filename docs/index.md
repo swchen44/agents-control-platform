@@ -53,6 +53,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 [模組架構](design/architecture.md) ·
 [Workspace 佈建](design/workspace.md) ·
 [Profile 選擇 / triage](design/selection.md) ·
+[Budget / Max-Token 管理](design/budget.md) ·
 [互動服務(HIL 人機介面)](design/interaction.md) ·
 [可觀測性](design/observability.md) ·
 [DB Schema](design/database.md) ·

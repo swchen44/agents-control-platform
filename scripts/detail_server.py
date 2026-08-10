@@ -2566,8 +2566,10 @@ def _budget_usage_card(journal, budget_cfg, profiles) -> str:
             "<td><b>token 用量/上限</b></td></tr></thead><tbody>"
             + "".join(rows) + "</tbody></table>"
             "<div class='sys' style='text-align:left'>綠 &lt;80% · 黃 ≥80% · 紅 "
-            "≥100%(達上限→pending:budget,只管理者改 config + hot reload)。"
-            "per-ticket soft/hard 見各 Profile 卡與該票詳情。</div></div>")
+            "≥100%。<b>token 管理 / max 管理</b>:每票有 soft/hard 兩層(token+usd);"
+            "達 <b>per-ticket soft</b> → 使用者自助增額表單(≤hard);達 <b>hard / 月 / 全站</b>"
+            " → 只管理者改 config + hot reload,達上限即 pending:budget。上表是月/全站 hard;"
+            "per-ticket soft/hard 見各 Profile 卡。</div></div>")
 
 
 # ── W7.6:概念/生命週期/狀態機頁(純 SVG,零依賴)────────────────────────── #

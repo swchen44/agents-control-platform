@@ -35,8 +35,10 @@ ARCP)② **Jira API 延遲/降級** ③ **並發飽和**(排隊)。看 dashboard
 (8 個紅黃綠燈 + 各 profile 時長/花費表),紅/黃燈就是熱點;單票細節看 ticket 頁 trace。
 
 **Q:會不會燒錢?**
-A:有預算閘:profile `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月),達上限交人;
-人可在表單放寬。model 也可選(haiku 省、opus 強)。
+A:有 budget 閘(token + usd,6 層):per-ticket **soft/hard** + 月/agent + 全站上限。達
+soft → 使用者自助增額表單(≤hard);達 hard/月/全站 → 管理者改 config + hot reload。每輪
+attempt 前檢查、達上限即 pending:budget。model 也可選(haiku 省、opus 強)。見
+[設計/Budget](design/budget.md)。
 
 **Q:同一種任務想比較兩個 profile(A/B 測試),或依票內容自動選 profile?**
 A:可以(Q16)。在 main profile 加 `select` 區塊:`candidates`(候選 profile,名字**須以 main

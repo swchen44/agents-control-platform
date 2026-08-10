@@ -106,7 +106,17 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
 - **(預留)CQ 回寫**:若票來源是 ClearQuest(`clearquest_id` 有值),未來會在 close 時把 Jira
   連結 + 結果回寫 CQ(`cq_writeback` 設定,含 base_url + 欄位對映)。**目前保留擴充點、尚未接
   實際 HTTP**(等 CQ 端 URL/欄位確定)。設計見 [design/lifecycle.md](design/lifecycle.md)。
-- **控管花費**:profile 的 `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月);超支交人。
+- **控管 token / 花費(budget)**:6 個上限 = {per-ticket, 月/agent, 全站} × {token, usd}
+  (完整見 [設計/Budget](design/budget.md)):
+  - **profile `budget:`**:`ticket_soft_usd`/`ticket_hard_usd`/`ticket_soft_tokens`/
+    `ticket_hard_tokens`(單票 soft/hard)+ `monthly_max_usd`/`monthly_max_tokens`(月/此
+    agent hard)。soft 破 → 使用者可**自助增額**(≤hard);hard/月破 → **只你(管理者)能改**。
+  - **全站 `outer_loop.budget:`**:`monthly_max_usd`/`monthly_max_tokens`(整個實例每月總量)。
+  - **管理者調上限流程**:改 `config.yaml` 對應欄位 → `POST /reload`。hard **即時讀 profile**,
+    reload 後該 profile 所有卡在上限的票**自動續跑**;事後可調回。全部欄位 None=不限;
+    load 時驗 **soft ≤ hard**。
+  - **看用量**:dashboard **Agent Detail 頁「budget 當月用量 vs 上限」卡**(全站 + 各 profile
+    月 cost/tokens vs 上限,綠<80%/黃≥80%/紅≥100%)。達上限 = `pending:budget`。
 - **控管並發**:`outer_loop.concurrency`(global + per-engine + per-profile);超額 QUEUED。
 - **排程 / 單次 job(週期或一次執行 agent)**:`outer_loop.triggers[]` 每個 job:
   `run_name` + `profile`(agent-job)或 `script`(script-job)+ **`count`**(次數上限:

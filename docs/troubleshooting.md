@@ -138,10 +138,16 @@
 - **自動化下指令**:`POST /ticket/<id>/command {cmd,args,by}`,回 `{ok,message}`;`ok=false`
   的 `message` 就是原因。
 
-## 8. 花費與預算
+## 8. 花費與預算(token / usd)
 
-- **`pending(reason=budget…)`**:達 profile 的 `max_budget_usd`(單次)或
-  `max_budget_monthly_usd`(月)→ 交人。人可在表單放寬,或調 profile。
+- **`pending(reason=budget, scope=…)`**:達某層上限(`scope` = `ticket-soft` / `ticket-hard`
+  / `monthly` / `global`;事件帶 `cost_usd` + `tokens`)。
+  - `ticket-soft` → 系統發**增額表單**(schema `budget_increase`),使用者自助調高本票上限
+    (≤hard)→ `hil_resumed(reason=budget_increase)` → 下輪 resume。
+  - `ticket-hard` / `monthly` / `global` → **只管理者**能改 config(profile `budget.*` 或
+    `outer_loop.budget.*`)+ `POST /reload`;hard 即時讀 → 自動續跑。
+  完整見 [設計/Budget](design/budget.md)。**只量到 token 或只量到 usd**(如 codex 無 cost)→
+  由量得到的那個卡(不可量的用量讀作 0、不誤卡)。
 - **花費比預期高很多**:多半是 **model 沒設對**——同任務 opus vs haiku 差約 8×(見
   [LESSONS #14](lessons.md))。**測試 profile 一律用便宜 model**,別把貴 model 留在測試
   profile(下次誰跑就吃 8× 陷阱)。model 是 profile 一行(`agent.model`)。

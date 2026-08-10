@@ -26,7 +26,7 @@
    ```yaml
    default:
      goal: '完成 ticket 描述交付的任務並通過驗證'
-     max_budget_usd: 0.5
+     budget: {ticket_soft_usd: 0.3, ticket_hard_usd: 0.5}
      workspace: {template: empty, folder: 'tickets/{agent}-{issue_id}'}
      agent: {backend: rawcli, engine: claude, model: haiku, os_sandbox: true,
              sandbox: workspace-write, timeout_sec: 300}
