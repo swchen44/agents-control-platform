@@ -347,6 +347,9 @@ try:
     check("/server/data:sys 版本/資源/登入狀態齊",
           all(k in (sd.get("sys") or {}) for k in
               ("versions", "auth", "resources", "anomalies")))
+    check("/server/data:perf 含 budget 燈",
+          any(i.get("key") == "budget"
+              for i in (sd.get("perf") or {}).get("indicators", [])))
     _au = sd["sys"]["auth"]
     check("/server/data:auth 狀態布林 + 方式字串(不外洩金鑰/email)",
           all(isinstance(_au.get(k), bool) for k in

@@ -77,6 +77,24 @@ check("per-profile:fc 累計 $5", abs(profs["fc"]["cost"] - 5.0) < 1e-6)
 check("per-profile:fc_v2 1 attempt、失敗率 0%",
       profs["fc_v2"]["attempts"] == 1 and profs["fc_v2"]["fail_rate"] == 0)
 
+# budget 燈:fc 月花費 $5 超 profile 月上限 $1 → 紅(最高利用率)
+bud = {"global": {"monthly_max_usd": 100.0},
+       "profiles": {"fc": {"monthly_max_usd": 1.0, "monthly_max_tokens": None},
+                    "fc_v2": {"monthly_max_usd": None,
+                              "monthly_max_tokens": None}}}
+rb = perf_metrics(journal, sessions, watch, sysinfo, journal_bytes=0,
+                  now=NOW, budget=bud)
+check("budget 燈:fc 超月上限 → 紅", light(rb, "budget") == "red")
+# 全站接近上限:global $6 / $8 = 75% → 綠(fc 無上限時)
+bud2 = {"global": {"monthly_max_usd": 8.0}, "profiles": {}}
+rb2 = perf_metrics(journal, sessions, watch, sysinfo, journal_bytes=0,
+                   now=NOW, budget=bud2)
+check("budget 燈:全站 75% → 綠", light(rb2, "budget") == "green")
+# 無任何月上限 → gray
+rg = perf_metrics(journal, sessions, watch, sysinfo, journal_bytes=0,
+                  now=NOW, budget={"global": {}, "profiles": {}})
+check("budget 無月上限 → gray", light(rg, "budget") == "gray")
+
 # 全空 → 不炸、燈預設綠/gray
 empty = perf_metrics([], {}, {}, None, 0, now=NOW)
 check("空資料不炸;系統資源無 sysinfo → gray",

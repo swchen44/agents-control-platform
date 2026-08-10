@@ -750,7 +750,7 @@ def _light(value, yellow, red, reverse=False) -> str:
 
 def perf_metrics(journal: list[dict], sessions: dict, watch: dict,
                  sysinfo: dict | None, journal_bytes: int,
-                 now: float | None = None) -> dict:
+                 now: float | None = None, budget: dict | None = None) -> dict:
     """Q5 效能指標(紅黃綠燈)+ per-profile 細節。純函式(可離線單測)。
     全用內部資料:journal / ticket_session / ticket_watch / sysinfo / journal 大小。"""
     now = time.time() if now is None else now
@@ -816,6 +816,43 @@ def perf_metrics(journal: list[dict], sessions: dict, watch: dict,
         {"key": "journal", "label": "journal 大小",
          "value": f"{jmb:.0f}MB", "light": _light(jmb, 50, 200)},
     ]
+
+    # budget:當月用量對月上限的最高利用率(綠<80% 黃≥80% 紅≥100%);全站 + 各 profile
+    import datetime
+    _ref = datetime.datetime.fromtimestamp(now)
+
+    def _msum(field, profile=None):
+        t = 0.0
+        for e in fin:
+            if not e.get(field):
+                continue
+            if profile is not None and e.get("profile") != profile:
+                continue
+            edt = datetime.datetime.fromtimestamp(e.get("ts") or 0)
+            if edt.year == _ref.year and edt.month == _ref.month:
+                t += float(e[field])
+        return t
+
+    util, worst, any_cap = 0.0, "—", False
+    if budget:
+        g = budget.get("global") or {}
+        checks = [("全站$", _msum("cost"), g.get("monthly_max_usd")),
+                  ("全站tok", _msum("tokens"), g.get("monthly_max_tokens"))]
+        for nm, caps in (budget.get("profiles") or {}).items():
+            checks.append((f"{nm}$", _msum("cost", nm),
+                           (caps or {}).get("monthly_max_usd")))
+            checks.append((f"{nm}tok", _msum("tokens", nm),
+                           (caps or {}).get("monthly_max_tokens")))
+        for label, used, cap in checks:
+            if cap:
+                any_cap = True
+                pct = 100.0 * used / cap
+                if pct > util:
+                    util, worst = pct, label
+    ind.append({
+        "key": "budget", "label": "budget 月用量(最高)",
+        "value": (f"{util:.0f}% {worst}" if any_cap else "—(無月上限)"),
+        "light": _light(util, 80, 100) if any_cap else "gray"})
 
     # per-profile 細節:attempts / 失敗率 / 平均時長 / 累計$ / 最後活動
     starts = {}          # (issue,attempt) → start ts
@@ -919,8 +956,20 @@ def build_server_data() -> dict:
     # Q5:效能監控(紅黃綠燈 + per-profile 細節),整合進 Server 頁
     _jp = os.path.join(ROOT, "events.jsonl")
     _jb = os.path.getsize(_jp) if os.path.exists(_jp) else 0
+    _budget = None
+    try:                                    # budget 燈:載 config 的月/全站上限
+        from arcp.profiles import load_profiles
+        from arcp.routing import load_config
+        _src, _ = load_config(_CONFIG_PATH)
+        _profs = load_profiles(_CONFIG_PATH)
+        _budget = {"global": _src.get("budget") or {},
+                   "profiles": {n: {"monthly_max_usd": p.monthly_max_usd,
+                                    "monthly_max_tokens": p.monthly_max_tokens}
+                                for n, p in _profs.items()}}
+    except Exception:                       # noqa: BLE001 — 壞 config 不擋頁
+        _budget = None
     data["perf"] = perf_metrics(read_journal(), read_sessions(), read_watch(),
-                                data["sys"], _jb)
+                                data["sys"], _jb, budget=_budget)
     data["conns"] = list(_CONNS)[-30:][::-1]        # W6.6 近期連線(新→舊)
     # W6.2:進程 + per-workspace(只掃 active session,省成本)
     procs = []
@@ -987,7 +1036,8 @@ _SERVER_JS = ("<script>"
     "<div class='l'>${esc(i.label)}</div></div>`).join('')+'</div>';"
     "h+=\"<p style='color:var(--muted);font-size:12px'>瓶頸幾乎都在 ① agent 執行時長"
     "(model,非 ARCP)② Jira API 延遲/降級 ③ 並發飽和(排隊)。看上面的燈 + 下方各 "
-    "profile 時長/$ 找熱點。</p>\";"
+    "profile 時長/$ 找熱點。<b>budget 月用量</b>燈黃≥80%/紅≥100%(有 profile 或全站達"
+    "月上限→票 pending:budget;調設定 + hot reload)。詳見 Agent Detail 頁用量卡。</p>\";"
     "if(pf.profiles.length){h+='<h2>各 profile 效能</h2>';"
     "h+=\"<style>.ptbl td,.ptbl th{border-bottom:1px solid var(--line);"
     "padding:4px 8px;text-align:left;font-size:13px}</style>\";"
