@@ -84,7 +84,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py` |
 | `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py` |
 | `jira_write` | `action`, `detail` | `scripts/run_poller.py` |
-| `job_fired` | `job`, `profile`, `run_name`, `task_idx` | `src/arcp/triggers.py` |
+| `job_fired` | `crid`, `job`, `profile`, `run_name`, `task_idx` | `src/arcp/triggers.py` |
 | `new_issue` | `state`, `summary` | `src/arcp/poller.py` |
 | `pending` | `cause`, `cost_usd`, `reason`, `scope`, `tokens` | `src/arcp/dispatcher.py` |
 | `profile_selected` | `chosen`, `method`, `original` | `src/arcp/dispatcher.py` |
@@ -181,9 +181,11 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   `hil_requested`/`score_requested` 沒有後續 = 在等人填表單(正常等待,非 bug)。
 
 **F. 排程觸發 / jobs(triggers.py)** —— 內部 job(P2):
-- `job_fired`(`job`/`run_name`/`profile`/`task_idx`):**agent-job 開了一張真 Jira 票**
+- `job_fired`(`job`/`run_name`/`profile`/`task_idx`/`crid`):**agent-job 開了一張真 Jira 票**
   (count 上限內、逢 cron/every 或 count=1 首輪);該票預建鎖定 profile 的 session(直接指定 profile),
   之後走正常 dispatch。task_script 多筆 → 同一輪多個 `job_fired`(task_idx 遞增)。
+  `crid` = 來源 ClearQuest CR id(CR 來源 job,如 scan_cq;task_script 每筆回 `crid` →
+  寫進 `session.clearquest_id` 供去重 + close→CQ 回寫。非 CR job 為 None)。
   script-job 走下面 script_run_* 系列(不開 Jira)。
 - `trigger_started` → `script_run_started`/`script_run_finished`(script 型)或
   `attempt_finished`(agent 型)→ `trigger_finished`(`outcome`)。

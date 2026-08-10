@@ -148,7 +148,8 @@ outer_loop:
       cron: "0 3 * * *"
       labels: [agent]        # 對到 create_or_resume route
       task: "巡檢昨日失敗票並回報"          # 靜態;或改用 task_script
-      # task_script: 'uv run gen_tasks.py'  # stdout JSON:[{summary,description,labels?}]
+      # task_script: 'uv run gen_tasks.py'  # stdout JSON:[{summary,description,labels?,crid?}]
+      #                                     # crid=來源 ClearQuest CR id(掃 CQ job 用)
 ```
 
 ### 5.2 現況(W3.4,將被 5.1 取代)

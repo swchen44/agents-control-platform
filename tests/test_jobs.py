@@ -109,7 +109,7 @@ st = Store(tempfile.mkdtemp()); src = FakeSource()
 gen = os.path.join(tempfile.mkdtemp(), "gen.py")
 open(gen, "w").write(
     'import json;print(json.dumps(['
-    '{"summary":"CR-1","description":"修 CR-1","labels":["agent"]},'
+    '{"summary":"CR-1","description":"修 CR-1","labels":["agent"],"crid":"BUGDB-1"},'
     '{"summary":"CR-2","description":"修 CR-2"}]))')
 evs = fire_agent_job(_job(task_script=[sys.executable, gen], labels=["agent"]),
                      src, st, PROFILES, "SCRUM")
@@ -121,6 +121,12 @@ check("task_script:第二筆無 labels → 用 job 預設 labels",
       src.created[1]["labels"] == ["agent"])
 check("task_script:兩張都預建鎖定 profile 的 session",
       all(st.get_session(c["id"]) is not None for c in src.created))
+# I2:crid → session.clearquest_id;無 crid → None;job_fired 帶 crid
+check("task_script:crid 寫進 session.clearquest_id",
+      st.get_session(src.created[0]["id"]).clearquest_id == "BUGDB-1"
+      and st.get_session(src.created[1]["id"]).clearquest_id is None)
+check("task_script:job_fired 帶 crid",
+      any(e["type"] == "job_fired" and e.get("crid") == "BUGDB-1" for e in evs))
 st.close()
 
 # ── task_script 壞掉 → 0 票(降級不擲例外)──────────────────────────── #

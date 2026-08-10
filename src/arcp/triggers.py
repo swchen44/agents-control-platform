@@ -309,12 +309,16 @@ def _resolve_tasks(trigger: Trigger) -> list[dict]:
                 "summary": str(it.get("summary")
                                or f"job:{trigger.run_name}")[:200],
                 "description": desc,
-                "labels": list(it.get("labels") or trigger.labels)})
+                "labels": list(it.get("labels") or trigger.labels),
+                # crid = ClearQuest CR id(來源 CR 的 job,如 scan_cq 掃出;寫進
+                # session.clearquest_id 供去重 + close→CQ 回寫)。非 CR job 省略。
+                "crid": (str(it.get("crid")).strip() or None
+                         if it.get("crid") is not None else None)})
         return out
     task = (trigger.task or trigger.prompt or "").strip()
     head = task.splitlines()[0][:120] if task else trigger.run_name
     return [{"summary": f"[job:{trigger.run_name}] {head}",
-             "description": task, "labels": list(trigger.labels)}]
+             "description": task, "labels": list(trigger.labels), "crid": None}]
 
 
 def fire_agent_job(trigger: Trigger, source, store, profiles: dict[str, Profile],
@@ -332,13 +336,15 @@ def fire_agent_job(trigger: Trigger, source, store, profiles: dict[str, Profile]
             events.append(store.journal("trigger_error", 0, trigger.run_name,
                                         error=str(e)[:200]))
             continue
+        crid = tk.get("crid")                 # I2:CR 來源 job → 記 clearquest_id
         store.upsert_session(TicketSession(   # 鎖定 profile:dispatcher 直接用此 profile
             issue_id=t.id, key=t.key, profile=trigger.profile,
             workspace="(handoff)", session_id=None, attempts=0, outcome=None,
-            pending_reason=None, cost_usd=0.0))
+            pending_reason=None, cost_usd=0.0, clearquest_id=crid))
         events.append(store.journal("job_fired", t.id, t.key,
                                     job=trigger.name, run_name=trigger.run_name,
-                                    profile=trigger.profile, task_idx=idx))
+                                    profile=trigger.profile, task_idx=idx,
+                                    crid=crid))
         log.info("job %s → 開票 %s(profile=%s)",
                  trigger.name, t.key, trigger.profile)
     return events

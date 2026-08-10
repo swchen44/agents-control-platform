@@ -243,13 +243,13 @@ grader 作關鍵任務的可選雙保險(profile 決定)。
 
 ## 主題 I — CR/ClearQuest 橋接收尾 + close→CQ 回寫(2026-08-10 定案,待資料/實作)
 
-> triage 結果模型與 Jira 取消已落地(見近期完成)。以下三項是**同一批未收的尾**,
-> 設計都已定,列此待做。I1 阻塞於使用者提供 CQ 端資訊。
+> triage 結果模型與 Jira 取消已落地(見近期完成)。**I2 已完成**(2026-08-10);
+> 剩 I1(阻塞於使用者提供 CQ 端資訊)、I3(小增量)。
 
 | # | 項目 | 做法 | 阻塞 / effort | 價值 |
 |---|---|---|---|---|
 | **I1** | **close→CQ 回寫**(所有 close 若 `clearquest_id` 有值 → 回 CQ 寫 Jira 連結 + 結果) | 擴充點 `cq_writeback` 已預留(`base_url` + 欄位 map);於**每個 close 路徑**(HIL 關單 / auto_close / ABORTED)呼叫;純設計已定,HTTP 未接 | ⛔ **等使用者給 CQ base_url + 欄位名**;接上約低-中 | CR 來源的閉環:CQ 端看得到 Jira 進度與結果 |
-| **I2** | `fire_agent_job` 寫入 `clearquest_id` | 目前 job 建票只寫 profile/base_ref,沒把來源 CR id 寫進 session → CR 去重 + I1 回寫都需要它;`ticket_session.clearquest_id` 欄位已存在,只差在 `fire_agent_job` 帶入 | 低(欄位已在) | I1 的前置;避免同一 CR 重複開票 |
+| **I2** | ~~`fire_agent_job` 寫入 `clearquest_id`~~ | ✅ **已完成**(2026-08-10):`task_script` 每筆輸出可帶 `crid` → `_resolve_tasks` 帶出 → `fire_agent_job` 寫進 `session.clearquest_id` + `job_fired` 事件帶 `crid`。`test_jobs` 覆蓋 | ✅ | I1 的前置;避免同一 CR 重複開票 |
 | **I3** | CR-bridge「只建票 + 貼 label、不鎖定 profile」模式 | 讓 CR→Jira 的票走 **triage**(由 label 入場、profile 由 select 決定)而非建票即鎖定;job 增一個「不預鎖 profile」選項 | 低-中 | CR 票也能享用泛化 triage(A/B / 條件式選 profile),而非固定一個 profile |
 
 **已定的決策**:label = **入場券**(poller 靠命中 route 的 label 撿票);profile =

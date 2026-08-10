@@ -70,7 +70,10 @@ method=script 需有 `script`。任一不符 → `ConfigError`,不讓壞設定�
 ```
 - `yaml` = 該 profile 的來源檔絕對路徑(`Profile.source_yaml`):inline 在主檔的 = `config.yaml`;
   拆到 `config/profiles/<名>.yaml` 的 = 該檔(Q15,per-owner)。腳本可據此讀 profile 細節。
-- `clearquest.crid` 目前由 dispatcher 傳入 `None`(= 空字串);待 R9 ClearQuest 觸發源接上才會填。
+- `clearquest.crid`:dispatcher 目前傳 `None`。CR 來源 job(I2)已把 CRID 寫進
+  `session.clearquest_id`,但 job 票是**鎖定 profile、不跑 triage**,所以 select 腳本現在還
+  拿不到;等 CR-bridge 走 triage(I3,不鎖 profile)時,dispatcher 再把 `session.clearquest_id`
+  帶進 stdin 這裡。
 - 逾時 **60s**(`selection._SCRIPT_TIMEOUT`);stderr 逐行吐 logger(`[select:<key>]`)方便除錯。
 
 **stdout(嚴格 JSON)** —— 命令必須印出:
