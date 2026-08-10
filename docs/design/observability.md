@@ -65,7 +65,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `assignee_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `assignee_restored` | — | `src/arcp/commands.py` |
 | `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py` |
-| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `truly_resumed` | `src/arcp/dispatcher.py`, `src/arcp/triggers.py` |
+| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `tokens`, `truly_resumed` | `src/arcp/dispatcher.py`, `src/arcp/triggers.py` |
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
 | `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
 | `closed` | `agent_score`, `by`, `human_score`, `outcome`, `request_id` | `src/arcp/hil.py`, `src/arcp/scoring.py` |

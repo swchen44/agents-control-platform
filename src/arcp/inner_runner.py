@@ -47,6 +47,7 @@ class AttemptResult:
     envelope_path: str
     error_kind: str | None = None  # infra | stalled | task | no-terminal (N3)
     structured: dict | None = None  # G1 agent {reason,status,next}
+    tokens: int | None = None      # budget:本 attempt 用的 token(input+output+cache)
 
 
 def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
@@ -128,4 +129,5 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         events_path=job["events_path"],
         envelope_path=job["envelope_path"],
         error_kind=envelope.get("error_kind"),
-        structured=envelope.get("structured"))
+        structured=envelope.get("structured"),
+        tokens=envelope.get("tokens"))

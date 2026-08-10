@@ -26,7 +26,8 @@ sys.path.insert(0, HERE)  # arcp.rawcli lives here
 def main() -> int:
     job = json.load(open(sys.argv[1]))
     envelope = {"completed": False, "session_id": None,
-                "truly_resumed": False, "cost_usd": None, "error": None,
+                "truly_resumed": False, "cost_usd": None, "tokens": None,
+                "error": None,
                 "error_kind": None,   # stalled | task | no-terminal | None
                 "structured": None}   # G1 agent 結構化自評
 
@@ -65,6 +66,7 @@ def main() -> int:
         envelope["session_id"] = agent.session_id
         envelope["truly_resumed"] = bool(resume_sid)  # native --resume used
         envelope["cost_usd"] = agent._cost_usd
+        envelope["tokens"] = agent._tokens
         envelope["error"] = agent._error
         envelope["structured"] = agent._structured   # G1
         # error_kind (N13/N3): stalled → dispatcher resumes; no-terminal =

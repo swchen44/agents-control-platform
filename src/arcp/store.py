@@ -55,6 +55,9 @@ class TicketSession:
     agent_score: int | None = None    # agent 自評 0-10(contract.score;auto_close 複製)
     base_ref: str | None = None       # W10.3:跨票 base 子票的來源票 issue_id(字串);
     #                                    dispatcher 首次佈建注入 base 脈絡後清為 None
+    tokens: int = 0                   # budget:本票累計 token(input+output+cache)
+    soft_tokens: int | None = None    # budget:本票可調 soft token(None=用 profile 預設)
+    soft_usd: float | None = None     # budget:本票可調 soft usd(None=用 profile 預設)
 
 
 class Store:
@@ -91,6 +94,9 @@ class Store:
                 outcome        TEXT,
                 pending_reason TEXT,
                 cost_usd       REAL NOT NULL DEFAULT 0,
+                tokens         INTEGER NOT NULL DEFAULT 0,
+                soft_tokens    INTEGER,
+                soft_usd       REAL,
                 queued         INTEGER NOT NULL DEFAULT 0,
                 queued_at      REAL NOT NULL DEFAULT 0,
                 inactive       INTEGER NOT NULL DEFAULT 0,
@@ -151,7 +157,10 @@ class Store:
                           ("score_reminded_at",
                            "REAL NOT NULL DEFAULT 0"),    # W7(R1)
                           ("base_ref", "TEXT"),           # W10.3 跨票 base
-                          ("agent_score", "INTEGER")):    # contract.score
+                          ("agent_score", "INTEGER"),     # contract.score
+                          ("tokens", "INTEGER NOT NULL DEFAULT 0"),  # budget
+                          ("soft_tokens", "INTEGER"),     # budget 可調 soft
+                          ("soft_usd", "REAL")):          # budget 可調 soft
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -214,9 +223,10 @@ class Store:
                 f.write(json.dumps(event, ensure_ascii=False) + "\n")
         return event
 
-    def monthly_cost(self, profile: str, now: float | None = None) -> float:
-        """W7.3:profile 當日曆月(跨所有票)累計花費 = sum(attempt_finished.cost)。
-        資料源是 journal(帶 ts+cost+profile);簡單掃檔,量大再改月帳表。"""
+    def _monthly_sum(self, field: str, profile: str | None = None,
+                     now: float | None = None) -> float:
+        """當日曆月 sum(attempt_finished[field]);profile=None → 全站(global)。
+        資料源是 journal(帶 ts+cost+tokens+profile);簡單掃檔,量大再改月帳表。"""
         import datetime
         now = time.time() if now is None else now
         ref = datetime.datetime.fromtimestamp(now)
@@ -230,21 +240,38 @@ class Store:
                         e = json.loads(line)
                     except ValueError:
                         continue
-                    if (e.get("type") != "attempt_finished"
-                            or e.get("profile") != profile or not e.get("cost")):
+                    if e.get("type") != "attempt_finished" or not e.get(field):
+                        continue
+                    if profile is not None and e.get("profile") != profile:
                         continue
                     edt = datetime.datetime.fromtimestamp(e.get("ts") or 0)
                     if edt.year == ref.year and edt.month == ref.month:
-                        total += float(e["cost"])
+                        total += float(e[field])
         except OSError:
             pass
         return total
+
+    def monthly_cost(self, profile: str, now: float | None = None) -> float:
+        """W7.3:profile 當月累計花費(USD)。"""
+        return self._monthly_sum("cost", profile, now)
+
+    def monthly_tokens(self, profile: str, now: float | None = None) -> int:
+        """budget:profile 當月累計 token。"""
+        return int(self._monthly_sum("tokens", profile, now))
+
+    def global_monthly_cost(self, now: float | None = None) -> float:
+        """budget:全站(所有 profile)當月累計花費(USD)。"""
+        return self._monthly_sum("cost", None, now)
+
+    def global_monthly_tokens(self, now: float | None = None) -> int:
+        """budget:全站(所有 profile)當月累計 token。"""
+        return int(self._monthly_sum("tokens", None, now))
 
     _SESSION_COLS = ("issue_id, key, profile, workspace, session_id, attempts,"
                      " outcome, pending_reason, cost_usd, queued, queued_at,"
                      " inactive, approval_revisions, finished_at, evict_count,"
                      " clearquest_id, human_score, score_reminded_at, base_ref,"
-                     " agent_score")
+                     " agent_score, tokens, soft_tokens, soft_usd")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -256,7 +283,8 @@ class Store:
             approval_revisions=row[12], finished_at=row[13],
             evict_count=row[14], clearquest_id=row[15],
             human_score=row[16], score_reminded_at=row[17] or 0.0,
-            base_ref=row[18], agent_score=row[19])
+            base_ref=row[18], agent_score=row[19],
+            tokens=row[20] or 0, soft_tokens=row[21], soft_usd=row[22])
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -300,8 +328,9 @@ class Store:
                      attempts, outcome, pending_reason, cost_usd,
                      queued, queued_at, inactive, approval_revisions,
                      finished_at, evict_count, clearquest_id,
-                     human_score, score_reminded_at, base_ref, agent_score)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     human_score, score_reminded_at, base_ref, agent_score,
+                     tokens, soft_tokens, soft_usd)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
@@ -317,13 +346,16 @@ class Store:
                     human_score=excluded.human_score,
                     score_reminded_at=excluded.score_reminded_at,
                     base_ref=excluded.base_ref,
-                    agent_score=excluded.agent_score
+                    agent_score=excluded.agent_score,
+                    tokens=excluded.tokens, soft_tokens=excluded.soft_tokens,
+                    soft_usd=excluded.soft_usd
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
                   s.approval_revisions, s.finished_at, s.evict_count,
                   s.clearquest_id, s.human_score, s.score_reminded_at,
-                  s.base_ref, s.agent_score))
+                  s.base_ref, s.agent_score,
+                  s.tokens, s.soft_tokens, s.soft_usd))
 
     # -- W3.4 trigger last_run 水位 ---------------------------------------- #
     def trigger_last_run(self, name: str) -> float:

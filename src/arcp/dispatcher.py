@@ -353,6 +353,7 @@ class Dispatcher:
                               preassigned_session_id=preassigned)
             sess.session_id = res.session_id or sess.session_id
             sess.cost_usd += res.cost_usd or 0.0
+            sess.tokens += res.tokens or 0            # budget:累計 token
             events.append(self.store.journal(
                 "attempt_finished", ticket.id, ticket.key,
                 attempt=sess.attempts, raw=res.raw_outcome,
@@ -360,7 +361,8 @@ class Dispatcher:
                 truly_resumed=res.truly_resumed,
                 structured=res.structured,               # G1:agent 自評(記錄)
                 envelope=res.envelope_path,
-                cost=res.cost_usd or 0.0,                # W7.3 月預算彙總資料源
+                cost=res.cost_usd or 0.0,                # 月/global 預算彙總資料源
+                tokens=res.tokens or 0,                  # 同上(token 維度)
                 profile=profile.name))
 
             # E3(W5.3):被主動驅逐(control /evict → killpg)——非故障,

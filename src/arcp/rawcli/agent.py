@@ -34,6 +34,17 @@ def _msg_event(text: str, source: str) -> dict:
     }
 
 
+def _sum_tokens(usage) -> int | None:
+    """從 claude/codex 的 usage 物件加總 token(input+output+cache);無則 None。
+    budget precheck 用的「已用 token」= 這些的總和(所有計費 token)。"""
+    if not isinstance(usage, dict):
+        return None
+    keys = ("input_tokens", "output_tokens",
+            "cache_creation_input_tokens", "cache_read_input_tokens")
+    total = sum(int(usage.get(k) or 0) for k in keys)
+    return total or None
+
+
 class RawCLIAgent:
     """執行單元 = `claude -p`(print 模式)/ `codex exec`。純 stdlib。"""
 
@@ -70,6 +81,7 @@ class RawCLIAgent:
         # runner 組 envelope 用(run() 後曝出)
         self._final_session_id: str | None = None
         self._cost_usd: float | None = None
+        self._tokens: int | None = None        # budget:input+output+cache 加總
         self._error: str | None = None
         self._structured: dict | None = None    # G1 agent 自評
         # terminal 事件(claude result / codex turn.completed)。crash 在此之前
@@ -275,6 +287,7 @@ class RawCLIAgent:
         elif t == "result":
             self._got_terminal = True
             self._cost_usd = o.get("total_cost_usd")
+            self._tokens = _sum_tokens(o.get("usage")) or self._tokens  # 累計最終
             if o.get("structured_output") is not None:   # G1:claude 直接給物件
                 self._structured = o.get("structured_output")
             if o.get("is_error"):
@@ -305,6 +318,9 @@ class RawCLIAgent:
             self._got_terminal = True
             u = o.get("usage") or {}
             self._cost_usd = u.get("total_cost_usd") or self._cost_usd
+            tk = _sum_tokens(u)                      # codex:逐 turn 累加
+            if tk is not None:
+                self._tokens = (self._tokens or 0) + tk
             # 瞬態 error(stream 斷線等)被 CLI 自己重連救回 → turn 仍完成,
             # 不該污染 envelope(W3.1 實測:Reconnecting 3/5 後成功)。
             # turn.failed 是終態、之後不會有 turn.completed,不受影響。
