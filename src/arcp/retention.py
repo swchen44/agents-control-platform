@@ -5,7 +5,7 @@
 journal 留著稽核(工作區可拋、證據不可拋——journal/事件已含判定依據)。
 
 - default 270 天(近一年,偏稽核保守);profile `retention_days: 0` = 不回收。
-- 刪除後 session.workspace 置哨值 `(reclaimed)`——之後 @agent retry 之類
+- 刪除後 session.workspace 置哨值 `(reclaimed)`——之後指令台 retry 之類
   讓 outcome 歸 None 時,health_check 失敗 → 重 provision(finished_at 也由
   store 歸零)。
 - 安全欄:只刪「存在的目錄」;哨值(`(adopted)`/`(handoff)`/…)非目錄自然跳過。

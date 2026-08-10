@@ -65,7 +65,7 @@
   (選填,空→fallback approver)。**Why**:轉人類要能指定 assignee。
 - **assignee = 資源開關**(W12):交人類=inactive(讓出 F1 額度、不派工);
   回機器人=resume。**Why**:「不在機器人手上就不吃機器資源」。
-- **F3 換手**(`@agent next` = 同票換手(next) / G1 next):換 profile 重排隊 / 交人;session 的 profile 優先於 route。
+- **F3 換手**(指令台 `next` = 同票換手(next) / G1 next):換 profile 重排隊 / 交人;session 的 profile 優先於 route。
 - 現狀:`approval.py`/`sections.py`/`commands.py`。真 Jira 實測 SCRUM-20/21/22 PASS。
 
 ## 4. 併發與資源閘門(concurrent, W1 F1)
@@ -329,7 +329,7 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
 > 改為 **HIL 表單驅動 + 系統建票(一步完成,使用者選定「系統在 agent project 建」)**。
 > 兩者脈絡注入邏輯相同,差別在「誰觸發、誰建票」。實作見 [architecture.md §4.1](design/architecture.md)。
 - **同票換手(next)**:就地換 profile/引擎。觸發 = HIL 表單選 `handoff_kind=next`,或 agent 自發
-  (`@agent next <profile>` 指令 / envelope `status=handoff`)。適合「同一件事繼續」。
+  (指令台 `next <profile>` / envelope `status=handoff`)。適合「同一件事繼續」。
 - **跨票換手(base)**:觸發 = HIL(End/Middle) 表單選 `handoff_kind=base` + 下一棒 profile +
   交接 prompt。**系統**(`hil._do_handoff`)在同 project `create_ticket` 建新票、預建其
   session(鎖定新 profile + `base_ref`);dispatcher 於新票首次佈建後**注入脈絡**(複製 base

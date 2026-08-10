@@ -429,11 +429,10 @@ class Dispatcher:
                                         engine_of_agent(profile.agent),
                                         sess.workspace, pack=False,
                                         reason="handoff-human")
-                    # W11:assignee 恆定,不再 assign 人;要 agent 繼續可留言
-                    # @agent run(留言指令保留),或人於後續一次性表單回覆。
+                    # W11:assignee 恆定,不再 assign 人;要 agent 繼續 → 指令台 run
                     self.source.add_comment(ticket.id, (
                         f"[agent] handoff→human:{summarize(res.structured)}\n"
-                        f"請人工接手;要 agent 繼續請留言 @agent run。"
+                        f"請人工接手;要 agent 繼續請用本票的指令台按 run。"
                         f"\n{_resume_hint(sess)}"))
                     events.append(self.store.journal(
                         "handoff", ticket.id, ticket.key, kind="human",

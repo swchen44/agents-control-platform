@@ -32,7 +32,7 @@ agents-control-platform/
 | 輸入 | `jira_source.py` | Jira Cloud 讀寫封裝(唯一碰 Cloud 細節);`triggers.py` 排程觸發 |
 | 決策 | `poller.py`(OuterLoop 外圈輪詢)、`routing.py`(route 比對)、`gate.py`(F1 分層額度閘) |
 | 執行 | `dispatcher.py`(派工+證據迴路)、`inner_runner.py`、`workspace.py`+`isolation.py`、`contract.py`(envelope)、`grader.py`(確定性驗證) |
-| 人機協作 | `approval.py`(起點審批)、`scoring.py`(HIL(End) 評分)、`commands.py`(@agent 指令 + 離手政策)、`sections.py`(description 三方分段+hash)、`interaction.py`+`hil.py`+`form_server.py`(W11 一次性表單) |
+| 人機協作 | `approval.py`(起點審批)、`scoring.py`(HIL(End) 評分)、`commands.py`(指令核心 `apply_command` + 離手政策)、`sections.py`(description 三方分段+hash)、`interaction.py`+`hil.py`+`form_server.py`(HIL 一次性表單 + 指令台) |
 | 狀態·觀測·控制 | `store.py`(SQLite + journal)、`control_api.py`(REST 控制面)、`transcript.py`、`retention.py` |
 | 其他 | `rawcli/`(RawCLIAgent,純 stdlib 執行單元)、`config.py`、`logutil.py`、`profiles.py`、`ticket.py`、`sysinfo.py`、`server_manager.py` |
 

@@ -110,7 +110,7 @@ dashboard ticket 頁 trace + runtime/events.jsonl,逐項確認新路徑:
       (original/chosen);chosen 就是實際跑的 profile
   [ ] W15 install:若該 profile 用 workspace_install → workspace 有 install 產物 +
       logger 有 [install] 輸出;中途 kill 再跑不會用半殘 ws(.arcp_provisioned marker)
-  [ ] Q11 hold:票上留言 @agent hold → 立即 evict(journal evicted)+ 開 hold 表單;
+  [ ] Q11 hold:票的指令台按 hold → 立即 evict(journal evicted)+ 開 hold 表單;
       填表(給新 prompt)→ journal hil_resumed + TICKET.md 出現「人類指示」段 → 續跑
   [ ] Q10 human prompt:HIL 表單填 human_prompt → runtime .../ws/.arcp_human.md 有該行,
       且下輪 TICKET.md 含它

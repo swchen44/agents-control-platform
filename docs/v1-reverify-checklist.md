@@ -114,10 +114,10 @@ default:
 
 ---
 
-## Step 4 — Q11 `@agent hold`(強制中斷 → HIL → 續跑)
+## Step 4 — Q11 指令台 `hold`(強制中斷 → HIL → 續跑)
 
-**做什麼**:在**正在跑**的測試票留言 `@agent hold`(你的帳號須在
-`source.commands.allowed_commenters` 白名單)。
+**做什麼**:在**正在跑**的測試票,開 description control 段的**指令台**連結 → 填 email → 按
+`hold`(在該票狀態=running 時可用)。
 
 **預期**:立即 evict(killpg)→ 開 hold 表單(@mention 你 + 一次性連結);你開連結填「給 agent
 的補充指示」送出 → 寫進 workspace 人類指示段 → resume 排隊續跑(**不耗 attempt**)。
@@ -167,7 +167,7 @@ default:
 
 - ☐ journal 有 `handoff(kind=next, via=hil, to=default_v2)`
 - ☐ 同一張票下輪的 attempt 用 `default_v2` 跑;`TICKET.md` 描述含你填的交接指示
-- ☐ 也可改用留言 `@agent next default_v2` 驗指令式同票換手(journal `handoff kind=agent`)
+- ☐ 也可改用指令台 `next default_v2` 驗指令式同票換手(journal `handoff kind=command`)
 
 ---
 
@@ -224,6 +224,6 @@ inject 守則已教格式)。跑到終態。試兩種:小檔(總和 <6MB)與大�
 
 - 全部打勾 → V1 付費路徑在真 agent 下如預期。把有疑點的步驟的 journal 片段留存
   (`runtime/events.jsonl` 對應區段 + `runtime/tickets/<id>/`)供離線分析。
-- 測試票可關掉(Done)或 `@agent cancel`;測試 workspace 由 retention 自動回收。
+- 測試票可關掉(Done)或指令台 `cancel`;測試 workspace 由 retention 自動回收。
 - 看不到某項時:先 `uv run python scripts/trace_lint.py runtime` 檢查四層證據齊不齊,
   再對照 [observability 事件字典](design/observability.md) + [troubleshooting](troubleshooting.md)。

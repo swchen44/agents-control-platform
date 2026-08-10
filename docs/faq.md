@@ -74,7 +74,7 @@ A:可以。在 `score_and_close` / `decision` 表單選「改派下一棒」→ 
 **同票換手(next)**(同一張票換 profile 接手 —— 重置 session、鎖定新 profile、依新 profile 的
 template 重新佈建 workspace,**非 native resume**,脈絡全留在 Jira 票)或 **跨票換手(base)**
 (系統自動另開新票交接,新票首次佈建時把本票脈絡複製進 `ws/BASE_<票>/`,本票收 ABORTED 為
-交接非失敗)。也可留言 `@agent next <profile>` 做同票換手。沒填全換手種類 / profile →
+交接非失敗)。也可在**指令台**下 `next <profile>` 做同票換手。沒填全換手種類 / profile →
 fail-safe 降級續跑原 agent。見 [使用者手冊 §7](user-guide.md)、[design/architecture.md §4](design/architecture.md)。
 
 **Q:我怎麼知道 agent 到底產了什麼?能拿到它的檔案嗎?**

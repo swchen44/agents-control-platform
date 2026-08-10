@@ -95,9 +95,11 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
    |---|---|---|---|---|
    | 42 | SCRUM-42 | 0 | 待辦 | filechain-demo |
 
-4. `on_match=create_or_resume` → 這票**進 dispatch 候選**。
+4. `on_match=create_or_resume` → 這票**進 dispatch 候選**;同時**佈建「指令台」**
+   (journal **`command_link_posted`**):把指令連結寫進 description 的 control 段 + 貼一則
+   指路 comment,人日後由此下 run/retry/hold/stop/cancel/next(綁票、到 close 失效)。
    (若命中的是 `notify_only`/`ignore` → 到此為止:只留 `route_matched`,**不派工、不建
-   session**——這就是灰度。)
+   session、不佈建指令台**——這就是灰度。)
 
 ## 4. F1 額度閘 → 首次派工 → triage 選 profile → 鎖進 `ticket_session`
 
@@ -134,7 +136,7 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
 4. **grader(可選雙保險)**:profile 的 `verify`(files/cmd/json)跑一遍。
    - 過 → **outcome=SUCCESS** → journal **`resolved`**(帶 `human_minutes_saved`)
    - 不過且還有 attempts → 把**失敗證據**餵回下一輪 resume(證據型停止)
-   - `on_unknown` → pending:unknown(等 `@agent run`)
+   - `on_unknown` → pending:unknown(等指令台 `run`)
 
 ## 6. 貼交付物 → HIL(End) 評分 / auto_close → 關單
 
@@ -165,9 +167,9 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
 | **todo** | 無 session | §2–3(還沒派工) |
 | **running** | 有 session、outcome=None、無 pending/queued/inactive | §4–5 |
 | **queued** | `queued=true` | §4 若額滿 |
-| **hil_middle** | `pending_reason` 有值(need_info/hold/human-decision…)或 inactive | 人 `@agent hold` 時 |
+| **hil_middle** | `pending_reason` 有值(need_info/hold/human-decision…)或 inactive | 人在指令台按 `hold` 時 |
 | **hil_end** | outcome ∈ SUCCESS/FAILURE/UNKNOWN、尚未關 | §6 等評分 |
-| **aborted** | outcome=ABORTED | triage notfound / `@agent cancel` |
+| **aborted** | outcome=ABORTED | triage notfound / 指令台 `cancel` |
 | **closed** | 人關 Jira(離開 jql) | §6 尾 |
 
 > Jira **status**(待辦/進行中/完成)是給人看的;harness **行為**讀的是
@@ -197,7 +199,7 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
 |---|---|---|
 | 票**完全沒反應** | 有沒有 `route_matched`? | 沒有 = label 沒對到任何 `create_or_resume` route(光有 `agent` label 不夠,那條是 notify_only);或 jql 沒撈到 |
 | 命中了但**沒開始跑** | 有 `route_matched` 無 `session_created`? | route 是 `notify_only`/`ignore`(灰度);或 F1 額滿(看 `queued`) |
-| **一直卡住** | journal `pending`(讀 `reason`) | 預算超限 / 需人 / 外部變更;`@agent run` 解 |
+| **一直卡住** | journal `pending`(讀 `reason`) | 預算超限 / 需人 / 外部變更;指令台 `run` 解 |
 | **選錯 agent** | journal `profile_selected`(`chosen`) | select 腳本邏輯;無此事件=用了 route 原 profile |
 | 票**被取消** | journal `aborted`(`reason`) | `reason=untriageable`=triage 判不出(profile=notfound) |
 | **關不掉** | Jira status + journal `closed` | auto_close=off 在等 HIL 評分;或 `transition` 目標狀態名不符 |

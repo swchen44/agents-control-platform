@@ -57,9 +57,7 @@ outer_loop:
   #                                # 並存時 cron 優先(warning);分鐘粒度,
   #                                # 停機錯過補跑一次(回溯上限 2 天)
 
-  # Phase 3:指令通道與外部變更政策
-  commands:
-    allowed_commenters: ['Shao-wei Chen']   # displayName 或 accountId(§6-13)
+  # 外部變更政策(人的指令改走「指令台」表單/REST,不再有 @agent 留言白名單)
   external_change:
     cancel_states: ['完成', 'Done', 'Cancelled']  # 人 out-of-band 關票 = 撤銷
 

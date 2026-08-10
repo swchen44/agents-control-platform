@@ -45,6 +45,20 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
 | 熱重載設定 | `POST :8787/reload` | 重讀 `config/`,**壞設定回 400、舊設定續用**(fail-safe) |
 | 強制驅逐卡住 agent | `POST :8787/evict/<issue_id>` | killpg 釋放資源、不耗 attempt、下輪 native resume |
 | 解除 Jira 降級 | `POST :8787/recover` | Jira 恢復後手動解降級(通常自動) |
+| 對某票下指令 | `POST :8787/ticket/<id>/command` | body `{cmd,args,by}`;見下方「指令台」 |
+
+### 2.1 指令台(人下指令的介面,取代舊 `@agent` 留言)
+
+人的指令(run/retry/hold/stop/cancel/next)改走「**指令台**」表單:每張被接管的票,poller
+首次派工時把連結寫進 **description 的 control 段** + 貼一則指路 comment(事件
+`command_link_posted`),綁票、可重複用、票 close 才失效。表單依票**當前狀態**動態列可用指令、
+附說明,需填 email、破壞性指令(cancel/stop)要二次確認。
+
+- **自動化 / 程式**走 REST:`POST :8787/ticket/<id>/command`,body `{cmd,args,by}`
+  (`args.profile` 供 next),回 `{ok,message}`。與指令台同一套核心、在 poller 行程(hold
+  能正確 killpg)。
+- **已移除**舊的 `@agent` 留言指令通道與 `commands.allowed_commenters` 白名單(未 release,
+  不相容)。REST 端點沿用 control API 的信任模型(綁 127.0.0.1;要開放見 §8 安全)。
 
 ## 3. 監控健康:Dashboard **Server 頁**
 

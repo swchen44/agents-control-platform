@@ -68,7 +68,7 @@ FORM_SCHEMAS: dict[str, dict] = {
              "type": "textarea", "required": False},
         ],
     },
-    # Q11:人類強制中斷(@agent hold)→ 開此表單給新指示 → submit 後 resume 排隊。
+    # Q11:人類強制中斷(指令台 hold)→ 開此表單給新指示 → submit 後 resume 排隊。
     "hold": {
         "version": SCHEMA_VERSION, "title": "強制中斷:給 agent 新指示", "hil": "middle",
         "fields": [

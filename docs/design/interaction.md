@@ -154,10 +154,10 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
 - 儲存:TICKET.md 每輪由 code 重渲染,故人類指示存**sidecar `ws/.arcp_human.md`**(append-only)
   ,`render_ticket_md` 讀它成「## 人類指示(累加)」段 → 不被重渲染蓋掉、可稽核、單一寫入者。
 
-### 13.4 人類強制中斷 → 回 HIL(Q11,`@agent hold`)
-- 新 `@agent hold` 指令(comment 通道)→ **立即 evict(沿用現有 killpg)** → HIL(Middle) →
-  開 need_info 表單(含 13.3 prompt 欄)→ submit 寫 TICKET.md 人類指示段 + resume 排隊。
-  **不耗 attempt**。九成沿用現有(evict + HIL 表單 + 指令通道),新增 = 指令 + 串接。
+### 13.4 人類強制中斷 → 回 HIL(Q11,指令台 `hold`)
+- `hold` 指令(**指令台**,見 §16)→ **立即 evict(沿用現有 killpg)** → HIL(Middle) →
+  開 hold 表單(含 13.3 prompt 欄)→ submit 寫 TICKET.md 人類指示段 + resume 排隊。
+  **不耗 attempt**。九成沿用現有(evict + HIL 表單),差別只在觸發改由指令台。
 - ⚠️ **限制(寫進開發者手冊 FAQ)**:立即 killpg = 進行中的工具步驟被硬殺;不丟資料
   (native resume 下輪重跑那一步),但那一步會重跑。未做「SIGTERM→10s→SIGKILL」優雅停,因
   native resume 已保進度、grace 效益低。此為已知現象,debug 時據此理解。
@@ -174,7 +174,7 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
   `hil._do_handoff`:kind/profile 不完整 → **fail-safe 降級為續跑原 agent**(不硬失敗)。
 - **同票換手(next)**:reset session、鎖定 `next_profile`、`workspace="(handoff)"` 哨值 → 下輪重
   provision 由新 profile 接手同一票。`handoff_prompt` 隨表單寫進 description human 段 → 新
-  TICKET.md 顯示。等同 agent 自發 `@agent next` 的效果,只是由人在表單觸發。
+  TICKET.md 顯示。等同指令台 `next` 或 agent 自發(envelope `status=handoff`)的效果。
 - **跨票換手(base)**:見 [architecture.md §4.1](architecture.md) —— 系統 `create_ticket` 建新票 +
   預建鎖定 profile 的 session(`base_ref`)+ 本票 ABORTED;dispatcher 於新票首次佈建後注入 base 脈絡。
 - **人的選擇全寫回**:human_score / 裁決 / handoff 參數都經 `_write_human_section` 寫進 Jira
@@ -194,4 +194,36 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
   `form_server._deliverables_html` 渲染 summary_md(安全 md→html)+ code + 附件下載 +
   references + cost/attempts + Jira/transcript/CQ 連結。檔案由 `/files/<token>` 服務
   (只服務 OUTPUT.json 宣告且在 workspace 內的檔;路徑穿越防護)。
+
+## 16. 指令台(command console;取代 @agent comment 指令通道)
+
+人下指令(run/retry/hold/stop/cancel/next)改走一個**綁票、可重複用**的表單,取代「在 Jira
+打 `@agent` 留言」——因為「沒人敢在 Jira 打指令」。與 HIL 表單**本質不同**:
+
+| | HIL 表單 | 指令台 |
+|---|---|---|
+| 目的 | 系統**需要人回答**特定事(審批/補資訊/評分) | 人**主動下指令** |
+| 生命週期 | **單次**:submit 即失效 | **綁票**:開票到 close 一直有效、可重複用 |
+| 觸發 | 系統隨需開 | 票首次派工即佈建 |
+
+- **決策(2026-08-10)**:①完全取代 comment 指令(自動化改走 REST API,不需相容);②連結放
+  **description control 段**(正本,與 approval 共存)+ 開票一則指路 comment;③選單**依當前
+  推導狀態**動態列可用指令 + 全指令說明表(用途/時機/副作用/效果);④**capability URL + 必填
+  email**(稽核,`autocomplete` 讓瀏覽器記住)+ 破壞性(cancel/stop)二次確認;⑤送出走
+  **per-ticket 指令 REST API**(`control_api`,poller 行程 → hold 能 killpg),與自動化同一核心。
+- **實作**:
+  - 指令核心 `commands.apply_command(source, store, profiles, issue_id, cmd, args, by)` →
+    `(ok, msg, events)`;`available_commands(sess)` 依 `canonical_state` 推導可用集;
+    `COMMAND_INFO` 為說明表/文件單一來源。人與自動化(REST)共用此核心。
+  - Token:`interactions` 加 `kind`(`hil`/`command`);command 型 submit **不翻 SUBMITTED**
+    (可重複用),close 時 `invalidate_ticket_commands` → 連結顯示唯讀「已結案」。
+  - 佈建 `hil.provision_command_link`(poller `create_or_resume` 候選、冪等):建 token、把
+    `command_console:<url>` 併入 description control 段(`approval._write_plan` 保留它)+ 貼指路
+    comment;事件 `command_link_posted`。
+  - 頁面 `form_server`:同 `/form/<token>` 依 `kind` 分流到指令台;GET 依狀態列指令 + email 欄 +
+    說明表,POST 驗 email/可用性/破壞性確認 → 呼 REST 指令核心 → 顯示即時結果。
+  - REST:`control_api` `POST /ticket/<id>/command {cmd,args,by}` → `{ok,message}`。
+- **已移除**:`CommandHandler`(comment 解析)、`commands.allowed_commenters` 白名單、事件
+  `command_denied`/`command_unknown`/`command_rejected`。`ExternalChangePolicy`(assignee/status
+  政策)保留。
 - **降級**:無 OUTPUT.json → comment 只有 structured summary、表單頁仍可評分。不擋流程。

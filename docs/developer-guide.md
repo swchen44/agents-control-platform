@@ -32,7 +32,7 @@ caffeinate。詳 [需求與理由](requirements.md)。
 - **決策**:`poller`(外圈輪詢 diff→journal→協調)、`routing`、`gate`(F1 分層額度閘)
 - **執行**:`dispatcher`(派工/審批/證據迴路)、`inner_runner`、`workspace`+`isolation`、
   `contract`(envelope 契約)、`grader`
-- **人機協作**:`approval`、`scoring`(HIL(End) 評分)、`commands`(@agent + 離手政策)、
+- **人機協作**:`approval`、`scoring`(HIL(End) 評分)、`commands`(指令台核心 `apply_command` + 離手政策)、
   `sections`(description 三方分段 + hash)、`interaction` + `hil` + `form_server`(W11 表單)、
   `output`(讀 agent 的 OUTPUT.json)+ `deliverables`(組交付物 ADF comment + 附件)+
   `adf`(精簡 ADF builder)—— agent 產出契約,見 [design/agent-output.md](design/agent-output.md)
@@ -66,7 +66,7 @@ main。設計見 [selection.md](design/selection.md)。
 - **跨票換手(base)**:`hil._do_handoff` 用 `source.create_ticket` 建新票 + 預建鎖定 profile 的 session
   (`store.TicketSession.base_ref` = 來源票 issue_id);`dispatcher._inject_base` 於新票首次
   佈建後呼 `workspace.inject_base_context` 複製脈絡進 `ws/BASE_<key>/`,一次性後清 `base_ref`。
-- **測試**:`tests/test_handoff.py`(指令式 @agent next)+ `tests/test_handoff_hil.py`(HIL 表單
+- **測試**:`tests/test_handoff.py`(指令台 next / apply_command)+ `tests/test_handoff_hil.py`(HIL 表單
   next/base/fail-safe/注入,免真 Jira 用 FakeSource.create_ticket)。真 `create_ticket` 寫入
   屬 V1 付費路徑(見 `scripts/reverify_v1.py` 清單)。設計見 [design/architecture.md §4](design/architecture.md)。
 
@@ -151,7 +151,7 @@ outcome 保留、不覆寫 handoff。與 `require_approval` 是人機光譜兩�
 
 ## 已知限制 / 除錯 FAQ
 
-- **強制中斷(evict / `@agent hold`)是立即 killpg,不是優雅停**:進行中的工具步驟會被
+- **強制中斷(evict / 指令台 `hold`)是立即 killpg,不是優雅停**:進行中的工具步驟會被
   硬殺。**不丟資料** —— 下輪 native resume 會從 session 接回、重跑被砍的那一步(檔案系統
   真值 + grader 保證正確)。未做「SIGTERM→10s→SIGKILL」優雅停,因 native resume 已保進度、
   grace 效益低。**debug 時若看到某工具步驟在 resume 後重跑一次,這是預期現象**,非 bug。

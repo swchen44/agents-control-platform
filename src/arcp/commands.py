@@ -1,16 +1,16 @@
-"""Comment command channel + external-change policy (v5 §4.1, §6-10~14).
+"""指令核心 apply_command + external-change policy (v5 §4.1, §6-10~14)。
 
-人 → agent 的唯一指令通道是 Jira comment。冪等由 watermark 保證(每則
-comment 只以 comment_added 事件出現一次);自家 [agent] 前綴留言不解析
-(防迴圈);不在白名單的指令會收到明確拒絕(§6-13);不認得的 @agent
-指令也要回覆(§6-14——否則人以為下了指令其實沒生效)。
+人 → agent 的指令走「指令台」表單、自動化走 per-ticket REST API,兩者共用本檔的
+apply_command(取代舊 @agent comment 通道 + 白名單;見 docs/design/interaction.md §16)。
+指令台頁面/佈建在 form_server/hil;本檔只放純效果核心 + 說明表 + 狀態可用性。
 
 指令語意(對 ticket_session 的狀態操作;dispatch 由同一輪 poll 稍後執行):
   run    解除 pending、續跑(pending 的人工解除機制——含 pending:unknown)
   retry  歸零 attempts + 解除 pending,從頭再試
+  hold   立即 evict(killpg)→ HIL(Middle):開 hold 表單給新指示、不耗 attempt
   stop   交還人工:pending:human-decision
   cancel 撤銷:outcome=ABORTED,此後不再派工
-  next <profile>  F3 換手(W2.5):重置 session、鎖定新 profile(dispatcher 以
+  next <profile>  F3 換手:重置 session、鎖定新 profile(dispatcher 以
          session.profile 優先於 route)→ 下輪重新排隊;目標 require_approval
          則重走審批門;workspace 置哨值 → 下輪重 provision(新 instance)
 

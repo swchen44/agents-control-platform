@@ -38,7 +38,7 @@ trigger/輸入/輸出/上下游見下表(與 `/concepts` 頁的職責表同內�
 | **contract** | envelope 結構化契約 + grader 三態判定(證據型停止) | attempt 結束 | raw agent 輸出 | envelope + outcome(SUCCESS/FAILURE/UNKNOWN) | dispatcher·inner_runner → store |
 | **approval** | 起點審批 / triage 閘(寫 plan 進 description、等 human 段 agent_name;可 decline) | dispatcher fork 前(require_approval / 全域 triage) | Ticket.description + profile | proceed/awaiting/reprompt + description 寫入 | dispatcher → sections·jira_source·store |
 | **scoring(ScoreGate)** | HIL(End) 人評分(seed score 佔位、讀 score、催評) | poller 每輪對終態未評票 | description human 段 + session | human_score + journal | poller → sections·jira_source·store |
-| **commands** | @agent 留言指令(run/retry/stop/cancel/next/handoff) | poller 偵測新留言 | Comment + 白名單 | 指令效果(解 pending/換手…)+ journal | poller → store·jira_source |
+| **commands** | 指令核心 `apply_command`(run/retry/hold/stop/cancel/next):人走指令台表單、自動化走 REST | form_server / control_api 呼叫 | issue_id + cmd + by(email) | 指令效果(解 pending/換手…)+ journal | form_server·control_api → store·jira_source |
 | **external(離手政策)** | assignee/status 政策:交人讓額度、回機器人 resume、外部關 Done=撤銷 | poller 偵測 status/assignee 變更 | Ticket 變更 + bot_id | inactive/abort/resume + journal | poller → store·jira_source |
 | **sections** | description 三方分段(human/control/agent:<名>)parse/render + hash 防篡改 | approval/scoring/commands 讀寫 description 時 | description 文字 | Section 物件 / 組回 description | approval·scoring·commands → (純函式) |
 | **store** | SQLite 狀態(ticket_watch/ticket_session)+ append-only journal | 各模組讀寫 | watch/session upsert、journal 事件 | 持久狀態 + 事件流 | 幾乎全部 → SQLite/檔案 |
@@ -86,7 +86,7 @@ state 就查 API/dashboard,不必動 DB。範例:triage 判不出 → 寫 `outco
 **觸發點(W10.3)**:人在 **HIL(End) `score_and_close`** 或 **HIL(Middle) `decision`**
 一次性表單選「改派下一棒」(`close_decision=handoff` / `next_step=handoff`),再選
 `handoff_kind`(next / base)+ 下一棒 profile(下拉,候選=載入的全部 profile)+ 交接
-prompt。也保留 agent 自發(`@agent next` 指令 / envelope `status=handoff`)的同票換手。
+prompt。也保留人在指令台下 `next` / agent 自發(envelope `status=handoff`)的同票換手。
 
 | | **同票換手(next)** | **跨票換手(base)** |
 |---|---|---|

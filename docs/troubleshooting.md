@@ -18,7 +18,7 @@
 | 真派工就爆(找不到 runner / spawn 失敗) | [§4 runner/派工失敗](#4-runner派工失敗) |
 | crash 後重跑,或懷疑重工/重複副作用 | [§5 resume 與冪等](#5-resume-與冪等) |
 | Jira 連不上/寫入失敗/整個降級暫停 | [§6 Jira 連線與降級](#6-jira-連線與降級) |
-| 在 Jira 留 `@agent …` 沒效果 | [§7 指令沒效果](#7-指令沒效果) |
+| 指令台下的指令沒效果 | [§7 指令沒效果](#7-指令沒效果指令台) |
 | 花費爆掉/一直被預算擋 | [§8 花費與預算](#8-花費與預算) |
 | dashboard 打不開或數字怪 | [§9 dashboard](#9-dashboard) |
 
@@ -124,14 +124,19 @@
   正常會在 poll 成功時自動解除;卡住可 `POST /recover`。這是 circuit-breaker,**不做
   work queue**(避免不同步)。人開表單時遇 Jira 異常 → 「暫勿送出、不落地」。
 
-## 7. 指令沒效果
+## 7. 指令沒效果(指令台)
 
-在 Jira 留 `@agent …` 沒反應 → 看 journal:
+人的指令改走「**指令台**」表單(description control 段的連結,取代舊 `@agent` 留言)。
+在指令台按了指令但沒生效 →
 
-- `command_denied`:作者不在 `config.yaml` 的 `commands.allowed_commenters` 白名單。
-- `command_unknown`:指令拼錯/不認得(看 `body` 欄位)。
-- `command_rejected`:指令對象/狀態不對(看 `target`)。
-- 完全沒有 command_* 事件:poller 沒看到那則留言(留言在水位之前?非該票?)。
+- **表單頁直接告訴你原因**:狀態不適用(該指令此刻不可用)/ cancel·stop **未勾確認** /
+  **缺 email**。照訊息修正即可。
+- **連結顯示「已結案,指令台已停用」**:票已 close → token 失效(正常)。
+- **journal 沒有 `command_accepted`**:指令沒被執行(被上面某條擋下),`author` 欄=提交 email。
+- **找不到指令台連結**:看該票有沒有 `command_link_posted` 事件(票須先成 `create_or_resume`
+  候選才會佈建);沒有 = 沒命中會派工的 route(見 §1)。
+- **自動化下指令**:`POST /ticket/<id>/command {cmd,args,by}`,回 `{ok,message}`;`ok=false`
+  的 `message` 就是原因。
 
 ## 8. 花費與預算
 
