@@ -9,6 +9,8 @@ outer_loop:
     project: SCRUM
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
+    # jira_base_url: https://your-org.atlassian.net   # 非機密;不設則用 ~/.env 的
+    #                                # JIRA_BASE_URL(email/token 一律只在 ~/.env)
     write_retry: {max: 5, base_sec: 1}
     # cancel_status: Cancelled     # triage(select)回 notfound → 中止時,Jira 想轉的取消
     #                              # 狀態名(workflow 相關);沒有則優雅退回一般結案(done)

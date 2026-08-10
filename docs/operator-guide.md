@@ -31,6 +31,19 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   [--runtime DIR] [--control-url URL] [--log-level LEVEL]`;`--host 127.0.0.1` 鎖本機、
   `--control-url` 指向本實例的 control API。**全走 CLI flag(不再讀 env)**。
 - **log 層級**:`--log-level` 等同設環境變數 `ARCP_LOG_LEVEL`(預設 INFO)。
+- **環境變數速查**(絕大多數不用設,有預設或走 CLI/config):
+
+  | 變數 | 用途 | 預設 / 來源 |
+  |---|---|---|
+  | `JIRA_EMAIL` / `JIRA_API_TOKEN` | **憑證(必填)** | `~/.env`,永不進 git、不顯示值 |
+  | `JIRA_BASE_URL` | Jira 實例 URL(**非機密**) | 建議放 **config.yaml `source.jira_base_url`**;不設則用 `~/.env` 的 `JIRA_BASE_URL` |
+  | `ARCP_CONFIG` | config 檔路徑 | 預設 `config.yaml`(或 `arcp.paths`) |
+  | `ARCP_LOG_LEVEL` / `ARCP_LOG_FILE` | log 層級 / 檔 | INFO / 無(`--log-level` 會設前者) |
+  | `ARCP_NAME` | dashboard 實例名覆寫 | config `source.name` |
+  | `ARCP_HOURLY_RATE` | ROI 顯示的人力時薪(選配) | 無(不設就不顯示人力成本對比) |
+
+  Jira 連結由 **`source.jira_base_url`(config)→ `~/.env` JIRA_BASE_URL** 解析;email/token
+  一律只在 `~/.env`。`config.yaml` 進版控,填 base_url 前確認 URL 可公開,否則留在 `~/.env`。
 - **優雅停**:`curl -X POST :8787/shutdown`(當前輪跑完退出);或直接 Ctrl-C。
 - poller 是**時間盒**:到時自動退,靠外部(cron / 迭代)重起;重起不重跑(冪等靠 `runtime/`)。
   要 24h+ 常駐請用 `-m 0`。
@@ -76,7 +89,8 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
 主頁票表**保持精簡**(掃視用);點 key 進**詳情頁**看全部。詳情頁「**來源・連結・用量**」卡:
 - **來源**:人開/route、排程/單次 **job**、**跨票交接子票**、**ClearQuest CR** —— 由 journal +
   session 推導(零額外欄位)。
-- **連結**:**Jira**(需環境變數 `JIRA_BASE_URL` 才成連結,不設則顯示 key)、**CR**
+- **連結**:**Jira**(需 config `source.jira_base_url` 或 `~/.env` JIRA_BASE_URL 才成連結,
+  不設則顯示 key)、**CR**
   (`clearquest_id`;CQ base_url 設了才成連結)、以及**本票發過的一次性連結清單**(指令台 /
   評分·決策·hold / budget 增額,含類型/狀態/建立時間/**完整可點 token URL** + 大檔 `/files`)。
 - **用量**:per-ticket cost/tokens vs soft/hard 的 bar。

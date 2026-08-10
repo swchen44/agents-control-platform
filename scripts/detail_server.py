@@ -2204,10 +2204,17 @@ def _ticket_meta_card(iid, s, evs) -> str:
                      or f"http://{f.get('host', '127.0.0.1')}:"
                         f"{f.get('port', 8790)}")
         cq_base = ((src.get("cq_writeback") or {}).get("base_url") or "")
+        jira_base = (src.get("source") or {}).get("jira_base_url") or ""
         prof = load_profiles(_CONFIG_PATH).get(s.get("profile"))
     except Exception:                       # noqa: BLE001
-        pass
-    jira_base = os.environ.get("JIRA_BASE_URL", "").rstrip("/")
+        jira_base = ""
+    if not jira_base:                       # 後備:~/.env 的 JIRA_BASE_URL(只取 base)
+        try:
+            from arcp.config import load_env
+            jira_base = load_env().get("JIRA_BASE_URL", "")
+        except Exception:                   # noqa: BLE001
+            jira_base = ""
+    jira_base = jira_base.rstrip("/")
 
     if s.get("clearquest_id"):
         origin = f"ClearQuest CR «{esc(s['clearquest_id'])}»"
@@ -2220,7 +2227,7 @@ def _ticket_meta_card(iid, s, evs) -> str:
 
     links = [f"<a href='{jira_base}/browse/{esc(key)}' rel='noopener' "
              f"target='_blank'>Jira {esc(key)}</a>" if jira_base
-             else f"Jira {esc(key)}(設 JIRA_BASE_URL 才成連結)"]
+             else f"Jira {esc(key)}(設 source.jira_base_url 才成連結)"]
     if s.get("clearquest_id"):
         cid = esc(s["clearquest_id"])
         links.append(f"<a href='{esc(cq_base)}/{cid}' rel='noopener' "

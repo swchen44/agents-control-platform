@@ -11,6 +11,8 @@ outer_loop:
     project: SCRUM
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
+    # jira_base_url: https://<你的>.atlassian.net  # 填了 dashboard/poller 都用它;
+    #                    # 不填則用 ~/.env 的 JIRA_BASE_URL(此檔進版控,勿寫機密)
     write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
     # bot_account_id: '...'   # 可選(W12):機器人 accountId;不填→啟動 myself() 解析
     # W6.4:定時快照器已移除(耗資源)。transcript 改事件觸發+被動按鈕。
