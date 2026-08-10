@@ -95,8 +95,10 @@ Poller     ─▶ Dispatcher : 下輪 resume 續跑(precheck 用新 soft 過關)
 - **journal**:`pending(reason=budget, scope=…, cost_usd, tokens)`、`hil_requested`
   (schema=budget_increase)、`hil_resumed(reason=budget_increase)`、每輪
   `attempt_finished(cost, tokens)`。
-- **dashboard**:Agent Detail 頁「budget 當月用量 vs 上限」卡(全站 + 各 profile 的月
-  cost/tokens vs 上限,綠<80%/黃≥80%/紅≥100%);各 Profile 卡列 per-ticket soft/hard。
+- **dashboard**:①**Server 頁**燈號「budget 月用量(最高)」——全站 + 各 profile 月
+  cost/tokens 對上限的最高利用率(綠<80%/黃≥80%/紅≥100%/無上限 gray);②**Agent Detail
+  頁**「budget 當月用量 vs 上限」卡(逐列全站 + 各 profile);各 Profile 卡列 per-ticket
+  soft/hard。
 - **排錯**:見 [troubleshooting](../troubleshooting.md);事件語意見
   [observability](observability.md)。
 
