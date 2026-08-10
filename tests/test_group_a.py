@@ -9,12 +9,12 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from arcp.commands import CommandHandler, parse  # noqa: E402
+from arcp.commands import apply_command  # noqa: E402
 from arcp.hil import apply_submission  # noqa: E402
 from arcp.interaction import build_request  # noqa: E402
 from arcp.scoring import ScoreGate  # noqa: E402
 from arcp.store import Store, TicketSession  # noqa: E402
-from arcp.ticket import Comment, Ticket  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 from arcp.workspace import (  # noqa: E402
     _read_human_notes,
     append_human_instruction,
@@ -83,11 +83,9 @@ st.close()
 rt = tempfile.mkdtemp(); st = Store(rt); src = FakeSource()
 ws3 = os.path.join(rt, "tickets", "1", "ws"); os.makedirs(ws3)
 st.upsert_session(_sess(1, ws3))
-ch = CommandHandler(src, st, allowed_commenters=["me"],
-                    base_url="http://h:8790", mention="acc1")
-check("Q11 parse:@agent hold → hold", parse("@agent hold") == "hold")
-ch.handle(_tk(), Comment(id=9, author="me", author_id="me",
-                         body="@agent hold", created="2026-08-09T00:00:00"))
+# Q11 hold 改走指令台核心 apply_command(取代 @agent comment)
+apply_command(src, st, {"p": None}, 1, "hold", by="me@x.tw",
+              base_url="http://h:8790", mention="acc1")
 evict_file = os.path.join(rt, "tickets", "1", "attempts", "EVICT")
 holds = [r for r in st.interactions_for_ticket(1) if r.schema_id == "hold"]
 check("Q11:寫了 EVICT 檔(evict)", os.path.isfile(evict_file))

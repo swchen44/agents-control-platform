@@ -69,11 +69,8 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
 | `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
 | `closed` | `agent_score`, `by`, `human_score`, `outcome`, `request_id` | `src/arcp/hil.py`, `src/arcp/scoring.py` |
-| `command_accepted` | `author`, `command`, `note` | `src/arcp/commands.py` |
-| `command_denied` | `author`, `command` | `src/arcp/commands.py` |
+| `command_accepted` | `author`, `command` | `src/arcp/commands.py` |
 | `command_link_posted` | — | `src/arcp/hil.py` |
-| `command_rejected` | `command`, `target` | `src/arcp/commands.py` |
-| `command_unknown` | `body` | `src/arcp/commands.py` |
 | `comment_added` | `author`, `body`, `comment_id` | `src/arcp/poller.py` |
 | `deliverables_posted` | `has_output`, `mode`, `n_attachments`, `skipped` | `src/arcp/deliverables.py` |
 | `dispatch_error` | `error` | `src/arcp/poller.py` |
@@ -107,7 +104,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 48 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 45 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -159,10 +156,12 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - ⚠️ `handoff_invalid`(`kind`/`to`/`via`):換手目標無效(profile 不存在/kind 空)→ 換手沒
   生效;`via=hil` 時已 fail-safe 降級為續跑原 agent(不硬失敗),查 `to`/`kind`。
 
-**D. 指令通道(commands.py)** —— 人在 Jira 留 `@agent` 指令:
-- `command_accepted` / `command_denied`(非白名單作者)/ `command_rejected`(對象不對)/
-  `command_unknown`(認不得的指令)。**指令沒效果**時查這四個:被 denied=作者不在
-  `allowed_commenters`;unknown=指令拼錯。
+**D. 指令通道(commands.py / 指令台)** —— 人走「指令台」表單、自動化走 REST API
+(`apply_command`;取代舊 `@agent` comment 通道):
+- `command_accepted`(`command`/`author`):一個指令(run/retry/hold/stop/cancel)已執行,
+  `author` = 提交者 email。**指令沒效果**時查它有沒有出現:沒有 = 表單擋在前面(狀態
+  不適用 / 破壞性未確認 / 缺 email),或連結已失效(票 close)。`next` 換手記 `handoff`
+  (`kind=command`)。佈建見 `command_link_posted`(§A)。
 - ⚠️ `external_abort`(`state`):外部把票改成 `cancel_states`(如「完成」)→ 中止。
   `external_cleared`(`cause`):外部變更已消化。
 - `assignee_alert` / `assignee_restored`:assignee 被改離 agent(告警留言)/ 改回
@@ -274,10 +273,11 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - 異常:如果你以為已經填了卻還 stalled → 表單提交沒成功(Jira 降級時「不落地」?)。
 - 連看:`reminders` 次數;Jira 該票的 @mention 留言 + 表單連結;troubleshooting §2/§6。
 
-**`command_denied` / `command_rejected` / `command_unknown`** — 指令沒生效(commands)
-- 何時:有人留 `@agent …` 但沒被執行。
-- 連看:`denied`=作者不在白名單(`author`);`unknown`=拼錯(`body`);`rejected`=對象
-  /狀態不對(`target`)。對應 troubleshooting §7。
+**`command_accepted` 沒出現** — 指令台指令沒生效
+- 何時:人在指令台按了指令,但票狀態沒變。
+- 連看:表單頁的錯誤訊息(狀態不適用 / cancel·stop 未勾確認 / 缺 email);連結是否已
+  失效(票 close → `command_link_posted` 後看有無 `closed`);`command_accepted` 有沒有
+  進 journal(`author`=提交 email)。對應 troubleshooting §7。
 
 **`dispatch_error` / `trigger_error`** — 派工/觸發時擲例外(poller)
 - 異常訊號本身。連看 `error` 字串 + poller 主控台輸出 + troubleshooting §4。

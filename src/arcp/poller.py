@@ -29,7 +29,7 @@ log = get_logger("poller")
 class OuterLoop:
     def __init__(self, source: JiraCloudSource, store: Store,
                  routes: list[Route], jql: str, dispatcher=None,
-                 commands=None, external=None, max_running: int = 1,
+                 external=None, max_running: int = 1,
                  concurrency: dict | None = None, triggers=None,
                  scoregate=None, project: str = "", command_link_fn=None):
         self.source = source
@@ -38,7 +38,6 @@ class OuterLoop:
         self.routes = routes
         self.jql = jql
         self.dispatcher = dispatcher   # None = pure grey mode (Phase 1)
-        self.commands = commands       # CommandHandler (Phase 3;移除中→改指令台)
         # 指令台佈建:command_link_fn(ticket)->events;票首次成 create_or_resume
         # 候選時寫指令連結進 description + 貼指路 comment(冪等)。
         self.command_link_fn = command_link_fn
@@ -112,10 +111,8 @@ class OuterLoop:
                     events.append(self.store.journal(
                         "comment_added", t.id, t.key, comment_id=c.id,
                         author=c.author, body=c.body[:200]))
-                    # 指令在 dispatch 之前處理:retry/run 解除 pending 後,
-                    # 同一輪 poll 就會重新派工
-                    if self.commands is not None:
-                        events.extend(self.commands.handle(t, c))
+                    # 人的指令已改走「指令台」表單(取代 @agent comment 解析);
+                    # 留言只記 comment_added 供觀測,不再從中解析指令。
             new_watermark = max([watermark] + [c.id for c in t.comments])
 
             self.store.upsert(TicketWatch(

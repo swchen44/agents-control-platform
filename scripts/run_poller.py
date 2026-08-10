@@ -21,7 +21,7 @@ import sys
 import time
 
 from arcp.approval import ApprovalGate
-from arcp.commands import CommandHandler, ExternalChangePolicy, apply_command
+from arcp.commands import ExternalChangePolicy, apply_command
 from arcp.config import jira_credentials
 from arcp.control_api import ControlAPI
 from arcp.dispatcher import Dispatcher
@@ -63,7 +63,7 @@ def adopt_existing(source, store, routes, jql) -> int:
     return n
 
 
-def make_reload(loop, disp, cmds, ext, config_path: str = "config.yaml"):
+def make_reload(loop, disp, ext, config_path: str = "config.yaml"):
     """W13/W4.5 hot reload(POST /reload):重讀 config、swap 引用。
 
     範圍與限制的完整說明見 docs/design/hotreload.md。壞 config → load_config/
@@ -79,11 +79,7 @@ def make_reload(loop, disp, cmds, ext, config_path: str = "config.yaml"):
         loop.concurrency = s_cfg.get("concurrency") or loop.concurrency
         loop.triggers = new_triggers                   # W4.5:triggers 可 reload
         disp.profiles = new_profiles
-        cmds.profiles = new_profiles
         ext.profiles = new_profiles                    # W4.5:離手定格查表同步
-        new_cmt = (s_cfg.get("commands") or {}).get("allowed_commenters")
-        if new_cmt:
-            cmds.allowed = new_cmt                     # W4.5:白名單可 reload
         new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
         if new_cancel:
             ext.cancel_states = new_cancel             # W4.5:終止狀態可 reload
@@ -162,12 +158,8 @@ def main(argv: list[str] | None = None) -> int:
     form_port = args.form_port or int(fcfg.get("port", 8790))  # CLI 覆寫 config
     form_base = fcfg.get("base_url") or f"http://{form_host}:{form_port}"
     mention = fcfg.get("mention_account_id", "")
-    # W4.5:allowed_commenters / cancel_states 從 config 接線(原 hardcode)
-    cmds = CommandHandler(
-        src, store,
-        (source_cfg.get("commands") or {}).get("allowed_commenters")
-        or ["Shao-wei Chen"],
-        profiles=profiles, base_url=form_base, mention=mention)  # Q11:hold 開表單
+    # W4.5:cancel_states 從 config 接線(原 hardcode)。人的指令改走指令台表單,
+    # 不再有 @agent comment 白名單。
     ext = ExternalChangePolicy(
         src, store,
         (source_cfg.get("external_change") or {}).get("cancel_states")
@@ -180,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
 
     loop = OuterLoop(
         src, store, routes, jql,
-        dispatcher=disp, commands=cmds, external=ext,
+        dispatcher=disp, external=ext,
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
         project=source_cfg.get("project", ""),             # jobs P2:agent-job 開票用
@@ -196,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
                             jira_base_url=getattr(src, "base_url", "")))
     loop.poll_interval = interval                            # W9.1 control 顯示
 
-    _reload = make_reload(loop, disp, cmds, ext, cfg_path)  # W13/W4.5 hot reload
+    _reload = make_reload(loop, disp, ext, cfg_path)  # W13/W4.5 hot reload
 
     # 指令核心閉包:人的表單 console 與自動化 REST API 共用同一條(在 poller 行程,
     # 故 hold 能正確 killpg 跑中的 agent)。取代舊 @agent comment 通道。

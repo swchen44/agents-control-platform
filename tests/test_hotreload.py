@@ -22,7 +22,6 @@ version: 1
 outer_loop:
   source: {project: X, jql: 'jql-v1'}
   concurrency: {max_running: 2, per_engine: {}, per_profile: {}}
-  commands: {allowed_commenters: ['Alice']}
   external_change: {cancel_states: ['Done']}
   triggers:
     - {name: t1, script: '/bin/true', run_name: r1, every: 1h}
@@ -38,7 +37,6 @@ inner_loop:
 """
 
 GOOD_V2 = GOOD_V1.replace("jql-v1", "jql-v2") \
-    .replace("['Alice']", "['Bob']") \
     .replace("['Done']", "['完成']") \
     .replace("max_running: 2", "max_running: 5") \
     .replace("- {name: t1, script: '/bin/true', run_name: r1, every: 1h}",
@@ -53,13 +51,11 @@ class _Obj:
 
 
 def _fixture(path):
-    loop, disp, cmds, ext = _Obj(), _Obj(), _Obj(), _Obj()
+    loop, disp, ext = _Obj(), _Obj(), _Obj()
     loop.routes, loop.jql, loop.concurrency, loop.triggers = [], "", {}, []
     disp.profiles = {}
-    cmds.profiles, cmds.allowed = {}, []
     ext.profiles, ext.cancel_states = {}, []
-    return make_reload(loop, disp, cmds, ext, config_path=path), \
-        loop, disp, cmds, ext
+    return make_reload(loop, disp, ext, config_path=path), loop, disp, ext
 
 
 def _write(path, text):
@@ -70,10 +66,10 @@ def _write(path, text):
 def test_reload_full_scope():
     path = tempfile.mkstemp(suffix=".yaml")[1]
     _write(path, GOOD_V1)
-    reload_fn, loop, disp, cmds, ext = _fixture(path)
+    reload_fn, loop, disp, ext = _fixture(path)
     out = reload_fn()
     assert out == {"routes": 1, "profiles": 1, "triggers": 1}
-    assert loop.jql == "jql-v1" and cmds.allowed == ["Alice"]
+    assert loop.jql == "jql-v1"
 
     _write(path, GOOD_V2)                       # 改 config → 全範圍 swap
     out = reload_fn()
@@ -81,18 +77,17 @@ def test_reload_full_scope():
     assert loop.jql == "jql-v2"
     assert loop.concurrency["max_running"] == 5
     assert [t.name for t in loop.triggers] == ["t1", "t2"]
-    assert cmds.allowed == ["Bob"]              # 白名單可 reload(W4.5 接線)
     assert ext.cancel_states == ["完成"]         # 終止狀態可 reload
-    assert disp.profiles is cmds.profiles is ext.profiles  # 三處同一份
+    assert disp.profiles is ext.profiles        # 兩處同一份
 
 
 def test_bad_config_fail_safe():
     path = tempfile.mkstemp(suffix=".yaml")[1]
     _write(path, GOOD_V1)
-    reload_fn, loop, disp, cmds, ext = _fixture(path)
+    reload_fn, loop, disp, ext = _fixture(path)
     reload_fn()
     old = (loop.routes, loop.jql, loop.triggers, disp.profiles,
-           cmds.allowed, ext.cancel_states)
+           ext.cancel_states)
 
     _write(path, BAD)                           # 壞 config
     try:
@@ -102,7 +97,7 @@ def test_bad_config_fail_safe():
         pass
     # 舊設定原封續用(fail-safe:引用完全沒動)
     assert (loop.routes, loop.jql, loop.triggers, disp.profiles,
-            cmds.allowed, ext.cancel_states) == old
+            ext.cancel_states) == old
 
 
 if __name__ == "__main__":

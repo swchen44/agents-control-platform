@@ -1837,7 +1837,7 @@ _TRANSCRIPT_REASON = {
     "close:SUCCESS": "結案(成功)", "close:FAILURE": "結案(失敗)",
     "close:ABORTED": "結案(撤銷)", "evict": "強制驅逐(killpg)",
     "handoff-human": "轉交人類", "handoff-agent": "換手其他 agent",
-    "handoff-cmd": "指令換手(@agent next)", "assignee-inactive": "指派給人類(暫停)",
+    "handoff-cmd": "指令換手(指令台 next)", "assignee-inactive": "指派給人類(暫停)",
     "pending:budget": "等待人類(預算耗盡)", "manual": "手動產生(按鈕)",
     "unknown": "未知",
 }
@@ -2655,9 +2655,10 @@ _ARCH_MODULES = {
                 "description human 段 + session",
                 "human_score + journal", "poller",
                 "sections·jira_source·store"),
-    "commands": ("commands", "@agent 留言指令(run/retry/stop/cancel/next/"
-                 "handoff)", "poller 偵測新留言", "Comment + 白名單",
-                 "指令效果(解 pending / 換手…)+ journal", "poller",
+    "commands": ("commands", "指令核心 apply_command(run/retry/hold/stop/cancel/"
+                 "next):人走指令台表單、自動化走 REST API",
+                 "form_server / control_api 呼叫", "issue_id + cmd + by(email)",
+                 "指令效果(解 pending / 換手…)+ journal", "form_server·control_api",
                  "store·jira_source"),
     "external": ("external(離手政策)", "assignee/status 政策:交人讓額度、回機器人"
                  "resume、外部關 Done=撤銷", "poller 偵測 status/assignee 變更",
@@ -2933,7 +2934,7 @@ _STATE_DOC = [
      "結果=outcome。",
      "outcome ∈ {SUCCESS, FAILURE, UNKNOWN}"),
     ("撤銷/交接 aborted",
-     "人在看板關 Done/Cancelled、@agent cancel,或交接→新票被 supersede。",
+     "人在看板關 Done/Cancelled、指令台 cancel,或交接→新票被 supersede。",
      "ticket_session.outcome='ABORTED'"),
     ("關票·離開 closed(概念終點)",
      "HIL(End) 後人關 Jira(Done)→ 票離開 jql 視野;非 DB 態,session 保留最後"
@@ -3010,7 +3011,7 @@ _ARCH_META = {
     "approval": ("arcp/approval.py", "ApprovalGate.gate"),
     "scoring": ("arcp/scoring.py",
                 "ScoreGate.on_poll / collect_score / write_handoff_sections"),
-    "commands": ("arcp/commands.py", "CommandHandler.handle"),
+    "commands": ("arcp/commands.py", "apply_command(指令台 + REST API)"),
     "external": ("arcp/commands.py",
                  "ExternalChangePolicy.on_status_changed / on_assignee_changed"),
     "sections": ("arcp/sections.py",
@@ -3117,7 +3118,8 @@ def render_concepts_page() -> str:
         "<p class='sys' style='text-align:left'>觸發:人在 HIL(End) "
         "<code>score_and_close</code> 或 HIL(Middle) <code>decision</code> 表單選"
         "「改派下一棒」,再選換手種類 + 下一棒 profile(下拉,候選=載入的全部 profile)"
-        "+ 交接指示;或 agent 自發 <code>@agent next</code>(僅同票換手)。</p>"
+        "+ 交接指示;人也可在<b>指令台</b>下 <code>next</code>、或 agent 自發"
+        "(envelope <code>status=handoff</code>)——皆僅同票換手。</p>"
         "<ul style='line-height:1.8'>"
         "<li><b>同票換手(next)→ 回進行中</b>:<b>同一張 Jira</b>,重置 session"
         "(<code>session_id</code>=None、<code>attempts</code>=0)、鎖定新 profile、"

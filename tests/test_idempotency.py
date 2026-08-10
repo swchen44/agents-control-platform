@@ -16,13 +16,12 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp import dispatcher as dmod  # noqa: E402
 from arcp.approval import ApprovalGate  # noqa: E402
-from arcp.commands import CommandHandler  # noqa: E402
 from arcp.dispatcher import Dispatcher  # noqa: E402
 from arcp.inner_runner import AttemptResult  # noqa: E402
 from arcp.profiles import Profile  # noqa: E402
 from arcp.sections import Section, render  # noqa: E402
 from arcp.store import Store  # noqa: E402
-from arcp.ticket import Comment, Ticket  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 
 BOT = "BOT-ACCT"
 
@@ -148,23 +147,6 @@ def test_approval_first_entry_idempotency_key():
     g.gate(_ticket(desc=written, assignee_id="APPR"), prof, sess)
     assert len(src.comments) == 1                  # 說明不重貼
     assert list(src.desc.values()) == [written]    # description 不重寫
-
-
-# -- 盤點 #2:指令重放冪等 -------------------------------------------------- #
-def test_command_replay_idempotent():
-    store = Store(tempfile.mkdtemp())
-    from arcp.store import TicketSession
-    store.upsert_session(TicketSession(
-        issue_id=1, key="P-1", profile="p", workspace="ws", session_id="s1",
-        attempts=1, outcome=None, pending_reason=None, cost_usd=0.0))
-    src = MockSource()
-    h = CommandHandler(src, store, ["Boss"])
-    c = Comment(id=9, author="Boss", author_id="b1", body="@agent cancel",
-                created="t")
-    h.handle(_ticket(), c)
-    h.handle(_ticket(), c)                         # watermark 丟失 → 重放
-    assert store.get_session(1).outcome == "ABORTED"   # 狀態冪等
-    assert len(src.comments) == 2                  # ack 重複一則(記錄於盤點 #2,可接受)
 
 
 # -- W5.1:sid 預派 + crash 偵測(盤點 #5)---------------------------------- #

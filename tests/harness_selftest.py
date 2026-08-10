@@ -10,12 +10,12 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from arcp.commands import CommandHandler, parse  # noqa: E402
+from arcp.commands import apply_command, available_commands  # noqa: E402
 from arcp.paths import config_dir  # noqa: E402
 from arcp.profiles import load_profiles  # noqa: E402
 from arcp.routing import ConfigError, load_config, match  # noqa: E402
 from arcp.store import Store, TicketSession  # noqa: E402
-from arcp.ticket import Comment, Ticket  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 
 ok = fail = 0
 
@@ -68,16 +68,7 @@ with tempfile.TemporaryDirectory() as tmp:
     except ConfigError:
         check("on_unknown: retry 被拒(v5 D3)", True)
 
-print("command parse:")
-check("run/RETRY/hold/stop/cancel 解析",
-      parse("@agent run now") == "run" and parse("@Agent RETRY") == "retry"
-      and parse("@agent hold") == "hold" and parse("@agent stop") == "stop"
-      and parse("@agent cancel x") == "cancel")
-check("@agent dance -> unknown", parse("@agent dance") == "unknown")
-check("[agent] 自家留言不解析", parse("[agent] ack: run") is None)
-check("一般留言不解析", parse("just a note about @agent stuff") is None)
-
-print("command channel semantics (FakeSource, tmp store):")
+print("command core(指令台;取代 @agent comment):")
 
 
 class FakeSource:
@@ -91,28 +82,23 @@ class FakeSource:
 with tempfile.TemporaryDirectory() as tmp:
     store = Store(tmp)
     src = FakeSource()
-    h = CommandHandler(src, store, allowed_commenters=["Boss"])
-    tk = t(id=7)
-    c_bad = Comment(id=1, author="Rando", author_id="r1",
-                    body="@agent cancel", created="")
-    h.handle(tk, c_bad)
-    check("白名單外 -> 拒絕留言、session 不變",
-          "未授權" in src.comments[-1][1] and store.get_session(7) is None)
     store.upsert_session(TicketSession(
         issue_id=7, key="SCRUM-9", profile="p", workspace="/w",
-        session_id="s", attempts=2, outcome="UNKNOWN",
-        pending_reason="unknown", cost_usd=0.1))
-    h.handle(tk, Comment(id=2, author="Boss", author_id="b1",
-                         body="@agent retry", created=""))
-    s = store.get_session(7)
+        session_id="s", attempts=2, outcome=None,
+        pending_reason="unknown", cost_usd=0.1))   # hil_middle(等人)
+    check("available_commands(pending)含 run/retry/cancel",
+          set(available_commands(store.get_session(7)))
+          >= {"run", "retry", "cancel"})
+    ok1, _, _ = apply_command(src, store, {"p": None}, 7, "retry", by="a@x.tw")
+    s7 = store.get_session(7)
     check("retry 解除 pending 並歸零 attempts",
-          s.outcome is None and s.pending_reason is None and s.attempts == 0)
-    h.handle(tk, Comment(id=3, author="Boss", author_id="b1",
-                         body="@agent cancel", created=""))
-    check("cancel -> ABORTED", store.get_session(7).outcome == "ABORTED")
-    h.handle(tk, Comment(id=4, author="Boss", author_id="b1",
-                         body="@agent dance", created=""))
-    check("不認得的指令收到說明", "可用" in src.comments[-1][1])
+          ok1 and s7.outcome is None and s7.pending_reason is None
+          and s7.attempts == 0)
+    ok2, _, _ = apply_command(src, store, {"p": None}, 7, "cancel", by="a@x.tw")
+    check("cancel -> ABORTED", ok2
+          and store.get_session(7).outcome == "ABORTED")
+    ok3, _, _ = apply_command(src, store, {"p": None}, 7, "run", by="a@x.tw")
+    check("aborted 後不接指令(擋)", not ok3)
     store.close()
 
 print("external-change policy:")

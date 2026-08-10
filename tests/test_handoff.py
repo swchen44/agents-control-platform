@@ -14,13 +14,13 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp import dispatcher as dmod  # noqa: E402
 from arcp.approval import ApprovalGate  # noqa: E402
-from arcp.commands import CommandHandler  # noqa: E402
+from arcp.commands import apply_command  # noqa: E402
 from arcp.dispatcher import Dispatcher  # noqa: E402
 from arcp.inner_runner import AttemptResult  # noqa: E402
 from arcp.profiles import Profile  # noqa: E402
 from arcp.sections import Section, render  # noqa: E402
 from arcp.store import Store, TicketSession  # noqa: E402
-from arcp.ticket import Comment, Ticket  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
 
 BOT = "BOT-ACCT"
 
@@ -63,15 +63,6 @@ def _ticket(desc="原始需求"):
                   assignee=None, assignee_id=BOT, description=desc)
 
 
-def _comment(body):
-    return Comment(id=9, author="Boss", author_id="b1", body=body,
-                   created="2026-08-05T00:00:00Z")
-
-
-def _handler(store, profiles):
-    return CommandHandler(MockSource(), store, ["Boss"], profiles=profiles)
-
-
 PROFILES = {"p": _profile("p"), "other": _profile("other")}
 
 
@@ -87,41 +78,38 @@ def _fork_recorder(structured=None):
     return _f, calls
 
 
-# -- @agent next 指令 ------------------------------------------------------- #
-def test_command_next_switches_profile():
+# -- next 指令(指令台;取代 @agent comment)-------------------------------- #
+def test_apply_next_switches_profile():
     store = Store(tempfile.mkdtemp())
     store.upsert_session(_sess(workspace="old-ws", session_id="s1",
-                               attempts=2, outcome="FAILURE",
-                               pending_reason="max-attempts"))
-    h = _handler(store, PROFILES)
-    ev = h.handle(_ticket(), _comment("@agent next other"))
-    assert [e["type"] for e in ev] == ["handoff"]
+                               attempts=2, outcome="FAILURE"))   # hil_end
+    ok, _msg, ev = apply_command(MockSource(), store, PROFILES, 1, "next",
+                                 args={"profile": "other"}, by="a@x.tw")
+    assert ok and [e["type"] for e in ev] == ["handoff"]
     sess = store.get_session(1)
     assert sess.profile == "other"
     assert sess.session_id is None and sess.attempts == 0
     assert sess.outcome is None and sess.pending_reason is None
     assert sess.workspace == "(handoff)"        # 下輪重 provision 新 instance
-    assert any("next → other" in c for _, c in h.source.comments)
 
 
-def test_command_next_invalid_target():
+def test_apply_next_invalid_target():
     store = Store(tempfile.mkdtemp())
     store.upsert_session(_sess(profile="p", workspace="old-ws",
-                               session_id="s1", attempts=1))
-    h = _handler(store, PROFILES)
-    ev = h.handle(_ticket(), _comment("@agent next nosuch"))
-    assert [e["type"] for e in ev] == ["command_rejected"]
+                               session_id="s1", attempts=1))     # running
+    ok, _msg, ev = apply_command(MockSource(), store, PROFILES, 1, "next",
+                                 args={"profile": "nosuch"}, by="a@x.tw")
+    assert (not ok) and ev == []
     sess = store.get_session(1)
-    assert sess.profile == "p" and sess.session_id == "s1"   # 原封不動
-    assert any("無效" in c for _, c in h.source.comments)
+    assert sess.profile == "p" and sess.session_id == "s1"       # 原封不動
 
 
-def test_command_next_bare_rejected():
+def test_apply_next_bare_rejected():
     store = Store(tempfile.mkdtemp())
-    store.upsert_session(_sess())
-    h = _handler(store, PROFILES)
-    ev = h.handle(_ticket(), _comment("@agent next"))
-    assert [e["type"] for e in ev] == ["command_rejected"]
+    store.upsert_session(_sess())                                # running
+    ok, _msg, ev = apply_command(MockSource(), store, PROFILES, 1, "next",
+                                 args={}, by="a@x.tw")
+    assert (not ok) and ev == []
 
 
 # -- dispatcher:鎖定的 profile 優先 + 重 provision ------------------------------------ #
