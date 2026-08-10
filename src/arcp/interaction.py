@@ -106,7 +106,13 @@ def gen_request_id() -> str:
 
 @dataclass
 class InteractionRequest:
-    """一次互動請求:綁單一 ticket + 單一 Request ID + 單一 schema。"""
+    """一次互動請求:綁單一 ticket + 單一 Request ID + 單一 schema。
+
+    kind:
+      "hil"     單次:系統需要人回答(審批/補資訊/評分),submit 即失效。
+      "command" 常駐:人主動下指令的表單 console,綁票、可重複用、close 才失效
+                (submit 不翻 SUBMITTED)。見 docs/design/interaction.md。
+    """
     request_id: str
     issue_id: int
     key: str
@@ -114,6 +120,7 @@ class InteractionRequest:
     schema_version: int
     token: str
     created_at: float
+    kind: str = "hil"
     expires_at: float = 0.0        # 0 = 未設(一般綁票生命週期 / 短窗)
     status: str = PENDING
     # context(唯讀顯示):question / options / grader / agent_score
@@ -135,15 +142,19 @@ class InteractionRequest:
 
 def build_request(issue_id: int, key: str, schema_id: str,
                   payload: dict | None = None, ttl_sec: float = 0.0,
-                  now: float | None = None) -> InteractionRequest:
-    """產生一筆新請求(含 token)。ttl_sec>0 才設有效期。"""
-    if schema_id not in FORM_SCHEMAS:
+                  now: float | None = None,
+                  kind: str = "hil") -> InteractionRequest:
+    """產生一筆新請求(含 token)。ttl_sec>0 才設有效期。kind=command 為常駐指令表單
+    (schema_id 可用哨值 'command',不在 FORM_SCHEMAS 內故略過 schema 檢查)。"""
+    if kind != "command" and schema_id not in FORM_SCHEMAS:
         raise ValueError(f"unknown schema_id: {schema_id}")
     now = time.time() if now is None else now
+    version = FORM_SCHEMAS[schema_id]["version"] if schema_id in FORM_SCHEMAS \
+        else SCHEMA_VERSION
     return InteractionRequest(
         request_id=gen_request_id(), issue_id=int(issue_id), key=key,
-        schema_id=schema_id, schema_version=FORM_SCHEMAS[schema_id]["version"],
-        token=gen_token(), created_at=now,
+        schema_id=schema_id, schema_version=version,
+        token=gen_token(), created_at=now, kind=kind,
         expires_at=(now + ttl_sec) if ttl_sec else 0.0,
         payload=payload or {})
 

@@ -119,6 +119,7 @@ class Store:
                 schema_id      TEXT NOT NULL,
                 schema_version INTEGER NOT NULL,
                 created_at     REAL NOT NULL,
+                kind           TEXT NOT NULL DEFAULT 'hil',
                 expires_at     REAL NOT NULL DEFAULT 0,
                 status         TEXT NOT NULL DEFAULT 'pending',
                 payload        TEXT,
@@ -166,6 +167,11 @@ class Store:
         if "run_count" not in tcols:               # jobs P2:次數上限記數
             self._db.execute("ALTER TABLE trigger_state ADD COLUMN"
                              " run_count INTEGER NOT NULL DEFAULT 0")
+        icols = {r[1] for r in self._db.execute(
+            "PRAGMA table_info(interactions)")}
+        if "kind" not in icols:                    # 指令 console:hil/command
+            self._db.execute("ALTER TABLE interactions ADD COLUMN"
+                             " kind TEXT NOT NULL DEFAULT 'hil'")
 
     def get(self, issue_id: int) -> TicketWatch | None:
         with self._lock:
@@ -357,7 +363,7 @@ class Store:
     # -- W11.2 互動請求(一次性 token 表單)------------------------------------ #
     _IX_COLS = ("request_id, token, issue_id, key, schema_id, schema_version,"
                 " created_at, expires_at, status, payload, submission,"
-                " submitted_at, submitted_by, reminders, reminded_at")
+                " submitted_at, submitted_by, reminders, reminded_at, kind")
 
     @staticmethod
     def _row_to_interaction(row):
@@ -369,7 +375,8 @@ class Store:
             payload=json.loads(row[9]) if row[9] else {},
             submission=json.loads(row[10]) if row[10] else None,
             submitted_at=row[11], submitted_by=row[12],
-            reminders=row[13], reminded_at=row[14])
+            reminders=row[13], reminded_at=row[14],
+            kind=row[15] if len(row) > 15 and row[15] else "hil")
 
     def upsert_interaction(self, r) -> None:
         with self._lock, self._db:
@@ -379,8 +386,8 @@ class Store:
                     (request_id, token, issue_id, key, schema_id,
                      schema_version, created_at, expires_at, status, payload,
                      submission, submitted_at, submitted_by, reminders,
-                     reminded_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     reminded_at, kind)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(request_id) DO UPDATE SET
                     status=excluded.status, payload=excluded.payload,
                     submission=excluded.submission,
@@ -393,7 +400,8 @@ class Store:
                   json.dumps(r.payload, ensure_ascii=False),
                   json.dumps(r.submission, ensure_ascii=False)
                   if r.submission is not None else None,
-                  r.submitted_at, r.submitted_by, r.reminders, r.reminded_at))
+                  r.submitted_at, r.submitted_by, r.reminders, r.reminded_at,
+                  getattr(r, "kind", "hil")))
 
     def get_interaction(self, token: str):
         """依 token 取請求(表單服務入口用);查無回 None。"""
@@ -414,6 +422,32 @@ class Store:
         """該票仍 pending 且未逾期的請求(催辦 / 觸發偵測用)。"""
         return [r for r in self.interactions_for_ticket(issue_id)
                 if r.is_open(now)]
+
+    def get_command_interaction(self, issue_id: int):
+        """該票的常駐指令 console token(kind='command');查無回 None。每票至多一個。"""
+        for r in self.interactions_for_ticket(issue_id):
+            if getattr(r, "kind", "hil") == "command":
+                return r
+        return None
+
+    def get_or_create_command_token(self, issue_id: int, key: str, now=None):
+        """取該票常駐指令 token;沒有就建一個(kind='command'、schema='command'、
+        status=pending、不設 expires)。回 InteractionRequest。"""
+        existing = self.get_command_interaction(issue_id)
+        if existing is not None:
+            return existing
+        from .interaction import build_request
+        req = build_request(issue_id, key, "command", kind="command", now=now)
+        self.upsert_interaction(req)
+        return req
+
+    def invalidate_ticket_commands(self, issue_id: int) -> None:
+        """票 close/取消時失效其指令 console token(狀態→invalidated)。"""
+        from .interaction import INVALIDATED
+        r = self.get_command_interaction(issue_id)
+        if r is not None and r.status != INVALIDATED:
+            r.status = INVALIDATED
+            self.upsert_interaction(r)
 
     def close(self) -> None:
         self._db.close()

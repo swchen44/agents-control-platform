@@ -644,30 +644,9 @@ def session_status(s: dict, qpos: dict[int, int]) -> tuple[str, str]:
     return "進行中", "running"
 
 
-def canonical_state(s: dict | None) -> str:
-    """W10.1(HIL 模型):把 (outcome, pending_reason, queued, inactive, 有無 session)
-    收斂成單一生命週期 key(6 態:dashboard per-profile 圖 + 狀態機共用)。
-
-    Model A:success/failure/unknown 不再是頂層態,收斂成 **hil_end** 的「結果」屬性
-    (result=outcome);舊 inactive(交人)+ 非終態 pending(審批/預算/待審視…)合併成
-    **hil_middle**。closed 是概念終點(人關 Jira→離開 jql,不設 DB 態)。
-    優先序:aborted > hil_end(終態評分)> hil_middle(pending 原因)> 排隊 >
-    hil_middle(交人)> 進行中。無 session = 待處理。此函式**唯讀**,只從既有 DB
-    欄位映射,不改 runtime 行為。"""
-    if not s:
-        return "todo"
-    oc = s.get("outcome")
-    if oc == "ABORTED":
-        return "aborted"
-    if oc in ("SUCCESS", "FAILURE", "UNKNOWN"):
-        return "hil_end"                 # 終點交人:評分 → 續跑/關票
-    if s.get("pending_reason"):
-        return "hil_middle"              # 過程中等人(審批/預算/待審視…)
-    if s.get("queued"):
-        return "queued"
-    if s.get("inactive"):
-        return "hil_middle"              # 過程中等人(交人:assignee 在人手上)
-    return "running"                     # 進行中
+# canonical_state 已抽到 arcp.lifecycle_state(單一真相來源;dashboard/console/
+# commands 共用)。此處 re-export 保留 detail_server.canonical_state 名稱相容。
+from arcp.lifecycle_state import canonical_state  # noqa: E402
 
 
 def saved_minutes(journal: list[dict]) -> float:

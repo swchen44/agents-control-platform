@@ -29,6 +29,7 @@ import os
 import re
 
 from .jira_source import JiraCloudSource
+from .lifecycle_state import canonical_state
 from .logutil import get_logger
 from .store import Store
 from .ticket import Comment, Ticket
@@ -44,6 +45,148 @@ def _finalize_leaving(sess, profiles: dict | None, reason: str) -> None:
     engine = engine_of_agent(prof.agent) if prof is not None else "claude"
     finalize_transcript(sess.session_id, engine, sess.workspace,
                         pack=False, reason=reason)
+
+
+def _write_evict(sess) -> None:
+    """寫 EVICT 檔 → agent 看門狗 killpg(同 control /evict);無 workspace 則略。"""
+    ws = getattr(sess, "workspace", "") or ""
+    if ws in ("", "(adopted)", "(handoff)"):
+        return
+    artifacts = os.path.join(os.path.dirname(ws), "attempts")
+    try:
+        os.makedirs(artifacts, exist_ok=True)
+        with open(os.path.join(artifacts, "EVICT"), "w") as f:
+            f.write("evict")
+    except OSError as e:               # 寫不了不擋指令(可能還沒 spawn)
+        log.warning("evict 寫檔失敗 %s: %s", getattr(sess, "key", "?"), e)
+
+
+# ── 指令核心(表單 console + REST API 共用;取代 @agent comment 通道)────────── #
+# COMMAND_INFO:每個指令的用途/時機/副作用/效果 —— console 說明表與文件共用。
+COMMAND_INFO: dict[str, dict] = {
+    "run": {
+        "label": "續跑(run)", "purpose": "解除 pending,讓 agent 接著跑",
+        "when": "卡在等待(pending:budget / unknown / 放行後)",
+        "side_effect": "清除 pending 原因;attempts 不歸零",
+        "effect": "下輪 poll 重新派工續跑(沿用同一 session)"},
+    "retry": {
+        "label": "重試(retry)", "purpose": "attempts 歸零並解除 pending,從頭再試",
+        "when": "失敗或卡住、想整輪重來",
+        "side_effect": "attempts 歸零、清 pending;沿用同一 session",
+        "effect": "下輪 poll 重新派工,從第一次 attempt 起算"},
+    "hold": {
+        "label": "強制中斷(hold)", "purpose": "立刻停住正在跑的 agent 並轉人",
+        "when": "agent 正在跑、但你要立即喊停給新指示",
+        "side_effect": "立即 killpg 當前 attempt(不耗 attempt);進 HIL(Middle)",
+        "effect": "另開一張 hold 表單請你給新指示;填完 agent 帶著它 resume"},
+    "stop": {
+        "label": "交還人工(stop)", "purpose": "把票交回人,暫不再派 agent",
+        "when": "想先讓人接手、不要 agent 繼續",
+        "side_effect": "pending:human-decision;讓出 F1 併發額度",
+        "effect": "不再派工,直到 run/retry 或人處理"},
+    "cancel": {
+        "label": "取消(cancel)", "purpose": "撤銷本票,此後不再派工",
+        "when": "這票不做了 / 誤開 / 判不出",
+        "side_effect": "outcome=ABORTED(終態);破壞性、需二次確認",
+        "effect": "永久停派;要復活請走 HIL(End) 的『續跑』"},
+    "next": {
+        "label": "換手(next)", "purpose": "同票換一個 agent profile 接手",
+        "when": "想換 profile / 引擎繼續同一件事",
+        "side_effect": "重置 session(session_id/attempts 歸零)、重建 workspace",
+        "effect": "下輪由新 profile 接手同一張票(目標若需放行則重走審批門)"},
+}
+# 破壞性指令:console 要二次確認
+DESTRUCTIVE = ("cancel", "stop")
+
+
+def available_commands(sess) -> list[str]:
+    """依當前推導狀態列出此刻適用的指令(console 動態選單 + apply 再驗共用)。"""
+    st = canonical_state(sess)
+    if st in ("todo", "aborted"):
+        return []                                  # 無 session / 已終態:不接指令
+    if st == "running":
+        return ["hold", "stop", "cancel", "next"]
+    if st == "queued":
+        return ["stop", "cancel", "next"]
+    if st == "hil_middle":                         # pending / 交人:等人推進
+        return ["run", "retry", "cancel", "next"]
+    if st == "hil_end":                            # 終態評分中(關單/續跑走 HIL 表單)
+        return ["retry", "cancel", "next"]
+    return ["cancel"]
+
+
+def apply_command(source, store, profiles, issue_id: int, cmd: str,
+                  args: dict | None = None, by: str = "", *,
+                  base_url: str = "", mention: str = "") -> tuple[bool, str, list]:
+    """執行一個指令(人的表單 console 與自動化 REST API 共用的唯一核心)。
+
+    回 (ok, 人看的結果訊息, events)。by=提交者身分(email,稽核)。args={profile:…}
+    供 next。在 poller 行程內呼叫 → hold 能正確 killpg。狀態不適用 / 目標無效 →
+    (False, 原因, [])。"""
+    args = args or {}
+    if cmd not in COMMAND_INFO:
+        return False, f"未知指令:{cmd}", []
+    sess = store.get_session(issue_id)
+    if sess is None:
+        return False, "此票尚無 session(尚未開始處理),暫無可下指令。", []
+    key = sess.key
+    if cmd not in available_commands(sess):
+        return (False,
+                f"指令「{cmd}」在目前狀態({canonical_state(sess)})不適用。", [])
+
+    def _audit(extra: str = "") -> None:
+        source.add_comment(issue_id, f"[agent] 指令 {cmd} by {by or '—'}"
+                                     f"(via 指令表單){extra}")
+
+    if cmd == "next":
+        target = str(args.get("profile") or "").strip()
+        if not target or (profiles is not None and target not in profiles):
+            avail = (", ".join(sorted(profiles)) if profiles else "—")
+            return False, f"next 目標 profile 無效:'{target}'(可用:{avail})", []
+        _finalize_leaving(sess, profiles, "handoff-cmd")
+        sess.profile = target
+        sess.session_id = None
+        sess.attempts = 0
+        sess.outcome, sess.pending_reason = None, None
+        sess.inactive, sess.queued, sess.queued_at = False, False, 0.0
+        sess.approval_revisions = 0
+        sess.workspace = "(handoff)"
+        store.upsert_session(sess)
+        _audit(f" → {target}")
+        log.info("%s 換手指令 → %s by %s", key, target, by)
+        return (True, f"已換手 → {target};下輪重新排隊接手。",
+                [store.journal("handoff", issue_id, key, kind="command",
+                               to=target, author=by)])
+
+    if cmd == "hold":
+        _write_evict(sess)                         # 立即 killpg(不耗 attempt)
+        sess.pending_reason = "hold"
+        store.upsert_session(sess)
+        from .hil import request_human  # lazy:避免 import 期耦合
+        request_human(
+            source, store, issue_id, key, "hold",
+            question="人類強制中斷,請給 agent 新指示(填完 agent 會帶著它 resume)",
+            base_url=base_url, mention=mention)
+        _audit()
+        log.info("%s hold:evict + 開 hold 表單 by %s", key, by)
+        return (True, "已中斷,agent 已停;請再填 hold 表單給新指示。",
+                [store.journal("command_accepted", issue_id, key,
+                               command="hold", author=by)])
+
+    if cmd in ("run", "retry"):
+        if cmd == "retry":
+            sess.attempts = 0
+        sess.outcome, sess.pending_reason = None, None
+    elif cmd == "stop":
+        sess.pending_reason = "human-decision"
+    elif cmd == "cancel":
+        sess.outcome, sess.pending_reason = "ABORTED", None
+    store.upsert_session(sess)
+    _audit()
+    log.info("%s 指令 %s by %s", key, cmd, by)
+    return (True, f"已執行:{cmd}。",
+            [store.journal("command_accepted", issue_id, key,
+                           command=cmd, author=by)])
 
 
 _COMMANDS: list[tuple[re.Pattern, str]] = [
@@ -86,17 +229,8 @@ class CommandHandler:
         self.mention = mention
 
     def _evict_running(self, sess) -> None:
-        """Q11:寫 EVICT 檔 → agent 看門狗 killpg(同 control /evict);無 workspace 則略。"""  # noqa: E501
-        ws = getattr(sess, "workspace", "") or ""
-        if ws in ("", "(adopted)", "(handoff)"):
-            return
-        artifacts = os.path.join(os.path.dirname(ws), "attempts")
-        try:
-            os.makedirs(artifacts, exist_ok=True)
-            with open(os.path.join(artifacts, "EVICT"), "w") as f:
-                f.write("evict")
-        except OSError as e:           # 寫不了不擋指令(可能還沒 spawn)
-            log.warning("hold evict 寫檔失敗 %s: %s", getattr(sess, "key", "?"), e)
+        """Q11:寫 EVICT 檔 → agent 看門狗 killpg(同 control /evict)。"""
+        _write_evict(sess)
 
     def _authorized(self, c: Comment) -> bool:
         return (c.author in self.allowed) or (c.author_id in self.allowed)
