@@ -37,11 +37,14 @@ log = get_logger("control")
 class ControlAPI:
     def __init__(self, poller, store, reload_fn=None,
                  host: str = "127.0.0.1", port: int = 8787,
-                 profiles_fn=None):
+                 profiles_fn=None, command_fn=None):
         self.poller = poller
         self.store = store
         self.reload_fn = reload_fn
         self.profiles_fn = profiles_fn     # W6.4:被動產 transcript 查 engine
+        # per-ticket 指令 API 的核心(自動化 + 人表單共用);簽章:
+        #   command_fn(issue_id, cmd, args:dict, by:str) -> (ok, msg, events)
+        self.command_fn = command_fn
         api = self
 
         class _Handler(BaseHTTPRequestHandler):
@@ -107,6 +110,11 @@ class ControlAPI:
                     except ValueError:
                         return self._json(400, {"error": "bad issue id"})
                     return self._json(*api.gen_transcript(iid))
+                # per-ticket 指令:POST /ticket/<id>/command {cmd, args, by}
+                # 人的表單 console 與自動化都打這條(在 poller 行程 → 能 killpg)
+                if (self.path.startswith("/ticket/")
+                        and self.path.endswith("/command")):
+                    return self._json(*api.run_command(self))
                 if self.path == "/reload":
                     if api.reload_fn is None:
                         return self._json(501, {"error": "reload 未接線"})
@@ -128,6 +136,34 @@ class ControlAPI:
     def port(self) -> int:
         """實際綁定 port(建構傳 0 = 系統配 ephemeral,測試用)。"""
         return self._server.server_address[1]
+
+    def run_command(self, handler) -> tuple[int, dict]:
+        """POST /ticket/<id>/command:body JSON {cmd, args, by} → command_fn。
+        回 (code, obj)。command_fn 跑到了就回 200 {ok, message}(狀態不適用也是
+        200 ok=false,方便表單統一顯示);請求本身壞才回 4xx/501。"""
+        if self.command_fn is None:
+            return 501, {"error": "command_fn 未接線"}
+        try:
+            iid = int(handler.path.split("/")[2])
+        except (ValueError, IndexError):
+            return 400, {"error": "bad issue id"}
+        n = int(handler.headers.get("Content-Length") or 0)
+        try:
+            body = json.loads(handler.rfile.read(n).decode("utf-8")) if n else {}
+        except (ValueError, UnicodeDecodeError):
+            return 400, {"error": "bad json body"}
+        cmd = str(body.get("cmd") or "").strip()
+        if not cmd:
+            return 400, {"error": "missing cmd"}
+        args = body.get("args") or {}
+        by = str(body.get("by") or "").strip()
+        try:
+            ok, msg, _ = self.command_fn(iid, cmd, args, by)
+        except Exception as e:  # noqa: BLE001 — 指令錯不弄死 API
+            log.warning("control: command %s/%s 失敗:%s", iid, cmd, e)
+            return 500, {"error": str(e)}
+        log.info("control: command %s/%s by %s → ok=%s", iid, cmd, by, ok)
+        return 200, {"ok": ok, "message": msg}
 
     def gen_transcript(self, iid: int) -> tuple[int, dict]:
         """W6.4 被動:人在 Jira ticket 頁按「產生 transcript」→ 對當前 session

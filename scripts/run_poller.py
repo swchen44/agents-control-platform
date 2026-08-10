@@ -21,7 +21,7 @@ import sys
 import time
 
 from arcp.approval import ApprovalGate
-from arcp.commands import CommandHandler, ExternalChangePolicy
+from arcp.commands import CommandHandler, ExternalChangePolicy, apply_command
 from arcp.config import jira_credentials
 from arcp.control_api import ControlAPI
 from arcp.dispatcher import Dispatcher
@@ -193,11 +193,18 @@ def main(argv: list[str] | None = None) -> int:
 
     _reload = make_reload(loop, disp, cmds, ext, cfg_path)  # W13/W4.5 hot reload
 
+    # 指令核心閉包:人的表單 console 與自動化 REST API 共用同一條(在 poller 行程,
+    # 故 hold 能正確 killpg 跑中的 agent)。取代舊 @agent comment 通道。
+    def _command_fn(issue_id, cmd, args, by):
+        return apply_command(src, store, profiles, issue_id, cmd, args or {},
+                             by, base_url=form_base, mention=mention)
+
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,
                      host=ctl.get("host", "127.0.0.1"),
                      port=args.control_port or int(ctl.get("port", 8787)),
-                     profiles_fn=lambda: disp.profiles)  # W6.4 被動 transcript
+                     profiles_fn=lambda: disp.profiles,  # W6.4 被動 transcript
+                     command_fn=_command_fn)             # per-ticket 指令 API
     api.start()
     # W6.4:移除定時快照器(耗資源)。transcript 改純事件觸發(換手/交人/
     # evict/close 由 dispatcher·commands 呼 finalize)+ 被動按鈕(control

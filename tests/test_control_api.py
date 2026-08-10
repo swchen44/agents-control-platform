@@ -58,6 +58,53 @@ def _post(api, path):
         return e.code, json.loads(e.read())
 
 
+def _post_json(api, path, obj):
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{api.port}{path}",
+        data=json.dumps(obj).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def test_command_endpoint():
+    """POST /ticket/<id>/command → command_fn;回 200{ok,message};請求壞→4xx/501。"""
+    calls = []
+
+    def _cmd_fn(iid, cmd, args, by):
+        calls.append((iid, cmd, args, by))
+        if cmd == "boom":
+            return False, "不適用", []
+        return True, f"已執行:{cmd}", [{"type": "command_accepted"}]
+
+    # 未接 command_fn → 501
+    api0 = _api()
+    try:
+        assert _post_json(api0, "/ticket/5/command", {"cmd": "run"})[0] == 501
+    finally:
+        api0.stop()
+
+    api = ControlAPI(FakePoller(), Store(tempfile.mkdtemp()), host="127.0.0.1",
+                     port=0, command_fn=_cmd_fn)
+    api.start()
+    try:
+        code, body = _post_json(api, "/ticket/5/command",
+                                {"cmd": "run", "args": {}, "by": "a@x.tw"})
+        assert code == 200 and body == {"ok": True, "message": "已執行:run"}
+        assert calls[-1] == (5, "run", {}, "a@x.tw")
+        # 狀態不適用:仍 200,ok=false(表單統一顯示)
+        code, body = _post_json(api, "/ticket/5/command", {"cmd": "boom"})
+        assert code == 200 and body["ok"] is False and body["message"] == "不適用"
+        # 壞請求
+        assert _post_json(api, "/ticket/abc/command", {"cmd": "run"})[0] == 400
+        assert _post_json(api, "/ticket/5/command", {})[0] == 400  # 缺 cmd
+    finally:
+        api.stop()
+
+
 def test_health():
     api = _api()
     try:
