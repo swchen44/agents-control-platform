@@ -2517,7 +2517,57 @@ def render_agent_page() -> str:
                 ("on_unknown", p.on_unknown),
             ]) + "</div>")
 
-    return head + cfg_card + routes_card + pcards + "</main>"
+    budget_card = _budget_usage_card(read_journal(), src.get("budget") or {},
+                                     profiles)
+    return head + cfg_card + budget_card + routes_card + pcards + "</main>"
+
+
+def _budget_usage_card(journal, budget_cfg, profiles) -> str:
+    """budget 當月用量 vs 上限(月/agent + 全站):綠<80% 黃≥80% 紅≥100%。"""
+    import datetime
+    ref = datetime.datetime.now()
+
+    def _sum(field, profile=None):
+        t = 0.0
+        for e in journal:
+            if e.get("type") != "attempt_finished" or not e.get(field):
+                continue
+            if profile is not None and e.get("profile") != profile:
+                continue
+            edt = datetime.datetime.fromtimestamp(e.get("ts") or 0)
+            if edt.year == ref.year and edt.month == ref.month:
+                t += float(e[field])
+        return t
+
+    def _cell(used, cap, is_usd):
+        fmt = (lambda v: f"${v:,.2f}") if is_usd else (lambda v: f"{int(v):,}")
+        if not cap:
+            return f"{fmt(used)} / —"
+        pct = used / cap * 100
+        col = ("s-failure" if pct >= 100 else
+               "s-unknown" if pct >= 80 else "s-success")
+        return (f"<span style='color:var(--{col})'>{fmt(used)} / {fmt(cap)}"
+                f"({pct:.0f}%)</span>")
+
+    g = budget_cfg or {}
+    rows = [f"<tr><td><b>全站(global)</b></td>"
+            f"<td>{_cell(_sum('cost'), g.get('monthly_max_usd'), True)}</td>"
+            f"<td>{_cell(_sum('tokens'), g.get('monthly_max_tokens'), False)}"
+            f"</td></tr>"]
+    for name in sorted(profiles):
+        p = profiles[name]
+        rows.append(
+            f"<tr><td>{esc(name)}</td>"
+            f"<td>{_cell(_sum('cost', name), p.monthly_max_usd, True)}</td>"
+            f"<td>{_cell(_sum('tokens', name), p.monthly_max_tokens, False)}"
+            f"</td></tr>")
+    return ("<h2>budget 當月用量 vs 上限(月/agent + 全站)</h2><div class='card'>"
+            "<table><thead><tr><td><b>範圍</b></td><td><b>USD 用量/上限</b></td>"
+            "<td><b>token 用量/上限</b></td></tr></thead><tbody>"
+            + "".join(rows) + "</tbody></table>"
+            "<div class='sys' style='text-align:left'>綠 &lt;80% · 黃 ≥80% · 紅 "
+            "≥100%(達上限→pending:budget,只管理者改 config + hot reload)。"
+            "per-ticket soft/hard 見各 Profile 卡與該票詳情。</div></div>")
 
 
 # ── W7.6:概念/生命週期/狀態機頁(純 SVG,零依賴)────────────────────────── #

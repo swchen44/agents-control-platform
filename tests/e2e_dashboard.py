@@ -415,6 +415,9 @@ try:
     check("Agent Detail:W7 新欄位可見",
           "budget.monthly_max_usd(月/agent)" in apage
           and "est_minutes(有效" in apage and "goal" in apage)
+    check("Agent Detail:budget 當月用量 vs 上限卡",
+          "budget 當月用量 vs 上限" in apage
+          and "全站(global)" in apage)
     check("Agent Detail:不外洩憑證",
           "JIRA_API_TOKEN" not in apage and "api_token" not in apage)
     check("Server 頁導覽含 Agent Detail tab", "href='/agent'" in spage)
