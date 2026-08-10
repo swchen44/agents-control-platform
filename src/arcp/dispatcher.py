@@ -23,7 +23,6 @@ from .inner_runner import run_attempt
 from .jira_source import JiraCloudSource
 from .logutil import get_logger
 from .profiles import Profile
-from .scoring import collect_budget_override
 from .store import Store, TicketSession
 from .ticket import Ticket
 from .transcript import engine_of_agent
@@ -60,7 +59,8 @@ def _resume_hint(sess: TicketSession) -> str:
 class Dispatcher:
     def __init__(self, source: JiraCloudSource, store: Store,
                  profiles: dict[str, Profile], root: str,
-                 server_manager=None, approval=None, cancel_status: str = ""):
+                 server_manager=None, approval=None, cancel_status: str = "",
+                 global_budget: dict | None = None):
         self.source = source
         self.store = store
         self.profiles = profiles
@@ -68,6 +68,8 @@ class Dispatcher:
         self.server_manager = server_manager   # conc.3 long-lived shared server
         self.approval = approval               # W2.3 ApprovalGate | None
         self.cancel_status = cancel_status     # triage 失敗時 Jira 想轉的「取消」狀態名
+        # budget:全站月度上限 dict{monthly_max_tokens, monthly_max_usd}(可 reload)
+        self.global_budget = global_budget or {}
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
                             events: list[dict]) -> list[dict]:
@@ -122,30 +124,84 @@ class Dispatcher:
                 "transcript_packed", ticket.id, ticket.key,
                 files=[os.path.basename(a) for a in arts]))
 
+    @staticmethod
+    def _fmt(metric: str, v) -> str:
+        return f"${float(v):.4f}" if metric == "usd" else f"{int(v):,} tok"
+
+    @staticmethod
+    def _field(metric: str, base: str) -> str:
+        return f"{base}_{'usd' if metric == 'usd' else 'tokens'}"
+
+    @staticmethod
+    def _first_hit(checks):
+        """回第一個 (metric, used, cap):cap 有設且 used≥cap。不可量的 metric used=0
+        →自然略過(codex 可能只有 token → usd 用量 0 不會誤卡)。"""
+        for metric, used, cap in checks:
+            if cap is not None and used is not None and float(used) >= float(cap):
+                return (metric, used, cap)
+        return None
+
     def _budget_precheck(self, ticket: Ticket, profile: Profile,
                          sess: TicketSession) -> list[dict]:
-        """W7.3 預算閘:此票單次(human `budget_override` 優先於 profile
-        max_budget_usd)或此 profile 當月累計達上限 → pending:budget、不 spawn。
-        回傳 pending 事件清單(空=可續跑)。"""
-        override = collect_budget_override(ticket.description or "")
-        single = override if override is not None else profile.max_budget_usd
-        if single is not None and sess.cost_usd >= single:
-            src = ("human budget_override" if override is not None
-                   else "profile 單次上限")
-            return self._budget_block(ticket, profile, sess, "single", (
-                f"[agent] pending:budget(單次)— 此票累計 ${sess.cost_usd:.4f} "
-                f"達{src} ${single:.4f}。放寬:在 human 段填 "
-                f"`budget_override: <USD>`(僅此票);或改 Profile。"
+        """budget 閘(每輪 attempt/resume 前):per-ticket(hard→soft)→ 月/agent →
+        全站,誰先破誰卡 → pending:budget。soft 破 = 使用者可自助增額(scope
+        ticket-soft);hard/月/全站 = 只管理者能改(留言通知)。兩 metric 都量到就都
+        檢查、任一破就卡;只量到一種就用那種。回 pending 事件(空=可續跑)。"""
+        used_usd, used_tok = sess.cost_usd, sess.tokens
+        soft_usd = (sess.soft_usd if sess.soft_usd is not None
+                    else profile.ticket_soft_usd)
+        soft_tok = (sess.soft_tokens if sess.soft_tokens is not None
+                    else profile.ticket_soft_tokens)
+
+        # 1) per-ticket hard(絕對上限;優先於 soft)
+        hit = self._first_hit([("usd", used_usd, profile.ticket_hard_usd),
+                               ("token", used_tok, profile.ticket_hard_tokens)])
+        if hit:
+            m, u, c = hit
+            fld = self._field(m, "ticket_hard")
+            return self._budget_block(ticket, profile, sess, "ticket-hard", (
+                f"[agent] pending:budget(單票 hard/{m})— 已用 {self._fmt(m, u)} "
+                f"達 hard 上限 {self._fmt(m, c)}。此為絕對上限:需**管理者**調高 "
+                f"profile «{profile.name}» 的 `budget.{fld}` 後 hot reload,自動續跑。"
                 f"\n{_resume_hint(sess)}"))
-        cap = profile.max_budget_monthly_usd
-        if cap is not None:
-            spent = self.store.monthly_cost(profile.name)
-            if spent >= cap:
-                return self._budget_block(ticket, profile, sess, "monthly", (
-                    f"[agent] pending:budget(月上限)— profile «{profile.name}» "
-                    f"當月已花 ${spent:.4f} 達月上限 ${cap:.4f}。"
-                    f"需調整 Profile.max_budget_monthly_usd 才能續跑。"
-                    f"\n{_resume_hint(sess)}"))
+
+        # 2) per-ticket soft → 使用者自助增額(增量 3 發一次性表單)
+        hit = self._first_hit([("usd", used_usd, soft_usd),
+                               ("token", used_tok, soft_tok)])
+        if hit:
+            m, u, c = hit
+            return self._budget_block(ticket, profile, sess, "ticket-soft", (
+                f"[agent] pending:budget(單票 soft/{m})— 已用 {self._fmt(m, u)} "
+                f"達 soft 上限 {self._fmt(m, c)}。可自助調高本票上限(≤ hard);"
+                f"稍後會發增額表單連結。\n{_resume_hint(sess)}"))
+
+        # 3) 月/agent hard(只管理者能改)
+        hit = self._first_hit([
+            ("usd", self.store.monthly_cost(profile.name),
+             profile.monthly_max_usd),
+            ("token", self.store.monthly_tokens(profile.name),
+             profile.monthly_max_tokens)])
+        if hit:
+            m, u, c = hit
+            return self._budget_block(ticket, profile, sess, "monthly", (
+                f"[agent] pending:budget(月/agent/{m})— profile «{profile.name}» "
+                f"當月已用 {self._fmt(m, u)} 達上限 {self._fmt(m, c)}。僅**管理者**能改"
+                f"(`budget.{self._field(m, 'monthly_max')}` + hot reload),本票才續跑。"
+                f"\n{_resume_hint(sess)}"))
+
+        # 4) 全站月度 hard(只管理者能改)
+        g = self.global_budget or {}
+        hit = self._first_hit([
+            ("usd", self.store.global_monthly_cost(), g.get("monthly_max_usd")),
+            ("token", self.store.global_monthly_tokens(),
+             g.get("monthly_max_tokens"))])
+        if hit:
+            m, u, c = hit
+            return self._budget_block(ticket, profile, sess, "global", (
+                f"[agent] pending:budget(全站/{m})— 全站當月已用 {self._fmt(m, u)} "
+                f"達 global 上限 {self._fmt(m, c)}。僅**管理者**能改"
+                f"(`outer_loop.budget.{self._field(m, 'monthly_max')}` + hot reload)。"
+                f"\n{_resume_hint(sess)}"))
         return []
 
     def _budget_block(self, ticket: Ticket, profile: Profile,
@@ -155,7 +211,7 @@ class Dispatcher:
         self.source.add_comment(ticket.id, msg)
         ev = [self.store.journal("pending", ticket.id, ticket.key,
                                  reason="budget", scope=scope,
-                                 cost_usd=sess.cost_usd)]
+                                 cost_usd=sess.cost_usd, tokens=sess.tokens)]
         finalize_transcript(sess.session_id,          # W6.4 等人類也產 transcript
                             engine_of_agent(profile.agent),
                             sess.workspace, pack=False, reason="pending:budget")
@@ -324,8 +380,8 @@ class Dispatcher:
                 return events
 
         while sess.attempts < profile.max_attempts:
-            # W7.3:spawn 前預算閘——此票單次(human budget_override 優先)或此
-            # profile 當月累計達上限 → pending:budget、不 spawn(跑前擋才不多燒)
+            # budget 閘:spawn 前檢查 per-ticket(soft/hard)/月/全站 → pending:budget、
+            # 不 spawn(跑前擋才不多燒;soft 可自助增額、hard/月/全站只管理者能改)
             blocked = self._budget_precheck(ticket, profile, sess)
             if blocked:
                 events.extend(blocked)
@@ -499,7 +555,7 @@ class Dispatcher:
 
             # A4/W7.3:budget 上限 — 本次未過驗證,若累計(單次/override)或當月
             # 已達上限就別再燒錢,交人(pending:budget)。通過的 attempt 已上面 return。
-            # 用同一個預檢(涵蓋 單次 + human budget_override + 月上限);last attempt
+            # 用同一個預檢(涵蓋 per-ticket soft/hard + 月 + 全站);last attempt
             # 剛好超支也會在此擋成 budget(而非落到下方 max-attempts FAILURE)。
             blocked = self._budget_precheck(ticket, profile, sess)
             if blocked:

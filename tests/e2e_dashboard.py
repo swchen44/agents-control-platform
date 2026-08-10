@@ -413,7 +413,7 @@ try:
           and "harness 設定(config.yaml)" in apage
           and "路由(route" in apage and "Profile · " in apage)
     check("Agent Detail:W7 新欄位可見",
-          "max_budget_monthly_usd(月)" in apage
+          "budget.monthly_max_usd(月/agent)" in apage
           and "est_minutes(有效" in apage and "goal" in apage)
     check("Agent Detail:不外洩憑證",
           "JIRA_API_TOKEN" not in apage and "api_token" not in apage)

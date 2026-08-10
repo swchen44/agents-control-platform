@@ -91,8 +91,8 @@ def load_config(path: str) -> tuple[dict, list[Route]]:
     }
     src["control"] = dict(outer.get("control") or {})    # W2.6 控制面
     src["form"] = dict(outer.get("form") or {})          # W11 互動表單服務
-    src["commands"] = dict(outer.get("commands") or {})  # W4.5:接線+可 reload
     src["external_change"] = dict(outer.get("external_change") or {})
+    src["budget"] = dict(outer.get("budget") or {})      # budget:全站月度上限
     return src, routes
 
 

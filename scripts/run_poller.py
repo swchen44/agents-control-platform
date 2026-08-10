@@ -79,6 +79,7 @@ def make_reload(loop, disp, ext, config_path: str = "config.yaml"):
         loop.concurrency = s_cfg.get("concurrency") or loop.concurrency
         loop.triggers = new_triggers                   # W4.5:triggers 可 reload
         disp.profiles = new_profiles
+        disp.global_budget = s_cfg.get("budget") or {}  # budget:全站上限可 reload
         ext.profiles = new_profiles                    # W4.5:離手定格查表同步
         new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
         if new_cancel:
@@ -150,7 +151,8 @@ def main(argv: list[str] | None = None) -> int:
               or src.myself().get("accountId", ""))
     disp = Dispatcher(src, store, profiles, root=runtime,
                       approval=ApprovalGate(src, store, bot_id),
-                      cancel_status=source_cfg.get("cancel_status", ""))  # triage 失敗
+                      cancel_status=source_cfg.get("cancel_status", ""),  # triage 失敗
+                      global_budget=source_cfg.get("budget") or {})  # 全站月度上限
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
     fcfg = source_cfg.get("form") or {}

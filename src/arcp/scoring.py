@@ -82,18 +82,6 @@ def collect_score(description: str | None) -> int | None:
     return n if SCORE_MIN <= n <= SCORE_MAX else None
 
 
-def collect_budget_override(description: str | None) -> float | None:
-    """W7.3:讀 human 段 `budget_override`(USD,此票單次上限放寬);非法/<=0 → None。"""
-    v = _human_value(description, "budget_override")
-    if v is None or (isinstance(v, str) and not v.strip()):
-        return None
-    try:
-        f = float(str(v).strip())
-    except (ValueError, TypeError):
-        return None
-    return f if f > 0 else None
-
-
 STALL_REMINDERS = 10             # W11:N 次無回應 → 記異常(可設)
 
 

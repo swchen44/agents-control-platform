@@ -18,6 +18,10 @@ outer_loop:
     per_engine: {claude: 2, codex: 1}
     per_profile: {}
 
+  budget:                          # 全站月度上限(只管理者能改 + hot reload;見 budget.md)
+    monthly_max_usd: 500.0
+    monthly_max_tokens: 200000000
+
   control:
     host: 127.0.0.1
     port: 8787
@@ -39,8 +43,13 @@ inner_loop:
   profiles:
     default:
       goal: '完成 ticket 描述交付的任務並通過驗證'
-      max_budget_usd: 1.0
-      max_budget_monthly_usd: 50.0
+      budget:                        # token/usd 上限(見 docs/design/budget.md)
+        ticket_soft_usd: 1.0         # 單票軟上限:破 → 使用者可自助增額(≤hard)
+        ticket_hard_usd: 3.0         # 單票硬上限:只管理者能改
+        ticket_soft_tokens: 300000   # token 同理(claude/codex 都量得到)
+        ticket_hard_tokens: 800000
+        monthly_max_usd: 50.0        # 月/此 agent 硬上限(只管理者能改)
+        monthly_max_tokens: 20000000
       human_minutes_est: 30          # KPI 節省人時估算
       # auto_close: off              # off(預設,正常 HIL 人評分)| on_success(只成功自動關)
       #                              | all(全終態自動關,無人值守);自動關時 human_score=agent 自評

@@ -4,7 +4,7 @@
 驗 dispatcher 的 budget 閘(決策 W4:超支=pending:budget,只有人能解除):
   B1 累計未超上限 → 跑滿 max_attempts → FAILURE(不進 budget)
   B2 一次 attempt 後超上限 → pending:budget、停在該次(不再 attempt)
-  B3 max_budget_usd=None → 不檢查(跑滿 attempts)
+  B3 ticket_hard_usd=None → 不檢查(跑滿 attempts)
 
 用假 run_attempt(回固定 cost、completed)+ 故意失敗的 verify(查不存在的檔)驅動
 重試迴圈;真 Store/provision/grader。
@@ -57,12 +57,13 @@ def _ticket():
 
 
 def _profile(budget):
-    # verify 查一個不存在的檔 → grade 必失敗 → 驅動重試/預算迴圈
+    # verify 查一個不存在的檔 → grade 必失敗 → 驅動重試/預算迴圈。
+    # budget 當 per-ticket hard usd 上限(達 hard → pending:budget)。
     return Profile(name="p", workspace_template="empty",
                    workspace_folder="tickets/{issue_id}", skills=[],
                    agent={"backend": "rawcli"},
                    verify=[VerifyStep(name="v", files={"never.txt": "x"})],
-                   max_attempts=2, on_unknown="pending", max_budget_usd=budget)
+                   max_attempts=2, on_unknown="pending", ticket_hard_usd=budget)
 
 
 def _run(budget, cost):

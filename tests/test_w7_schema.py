@@ -33,18 +33,22 @@ inner_loop:
     return path
 
 
-def test_goal_and_monthly_budget_load():
+def test_goal_and_budget_load():
     prof = load_profiles(_yaml(
-        profile_extra="      goal: '把登入逾時修好並補測試'",
-        loop_extra=", max_budget_monthly_usd: 50.0"))["p"]
+        profile_extra="      goal: '把登入逾時修好並補測試'\n"
+                      "      budget: {monthly_max_usd: 50.0, "
+                      "ticket_soft_usd: 1.0, ticket_hard_tokens: 500000}"))["p"]
     assert prof.goal == "把登入逾時修好並補測試"
-    assert prof.max_budget_monthly_usd == 50.0
+    assert prof.monthly_max_usd == 50.0
+    assert prof.ticket_soft_usd == 1.0
+    assert prof.ticket_hard_tokens == 500000
 
 
 def test_defaults_when_unset():
     prof = load_profiles(_yaml())["p"]
     assert prof.goal is None
-    assert prof.max_budget_monthly_usd is None          # None = 不限
+    assert prof.monthly_max_usd is None                 # None = 不限
+    assert prof.ticket_soft_usd is None and prof.ticket_hard_tokens is None
     assert prof.human_minutes_est is None               # 保留「未設」語意
     assert prof.est_minutes() == DEFAULT_HUMAN_MINUTES_EST == 240.0
 

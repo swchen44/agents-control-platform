@@ -86,7 +86,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `jira_write` | `action`, `detail` | `scripts/run_poller.py` |
 | `job_fired` | `job`, `profile`, `run_name`, `task_idx` | `src/arcp/triggers.py` |
 | `new_issue` | `state`, `summary` | `src/arcp/poller.py` |
-| `pending` | `cause`, `cost_usd`, `reason`, `scope` | `src/arcp/dispatcher.py` |
+| `pending` | `cause`, `cost_usd`, `reason`, `scope`, `tokens` | `src/arcp/dispatcher.py` |
 | `profile_selected` | `chosen`, `method`, `original` | `src/arcp/dispatcher.py` |
 | `queued` | `engine`, `profile` | `src/arcp/poller.py` |
 | `resolved` | `attempts`, `cost_usd`, `human_minutes_saved` | `src/arcp/dispatcher.py` |

@@ -21,6 +21,15 @@ from .routing import ConfigError
 DEFAULT_HUMAN_MINUTES_EST = 240.0
 
 
+def _iopt(v) -> int | None:
+    """budget 欄位:None 保持 None,否則轉 int。"""
+    return int(v) if v is not None else None
+
+
+def _fopt(v) -> float | None:
+    return float(v) if v is not None else None
+
+
 @dataclass
 class VerifyStep:
     name: str
@@ -40,7 +49,15 @@ class Profile:
     verify: list[VerifyStep]
     max_attempts: int
     on_unknown: str                  # must be "pending" (v5 D3)
-    max_budget_usd: float | None = None  # A4:超支→pending:budget(None=不限)
+    # budget(profile.budget:*;None=不限)。per-ticket soft/hard × token/usd:
+    # soft 破→使用者自助增額表單(≤hard);hard 破→只管理者能改。月/agent 單一 hard。
+    # 見 docs/design/budget.md。
+    ticket_soft_tokens: int | None = None
+    ticket_hard_tokens: int | None = None
+    ticket_soft_usd: float | None = None
+    ticket_hard_usd: float | None = None
+    monthly_max_tokens: int | None = None   # 月/此 agent hard(管理者專屬)
+    monthly_max_usd: float | None = None
     require_approval: bool = False    # W2.3 起點審批門(per-profile;開跑前)
     # auto_close(跑完收尾;require_approval 的另一端):off=正常 HIL(人評分關單)、
     # on_success=只 SUCCESS 自動關(其餘進 HIL)、all=全終態自動關。自動關時
@@ -53,8 +70,6 @@ class Profile:
     # W7(R1):人可讀的 agent 目標,交人評分時寫進 description 的 agent:<profile> 段,
     # 讓人對照判斷完成度。None → 用 route/profile 名 fallback。
     goal: str | None = None
-    # W7(R7):月預算上限(日曆月、跨票、per-profile;None=不限)。超過只能改此設定。
-    max_budget_monthly_usd: float | None = None
     # workspace 佈建(docs/design/workspace.md):
     # workspace_install=安裝命令(argv;設了就用它佈建,不 copytree);
     # common_skills=從 config/skills/ 選的資料夾名;inject_md=是否注入 inject 檔
@@ -125,6 +140,16 @@ def load_profiles(path: str) -> dict[str, Profile]:
         agent = p.get("agent") or {}
         if not agent.get("backend"):
             raise ConfigError(f"profile {name}: agent.backend 必填")
+        bud = p.get("budget") or {}
+        for metric, s_key, h_key in (("token", "ticket_soft_tokens",
+                                      "ticket_hard_tokens"),
+                                     ("usd", "ticket_soft_usd",
+                                      "ticket_hard_usd")):
+            s, h = bud.get(s_key), bud.get(h_key)
+            if s is not None and h is not None and float(s) > float(h):
+                raise ConfigError(
+                    f"profile {name}: budget.{s_key} 不得大於 {h_key}"
+                    f"({metric} soft≤hard)")
         auto_close = str(p.get("auto_close", "off"))
         if auto_close not in ("off", "on_success", "all"):
             raise ConfigError(f"profile {name}: auto_close 須為 "
@@ -164,8 +189,12 @@ def load_profiles(path: str) -> dict[str, Profile]:
             verify=steps,
             max_attempts=int(loop.get("max_attempts", 2)),
             on_unknown="pending",
-            max_budget_usd=(float(loop["max_budget_usd"])
-                            if loop.get("max_budget_usd") is not None else None),
+            ticket_soft_tokens=_iopt(bud.get("ticket_soft_tokens")),
+            ticket_hard_tokens=_iopt(bud.get("ticket_hard_tokens")),
+            ticket_soft_usd=_fopt(bud.get("ticket_soft_usd")),
+            ticket_hard_usd=_fopt(bud.get("ticket_hard_usd")),
+            monthly_max_tokens=_iopt(bud.get("monthly_max_tokens")),
+            monthly_max_usd=_fopt(bud.get("monthly_max_usd")),
             require_approval=bool(appr.get("required", False)),
             auto_close=auto_close,
             approver=appr.get("approver"),
@@ -175,9 +204,6 @@ def load_profiles(path: str) -> dict[str, Profile]:
                                if p.get("human_minutes_est") is not None
                                else None),
             goal=(str(p["goal"]) if p.get("goal") is not None else None),
-            max_budget_monthly_usd=(
-                float(loop["max_budget_monthly_usd"])
-                if loop.get("max_budget_monthly_usd") is not None else None),
             workspace_install=(str(ws["install"])
                                if ws.get("install") else None),
             common_skills=list(ws.get("common_skills") or []),
