@@ -24,6 +24,8 @@ from .ticket import Ticket
 log = get_logger("selection")
 
 _SCRIPT_TIMEOUT = 60.0
+# select 明確判不出適用 profile 的哨值 → dispatcher 中止(ABORTED),不派工。
+UNTRIAGEABLE = "notfound"
 
 
 def _pool(profile) -> list[str]:
@@ -83,13 +85,28 @@ def select_profile(ticket: Ticket, profile, profiles: dict,
         return profile.name, meta
     for line in (proc.stderr or "").splitlines():
         log.info("[select:%s] %s", ticket.key, line)
-    chosen = (proc.stdout or "").strip().splitlines()[-1].strip() \
-        if (proc.stdout or "").strip() else ""
-    if proc.returncode != 0 or chosen not in pool:
-        log.warning("select script rc=%s chosen=%r 不在 pool %s → fallback %s",
-                    proc.returncode, chosen, pool, profile.name)
-        meta["chosen"] = profile.name
-        meta["error"] = f"rc={proc.returncode} chosen={chosen!r}"
+    if proc.returncode != 0:                    # 腳本錯 → fail-safe 回 main
+        meta.update(chosen=profile.name, error=f"rc={proc.returncode}")
+        log.warning("select script rc=%s → fallback %s",
+                    proc.returncode, profile.name)
         return profile.name, meta
-    meta["chosen"] = chosen
+    # 嚴格 JSON stdout:{"profile": "<候選名|notfound>", "reason": "..."}
+    try:
+        out = json.loads((proc.stdout or "").strip())
+        chosen = str(out["profile"]).strip()
+    except (ValueError, KeyError, TypeError) as e:
+        meta.update(chosen=profile.name, error=f"bad stdout: {e}")
+        log.warning("select script stdout 非合法 JSON → fallback %s(%s)",
+                    profile.name, e)
+        return profile.name, meta
+    reason = str(out.get("reason") or "").strip()
+    if chosen == UNTRIAGEABLE:                   # 明確判不出 → 交給 dispatcher 中止
+        meta.update(chosen=UNTRIAGEABLE, untriageable=True, reason=reason)
+        return UNTRIAGEABLE, meta
+    if chosen not in pool:                        # 無效名 → fail-safe 回 main
+        meta.update(chosen=profile.name, error=f"chosen={chosen!r} 不在 pool")
+        log.warning("select chosen=%r 不在 pool %s → fallback %s",
+                    chosen, pool, profile.name)
+        return profile.name, meta
+    meta.update(chosen=chosen, reason=reason)
     return chosen, meta

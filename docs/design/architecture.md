@@ -50,9 +50,24 @@ trigger/輸入/輸出/上下游見下表(與 `/concepts` 頁的職責表同內�
 ## 3. HIL 生命週期(6 態 + 概念終點)
 
 `todo → running ⇄ queued`,人介入時進 `HIL(Middle)`(過程中等人)或 `HIL(End)`
-(終點評分),外部撤銷/交接進 `aborted`,人關 Jira 後 `closed`(概念終點,離開
-jql)。`success/failure/unknown` 是 **HIL(End) 的結果屬性**,不是頂層狀態。完整
-轉移圖與 DB 推導見 `/concepts` 頁與 [lifecycle.md](lifecycle.md)。
+(終點評分),外部撤銷/交接/**triage 判不出**進 `aborted`,人關 Jira 後 `closed`(概念終點,
+離開 jql)。`success/failure/unknown` 是 **HIL(End) 的結果屬性**,不是頂層狀態。
+
+### 3.1 狀態是「推導」的,沒有 state 欄(重要)
+
+**DB 沒有 `state` 欄**;6 態由 `detail_server.canonical_state()` 從**互相正交的原始欄**
+唯讀映射:`outcome`(SUCCESS/FAILURE/**ABORTED**/UNKNOWN/None)、`pending_reason`、
+`queued`、`inactive`、有無 session。優先序:**aborted > hil_end(終態評分)> hil_middle
+(pending 原因)> queued > hil_middle(inactive/交人)> running**;無 session = todo。
+
+**為何不加 state 欄**:行為邏輯(dispatcher / gate / ScoreGate)讀的是**原始欄**(如
+`outcome in (SUCCESS,ABORTED)` 判終態、gate 用 outcome/pending/queued/inactive 算 in-flight);
+若再加一個權威 `state` 字串 = **兩個真相來源** → 雙寫漂移,正是 D6/單一 writer 要避免的
+race。`canonical_state` 只是**讀模型**(dashboard / `/api/v1/tickets` 用),不參與行為。要看
+state 就查 API/dashboard,不必動 DB。範例:triage 判不出 → 寫 `outcome=ABORTED` +
+`profile=notfound` → 推導成 `aborted`(理由由 `profile=notfound` + journal `aborted` 得知)。
+
+完整轉移圖見 `/concepts` 頁與 [lifecycle.md](lifecycle.md);開發細節見 [開發者手冊](../developer-guide.md)。
 
 ## 4. agent↔agent 交接:兩種機制,怎麼選?
 

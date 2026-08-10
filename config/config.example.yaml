@@ -10,6 +10,8 @@ outer_loop:
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
     write_retry: {max: 5, base_sec: 1}
+    # cancel_status: Cancelled     # triage(select)回 notfound → 中止時,Jira 想轉的取消
+    #                              # 狀態名(workflow 相關);沒有則優雅退回一般結案(done)
 
   concurrency:
     max_running: 2

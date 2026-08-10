@@ -58,6 +58,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 <!-- BEGIN gen_event_dict -->
 | 事件 | 欄位(kwargs) | 產生點 |
 |---|---|---|
+| `aborted` | `detail`, `reason` | `src/arcp/dispatcher.py` |
 | `adopted` | — | `scripts/run_poller.py` |
 | `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py` |
 | `assignee_alert` | `assignee` | `src/arcp/commands.py` |
@@ -105,7 +106,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 46 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 47 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -124,6 +125,9 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 **B. 派工 + 證據迴路(dispatcher.py)** —— 內圈跑 agent:
 - `profile_selected`(`original`/`chosen`/`method`):Q16 首次派工選了不同 profile(A/B 測試 /
   泛化 triage)。看到它 = 這票沒用 route 原 profile,而是 select 選出的 `chosen`。
+- `aborted`(`reason`/`detail`):中止(不跑 agent)。`reason=untriageable` = triage(select)
+  判不出適用 profile(select 回 `notfound`)→ session `profile=notfound`、`outcome=ABORTED`、
+  Jira 轉取消(`source.cancel_status`,沒有則 done)。看 `detail` 知 select 給的原因。
 - `session_created`(建 workspace)→ `attempt_started` → `attempt_finished`
   (`raw`=completed/error/unknown、`cost`、`truly_resumed`、`error_kind`)。正常一輪。
 - `attempt_crash_recovered`(`resume`):偵測到上次 attempt 崩潰,這次靠 native resume

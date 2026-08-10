@@ -79,6 +79,15 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   **任何失敗 fail-safe 回 main**;journal 記 `profile_selected`(original / chosen / method),
   在 dashboard 事件時間軸 / `/api/v1/tickets` 可觀測「這票實際跑哪個 profile」。詳見
   [設計/選擇](design/selection.md)。
+- **triage 判不出 → Jira 取消狀態(`source.cancel_status`)**:當 `select`(triage)腳本回
+  `notfound`(判不出適用的 agent profile),票會中止(內部 `outcome=ABORTED`)。若設了
+  `source.cancel_status: "Cancelled"`(或你 workflow 的取消狀態名),harness 會**優先把 Jira
+  轉到那個狀態**;沒設或該 workflow 沒有這狀態 → 優雅退回一般結案(done-category),不擋流程。
+  Jira 沒有內建「取消」類別,所以這靠你 workflow 的狀態名——**公司內部 Jira workflow 較豐富時
+  很實用**(例:「Cancelled / Won't Do」)。其他 close(HIL 成功/失敗)維持一般 done。
+- **(預留)CQ 回寫**:若票來源是 ClearQuest(`clearquest_id` 有值),未來會在 close 時把 Jira
+  連結 + 結果回寫 CQ(`cq_writeback` 設定,含 base_url + 欄位對映)。**目前保留擴充點、尚未接
+  實際 HTTP**(等 CQ 端 URL/欄位確定)。設計見 [design/lifecycle.md](design/lifecycle.md)。
 - **控管花費**:profile 的 `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月);超支交人。
 - **控管並發**:`outer_loop.concurrency`(global + per-engine + per-profile);超額 QUEUED。
 - **排程 / 單次 job(週期或一次執行 agent)**:`outer_loop.triggers[]` 每個 job:

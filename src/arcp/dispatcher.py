@@ -60,13 +60,36 @@ def _resume_hint(sess: TicketSession) -> str:
 class Dispatcher:
     def __init__(self, source: JiraCloudSource, store: Store,
                  profiles: dict[str, Profile], root: str,
-                 server_manager=None, approval=None):
+                 server_manager=None, approval=None, cancel_status: str = ""):
         self.source = source
         self.store = store
         self.profiles = profiles
         self.root = root
         self.server_manager = server_manager   # conc.3 long-lived shared server
         self.approval = approval               # W2.3 ApprovalGate | None
+        self.cancel_status = cancel_status     # triage 失敗時 Jira 想轉的「取消」狀態名
+
+    def _abort_untriageable(self, ticket: Ticket, meta: dict,
+                            events: list[dict]) -> list[dict]:
+        """triage 判不出適用 profile → 中止:寫 profile=notfound + ABORTED、journal
+        aborted(reason=untriageable)、留言、Jira 轉取消(cancel_status;沒有則優雅退回
+        done-category)。不跑 agent。"""
+        reason = meta.get("reason") or ""
+        self.store.upsert_session(TicketSession(
+            issue_id=ticket.id, key=ticket.key, profile="notfound",
+            workspace="(untriaged)", session_id=None, attempts=0,
+            outcome="ABORTED", pending_reason=None, cost_usd=0.0))
+        events.append(self.store.journal(
+            "aborted", ticket.id, ticket.key, reason="untriageable",
+            detail=reason[:200]))
+        self.source.add_comment(ticket.id, (
+            "[agent] triage 判不出適用的 agent profile → 中止(ABORTED,不派工)。"
+            + (f"原因:{reason}" if reason else "")))
+        # Jira 取消:優先轉 cancel_status(config),沒有就退回 done-category
+        self.source.transition(ticket.id, "done",
+                               prefer_status=self.cancel_status or None)
+        log.info("%s triage untriageable → ABORTED", ticket.key)
+        return events
 
     def _post_deliverables(self, sess: TicketSession, ticket: Ticket,
                            outcome: str, res, events: list[dict]) -> None:
@@ -188,8 +211,10 @@ class Dispatcher:
         # Q16:首次派工(尚無 session)且 main profile 有 select → 選一個實際 profile
         # (A/B 測試 / 泛化 triage);選中的由下方 session 建立時 pin 住,resume 不重選。
         elif sess is None and getattr(profile, "select", None):
-            from .selection import select_profile
+            from .selection import UNTRIAGEABLE, select_profile
             chosen, meta = select_profile(ticket, profile, self.profiles)
+            if chosen == UNTRIAGEABLE:            # triage 判不出 → 中止,不跑 agent
+                return self._abort_untriageable(ticket, meta, events)
             if chosen != profile.name and chosen in self.profiles:
                 events.append(self.store.journal(
                     "profile_selected", ticket.id, ticket.key,

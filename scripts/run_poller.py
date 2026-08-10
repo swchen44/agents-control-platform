@@ -153,7 +153,8 @@ def main(argv: list[str] | None = None) -> int:
     bot_id = (source_cfg.get("bot_account_id")
               or src.myself().get("accountId", ""))
     disp = Dispatcher(src, store, profiles, root=runtime,
-                      approval=ApprovalGate(src, store, bot_id))
+                      approval=ApprovalGate(src, store, bot_id),
+                      cancel_status=source_cfg.get("cancel_status", ""))  # triage 失敗
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
     fcfg = source_cfg.get("form") or {}

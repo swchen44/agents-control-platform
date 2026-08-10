@@ -273,12 +273,28 @@ class JiraCloudSource:
                               body={"fields": fields})
         return self.get_ticket(issue["id"], with_comments=False)
 
-    def transition(self, id_or_key: str | int, to_category: str) -> bool:
-        """Move an issue to the first transition whose target statusCategory
-        matches (new|indeterminate|done) — category is locale-immune."""
+    def transition(self, id_or_key: str | int, to_category: str,
+                   prefer_status: str | None = None) -> bool:
+        """Move an issue to a transition. If prefer_status is given, first try a
+        transition whose target status NAME matches it (e.g. "Cancelled" —
+        workflow-specific); otherwise / if absent, fall back to the first
+        transition whose target statusCategory matches (new|indeterminate|done,
+        locale-immune)."""
         data = self._request("GET",
                              f"/rest/api/3/issue/{id_or_key}/transitions")
-        for tr in data.get("transitions", []):
+        trs = data.get("transitions", [])
+        if prefer_status:                        # 優先按狀態名(取消狀態,workflow 相關)
+            for tr in trs:
+                if (tr["to"].get("name") or "").strip().lower() \
+                        == prefer_status.strip().lower():
+                    self._request("POST",
+                                 f"/rest/api/3/issue/{id_or_key}/transitions",
+                                 body={"transition": {"id": tr["id"]}})
+                    self._notify_write("transition", id_or_key, prefer_status)
+                    return True
+            log.info("transition %s:找不到狀態 %r,退回 %s-category",
+                     id_or_key, prefer_status, to_category)
+        for tr in trs:
             if tr["to"]["statusCategory"]["key"] == to_category:
                 self._request("POST",
                              f"/rest/api/3/issue/{id_or_key}/transitions",

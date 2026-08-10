@@ -57,11 +57,9 @@ method=script 需有 `script`。任一不符 → `ConfigError`,不讓壞設定�
 ### method=random
 從 `[main] + candidates` **均勻隨機**挑一個(A/B 分流)。非密碼用途。
 
-### method=script
-把下列 JSON 餵給命令的 **stdin**;命令在 **stdout** 印出選中的 profile 名
-(取最後一非空行、strip;**必須 ∈ 池**)。可據 description / summary / labels / crid 做
-條件式 triage(例:標籤含 `urgent` → 選快版;description 提到 DB migration → 選 careful 版)。
+### method=script(I/O 契約:兩邊都 JSON)
 
+**stdin(JSON)** 餵給命令:
 ```json
 {
   "ticket": {"id","key","summary","description","created","updated","labels"},
@@ -73,17 +71,31 @@ method=script 需有 `script`。任一不符 → `ConfigError`,不讓壞設定�
 - `yaml` = 該 profile 的來源檔絕對路徑(`Profile.source_yaml`):inline 在主檔的 = `config.yaml`;
   拆到 `config/profiles/<名>.yaml` 的 = 該檔(Q15,per-owner)。腳本可據此讀 profile 細節。
 - `clearquest.crid` 目前由 dispatcher 傳入 `None`(= 空字串);待 R9 ClearQuest 觸發源接上才會填。
-- 逾時 **60s**(`selection._SCRIPT_TIMEOUT`);stderr 會被 logger 逐行吐出(`[select:<key>]`),
-  方便腳本除錯。
+- 逾時 **60s**(`selection._SCRIPT_TIMEOUT`);stderr 逐行吐 logger(`[select:<key>]`)方便除錯。
 
-## fail-safe(選擇失敗不擋派工)
+**stdout(嚴格 JSON)** —— 命令必須印出:
+```json
+{"profile": "<候選名 | notfound>", "reason": "為什麼(選填,進 journal/comment)"}
+```
+可據 description / summary / labels / crid 做條件式 triage(例:標籤含 `urgent` → 選快版)。
 
-選擇過程**任何失敗**一律 fallback 回 **main profile**,不擋派工(journal 記 `error`):
-- script 逾時 / 無法執行(`OSError`)
-- rc ≠ 0
-- stdout 回傳的名字不在池內
+**解析決策表:**
 
-> 設計原則:選 profile 是「加值」,不能因它出錯就讓票卡住;寧可退回 main 照跑。
+| stdout | 動作 |
+|---|---|
+| `profile` ∈ 候選池 | 寫入 `session.profile` 跑(鎖定,resume 不重選);`reason`→ journal `profile_selected` |
+| `profile == "notfound"` | **triage 判不出 → ABORTED(untriageable)**:`session.profile="notfound"`、`outcome=ABORTED`、journal `aborted(reason=untriageable, detail=reason)`、留言、**Jira 轉取消**(`source.cancel_status`,workflow 沒有則優雅退回 done-category) |
+| `profile` 非池內也非 notfound(無效名) | **fail-safe 回 main**(journal `error`)|
+| stdout 非合法 JSON / rc≠0 / 逾時 / crash | **fail-safe 回 main**(journal `error`)|
+
+## fail-safe vs 明確中止(兩者不同)
+
+- **明確 `notfound` → 中止(ABORTED)**:腳本「決定」這票沒有適用 agent → 不跑、Jira 取消。
+- **腳本壞掉 / 無效名 → fallback main**:那是**暫時性/設定問題**,不該因它讓真工作被誤關 →
+  退回 main 照跑(journal 記 `error`)。
+
+> 設計原則:選 profile 是「加值」,腳本出錯不擋派工(退 main);但腳本**明確說判不出**時,
+> 就如實中止(不硬塞 main 亂跑)。
 
 ## 與 triage(Q7)的關係:一機制同時決定「要不要人 + 選哪個 profile」
 

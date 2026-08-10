@@ -70,34 +70,44 @@ picks = {select_profile(_tk(), main, profiles)[0] for _ in range(30)}
 check("random:選出的都在 pool", picks <= {"fc", "fc_v2"})
 check("random:pool 兩個都可能被選到(30 次)", len(picks) >= 1)
 
-# ── script → 依 stdout 回名;無效/rc!=0 → fallback main ────────────── #
+# ── script → 嚴格 JSON stdout {profile,reason};notfound→中止、無效/rc→main ── #
 d = tempfile.mkdtemp()
-good_sh = os.path.join(d, "pick.sh")
-open(good_sh, "w").write('#!/bin/sh\ncat >/dev/null\necho fc_v2\n')
-os.chmod(good_sh, os.stat(good_sh).st_mode | stat.S_IEXEC)
-main_s = _prof("fc", {"candidates": ["fc_v2"], "method": "script",
-                      "script": f"{good_sh}"})
-profiles = {"fc": main_s, "fc_v2": _prof("fc_v2")}
-chosen, meta = select_profile(_tk(), main_s, profiles)
-check("script:stdout 回 fc_v2 → 選 fc_v2", chosen == "fc_v2")
 
-bad_sh = os.path.join(d, "bad.sh")
-open(bad_sh, "w").write('#!/bin/sh\ncat >/dev/null\necho nonexistent_profile\n')
-os.chmod(bad_sh, os.stat(bad_sh).st_mode | stat.S_IEXEC)
-main_b = _prof("fc", {"candidates": ["fc_v2"], "method": "script",
-                      "script": f"{bad_sh}"})
-profiles = {"fc": main_b, "fc_v2": _prof("fc_v2")}
-chosen, meta = select_profile(_tk(), main_b, profiles)
-check("script:回不在 pool 的名 → fallback main", chosen == "fc" and "error" in meta)
 
-rc_sh = os.path.join(d, "rc.sh")
-open(rc_sh, "w").write('#!/bin/sh\ncat >/dev/null\nexit 5\n')
-os.chmod(rc_sh, os.stat(rc_sh).st_mode | stat.S_IEXEC)
-main_r = _prof("fc", {"candidates": ["fc_v2"], "method": "script",
-                      "script": f"{rc_sh}"})
-profiles = {"fc": main_r, "fc_v2": _prof("fc_v2")}
-chosen, meta = select_profile(_tk(), main_r, profiles)
-check("script:rc!=0 → fallback main", chosen == "fc")
+def _script(name, body):
+    p = os.path.join(d, name)
+    open(p, "w").write("#!/bin/sh\ncat >/dev/null\n" + body + "\n")
+    os.chmod(p, os.stat(p).st_mode | stat.S_IEXEC)
+    return p
+
+
+def _sel(script):
+    m = _prof("fc", {"candidates": ["fc_v2"], "method": "script",
+                     "script": script})
+    return select_profile(_tk(), m, {"fc": m, "fc_v2": _prof("fc_v2")})
+
+
+chosen, meta = _sel(_script("pick.sh",
+                            'echo \'{"profile":"fc_v2","reason":"符合"}\''))
+check("script:JSON 回 fc_v2 → 選 fc_v2 + reason",
+      chosen == "fc_v2" and meta.get("reason") == "符合")
+
+chosen, meta = _sel(_script("nf.sh",
+                            'echo \'{"profile":"notfound","reason":"無適用"}\''))
+check("script:notfound → 回哨值(dispatcher 中止用)+ reason",
+      chosen == "notfound" and meta.get("untriageable")
+      and meta.get("reason") == "無適用")
+
+chosen, meta = _sel(_script("bad.sh", 'echo \'{"profile":"nonexistent"}\''))
+check("script:無效名(非池非notfound)→ fallback main",
+      chosen == "fc" and "error" in meta)
+
+chosen, meta = _sel(_script("notjson.sh", 'echo hello-plain-text'))
+check("script:stdout 非 JSON → fallback main",
+      chosen == "fc" and "error" in meta)
+
+chosen, meta = _sel(_script("rc.sh", 'exit 5'))
+check("script:rc!=0 → fallback main", chosen == "fc" and "error" in meta)
 
 print(f"test-selection: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

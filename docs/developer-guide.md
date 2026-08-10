@@ -39,6 +39,23 @@ caffeinate。詳 [需求與理由](requirements.md)。
 - **狀態·觀測·控制**:`store`(SQLite + journal)、`control_api`、`transcript`、`retention`
   (`detail_server.py` 唯讀 dashboard 在 `scripts/`)
 
+### 狀態怎麼推導(沒有 state 欄)
+
+**DB 不存 `state`**;6 態由 `detail_server.canonical_state()` 從原始欄唯讀映射:
+`outcome`(含 ABORTED)/`pending_reason`/`queued`/`inactive`/有無 session。**行為邏輯讀原始欄**
+(dispatcher `outcome in (SUCCESS,ABORTED)`、gate 算 in-flight、ScoreGate 終態判定),
+`canonical_state` 只是給 dashboard / `/api/v1/tickets` 的**讀模型**。**不要加權威 state 欄**
+(雙源真相 → 漂移;見 [architecture §3.1](design/architecture.md))。triage 判不出 =
+`outcome=ABORTED` + `profile=notfound` → 推導 `aborted`。
+
+### triage(select)判不出 → 中止
+
+`selection.select_profile` 的 script 模式:stdin JSON、**stdout 嚴格 JSON** `{profile,reason}`。
+`profile=="notfound"`(`UNTRIAGEABLE`)→ `dispatcher._abort_untriageable`:寫 `outcome=ABORTED`
++ `profile=notfound` + journal `aborted(reason=untriageable)` + `source.transition(…,
+prefer_status=cancel_status)`(Jira 取消,workflow 沒有則退回 done)。無效名/腳本錯 → fallback
+main。設計見 [selection.md](design/selection.md)。
+
 ### agent↔agent 交接(W10.3)在哪
 
 - **HIL 表單驅動**:`hil._do_handoff`(被 `apply_submission` 呼叫)。表單欄位(`handoff_kind`

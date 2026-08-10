@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+### Changed
+- **triage(select)結果模型 + 判不出即中止**:select script 的 **stdout 改嚴格 JSON**
+  `{"profile":"<名>|notfound","reason":"..."}`(取代舊的「純文字最後一行」)。`profile ∈ 池`
+  → 鎖定該 profile 跑(reason→journal);**`notfound` → ABORTED(untriageable)**:寫
+  `session.profile=notfound`、`outcome=ABORTED`、journal `aborted(reason=untriageable)`、留言、
+  **Jira 轉取消**(`source.cancel_status`,workflow 沒有則優雅退回 done-category);無效名/腳本
+  錯/逾時 → fail-safe 回 main。`jira_source.transition` 加 `prefer_status`(按狀態名優先、退回
+  category)。`dispatcher` 加 `cancel_status` + `_abort_untriageable`。新事件 `aborted`(共 47)。
+  用語:文件不再用「pin」,改「寫入/鎖定 session 的 profile」。
+  tests:test_selection 改 JSON、新增 test_triage_abort(6);selection.md I/O 契約 + 決策表、
+  architecture §3.1 + developer-guide「狀態是推導的、沒有 state 欄」、operator-guide cancel_status +
+  (預留)CQ 回寫。
+- **(預留)close→CQ 回寫**:設計定案(所有 close 若 clearquest_id 有值 → 回寫 Jira 連結+結果
+  到 CQ),config `cq_writeback` 為擴充點;**尚未接實際 HTTP**(等 CQ URL/欄位)。
+
 ### Added
 - **泛化 job(P2):週期/單次執行 agent → 開真 Jira 票**。`outer_loop.triggers[]` 加
   `count`(次數上限:1 單次 / 0 無上限需 cron / N 次;預設 1;持久化 `trigger_state.run_count`)
