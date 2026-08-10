@@ -76,6 +76,21 @@ FORM_SCHEMAS: dict[str, dict] = {
              "type": "textarea", "required": True},
         ],
     },
+    # budget:單票 soft 上限破 → 使用者自助調高(≤hard)。context(唯讀)放 payload:
+    # 已用 token/usd、soft/hard、summary 快照、transcript/jira 連結。上限校驗(≤hard)
+    # 在 hil.apply_submission(clamp 到 payload 帶的 hard)。
+    "budget_increase": {
+        "version": SCHEMA_VERSION, "title": "提高本票 token / 花費上限",
+        "hil": "middle",
+        "fields": [
+            {"key": "new_soft_usd", "label": "新的本票 USD 上限(選填,≤ hard)",
+             "type": "number", "required": False, "min": 0},
+            {"key": "new_soft_tokens", "label": "新的本票 token 上限(選填,≤ hard)",
+             "type": "int", "required": False, "min": 0},
+            {"key": "note", "label": "備註(選填)", "type": "textarea",
+             "required": False},
+        ],
+    },
     "score_and_close": {
         "version": SCHEMA_VERSION, "title": "評分與結案裁決", "hil": "end",
         # context(唯讀顯示,非欄位):grader outcome、agent 自評 —— 放 payload
@@ -208,11 +223,12 @@ def validate_submission(schema_id: str, data: dict | None,
             if f.get("required"):
                 errors.append(f"{f['label']}:必填")
             continue
-        if typ == "int":
+        if typ in ("int", "number"):
             try:
-                v = int(str(raw).strip())
+                v = int(str(raw).strip()) if typ == "int" \
+                    else float(str(raw).strip())
             except (ValueError, TypeError):
-                errors.append(f"{f['label']}:需整數")
+                errors.append(f"{f['label']}:需{'整數' if typ == 'int' else '數字'}")
                 continue
             lo, hi = f.get("min"), f.get("max")
             if (lo is not None and v < lo) or (hi is not None and v > hi):

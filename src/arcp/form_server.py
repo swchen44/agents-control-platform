@@ -82,10 +82,11 @@ def _field_html(f: dict, req, val=None) -> str:
     inp = ""
     if typ == "textarea":
         inp = f"<textarea name='{k}'>{v}</textarea>"
-    elif typ == "int":
+    elif typ in ("int", "number"):
         lo, hi = f.get("min", ""), f.get("max", "")
+        step = "1" if typ == "int" else "any"
         inp = (f"<input type='number' name='{k}' value='{v}' "
-               f"min='{lo}' max='{hi}'>")
+               f"min='{lo}' max='{hi}' step='{step}'>")
     elif typ == "select":
         raw = (f.get("options")
                or (req.payload.get(f["options_from"]) if req else []) or [])

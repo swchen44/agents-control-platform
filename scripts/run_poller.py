@@ -153,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
                       approval=ApprovalGate(src, store, bot_id),
                       cancel_status=source_cfg.get("cancel_status", ""),  # triage 失敗
                       global_budget=source_cfg.get("budget") or {})  # 全站月度上限
+    # budget soft 破→發增額表單需 form base_url/mention(下方 fcfg 定義後補設)
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
     fcfg = source_cfg.get("form") or {}
@@ -160,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     form_port = args.form_port or int(fcfg.get("port", 8790))  # CLI 覆寫 config
     form_base = fcfg.get("base_url") or f"http://{form_host}:{form_port}"
     mention = fcfg.get("mention_account_id", "")
+    disp.form_base_url, disp.mention = form_base, mention  # budget soft 增額表單用
     # W4.5:cancel_states 從 config 接線(原 hardcode)。人的指令改走指令台表單,
     # 不再有 @agent comment 白名單。
     ext = ExternalChangePolicy(

@@ -174,6 +174,39 @@ def _do_handoff(source, store, sess: TicketSession, req: InteractionRequest,
                           via="hil")]
 
 
+def _apply_budget_increase(source, store, sess, req: InteractionRequest,
+                           data: dict) -> list:
+    """budget_increase 提交:把新 soft 寫進 session(clamp ≤ payload 帶的 hard)、
+    解 budget pending → 下輪 resume。回事件。"""
+    p = req.payload or {}
+    hard_u, hard_t = p.get("hard_usd"), p.get("hard_tokens")
+    notes = []
+    nu, nt = data.get("new_soft_usd"), data.get("new_soft_tokens")
+    if nu is not None:
+        v = float(nu)
+        if hard_u is not None and v > float(hard_u):
+            v = float(hard_u)
+            notes.append("USD 封頂到 hard")
+        sess.soft_usd = v
+    if nt is not None:
+        v = int(nt)
+        if hard_t is not None and v > int(hard_t):
+            v = int(hard_t)
+            notes.append("token 封頂到 hard")
+        sess.soft_tokens = v
+    sess.pending_reason = None                      # 解 budget → 下輪 resume 續跑
+    store.upsert_session(sess)
+    tail = f"({';'.join(notes)})" if notes else ""
+    source.add_comment(req.issue_id, (
+        f"[agent] 已提高本票上限{tail}:soft usd="
+        f"{sess.soft_usd if sess.soft_usd is not None else '未改'}、soft token="
+        f"{sess.soft_tokens if sess.soft_tokens is not None else '未改'};下輪續跑。"))
+    log.info("%s budget_increase soft_usd=%s soft_tokens=%s",
+             req.key, sess.soft_usd, sess.soft_tokens)
+    return [store.journal("hil_resumed", req.issue_id, req.key,
+                          reason="budget_increase", request_id=req.request_id)]
+
+
 def apply_submission(source, store, req: InteractionRequest, *,
                      profiles: dict | None = None,
                      now: float | None = None) -> list[dict]:
@@ -226,6 +259,8 @@ def apply_submission(source, store, req: InteractionRequest, *,
                     evs.append(store.journal(       # closed(有別於 SUCCESS 的
                         "closed", req.issue_id, req.key, by="human",  # resolved)
                         request_id=req.request_id))
+        elif req.schema_id == "budget_increase":   # 自助調高本票 soft(≤hard)
+            evs.extend(_apply_budget_increase(source, store, sess, req, data))
         else:                                  # need_info / decision → resume
             sess.pending_reason = None
             sess.inactive = False

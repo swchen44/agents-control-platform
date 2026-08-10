@@ -60,7 +60,8 @@ class Dispatcher:
     def __init__(self, source: JiraCloudSource, store: Store,
                  profiles: dict[str, Profile], root: str,
                  server_manager=None, approval=None, cancel_status: str = "",
-                 global_budget: dict | None = None):
+                 global_budget: dict | None = None,
+                 form_base_url: str = "", mention: str = ""):
         self.source = source
         self.store = store
         self.profiles = profiles
@@ -70,6 +71,8 @@ class Dispatcher:
         self.cancel_status = cancel_status     # triage 失敗時 Jira 想轉的「取消」狀態名
         # budget:全站月度上限 dict{monthly_max_tokens, monthly_max_usd}(可 reload)
         self.global_budget = global_budget or {}
+        self.form_base_url = form_base_url      # budget soft 破→發增額表單連結
+        self.mention = mention
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
                             events: list[dict]) -> list[dict]:
@@ -126,6 +129,8 @@ class Dispatcher:
 
     @staticmethod
     def _fmt(metric: str, v) -> str:
+        if v is None:
+            return "—"
         return f"${float(v):.4f}" if metric == "usd" else f"{int(v):,} tok"
 
     @staticmethod
@@ -165,15 +170,11 @@ class Dispatcher:
                 f"profile «{profile.name}» 的 `budget.{fld}` 後 hot reload,自動續跑。"
                 f"\n{_resume_hint(sess)}"))
 
-        # 2) per-ticket soft → 使用者自助增額(增量 3 發一次性表單)
+        # 2) per-ticket soft → 使用者自助增額(發 budget_increase 一次性表單)
         hit = self._first_hit([("usd", used_usd, soft_usd),
                                ("token", used_tok, soft_tok)])
         if hit:
-            m, u, c = hit
-            return self._budget_block(ticket, profile, sess, "ticket-soft", (
-                f"[agent] pending:budget(單票 soft/{m})— 已用 {self._fmt(m, u)} "
-                f"達 soft 上限 {self._fmt(m, c)}。可自助調高本票上限(≤ hard);"
-                f"稍後會發增額表單連結。\n{_resume_hint(sess)}"))
+            return self._budget_soft_form(ticket, profile, sess, hit[0])
 
         # 3) 月/agent hard(只管理者能改)
         hit = self._first_hit([
@@ -215,6 +216,41 @@ class Dispatcher:
         finalize_transcript(sess.session_id,          # W6.4 等人類也產 transcript
                             engine_of_agent(profile.agent),
                             sess.workspace, pack=False, reason="pending:budget")
+        return ev
+
+    def _budget_soft_form(self, ticket: Ticket, profile: Profile,
+                          sess: TicketSession, metric: str) -> list[dict]:
+        """單票 soft 破:pending:budget + 發 budget_increase 一次性表單(自助調高
+        ≤hard)。表單顯示 已用/soft/hard(token+usd)+ 目前 summary + Jira 連結。"""
+        from .deliverables import snapshot_for_form
+        from .hil import request_human
+        sess.pending_reason = "budget"
+        self.store.upsert_session(sess)
+        ev = [self.store.journal("pending", ticket.id, ticket.key,
+                                 reason="budget", scope="ticket-soft",
+                                 cost_usd=sess.cost_usd, tokens=sess.tokens)]
+        finalize_transcript(sess.session_id, engine_of_agent(profile.agent),
+                            sess.workspace, pack=False, reason="pending:budget")
+        soft_u = sess.soft_usd if sess.soft_usd is not None else profile.ticket_soft_usd
+        soft_t = (sess.soft_tokens if sess.soft_tokens is not None
+                  else profile.ticket_soft_tokens)
+        base = getattr(self.source, "base_url", "") or ""
+        question = (
+            f"本票已達 soft 上限({metric})。目前用量 → "
+            f"USD ${sess.cost_usd:.4f}(soft {self._fmt('usd', soft_u)} / "
+            f"hard {self._fmt('usd', profile.ticket_hard_usd)})、"
+            f"token {sess.tokens:,}(soft {self._fmt('token', soft_t)} / "
+            f"hard {self._fmt('token', profile.ticket_hard_tokens)})。可提高本票上限"
+            f"(不得超過 hard;超過 hard 需通知管理者改 profile)。")
+        request_human(
+            self.source, self.store, ticket.id, ticket.key, "budget_increase",
+            question=question, base_url=self.form_base_url, mention=self.mention,
+            payload_extra={
+                "deliverables": snapshot_for_form(sess.workspace),
+                "jira_url": (f"{base.rstrip('/')}/browse/{ticket.key}"
+                             if base else ""),
+                "hard_usd": profile.ticket_hard_usd,
+                "hard_tokens": profile.ticket_hard_tokens})
         return ev
 
     def _inject_base(self, sess: TicketSession, ticket: Ticket,
