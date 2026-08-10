@@ -134,6 +134,7 @@ class ScoreGate:
         evs = []
         # outcome 保留;不覆寫 handoff(handoff 非 SUCCESS/FAILURE/UNKNOWN,不會到這)
         if self.source.transition(ticket.id, "done"):
+            self.store.invalidate_ticket_commands(ticket.id)  # 指令台失效
             evs.append(self.store.journal(
                 "closed", ticket.id, ticket.key, by="auto",
                 outcome=session.outcome, agent_score=ascore, human_score=ascore))

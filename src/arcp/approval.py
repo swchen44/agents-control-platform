@@ -50,7 +50,14 @@ class ApprovalGate:
             # 首次:原本無 ARCP 區塊,原始描述整段沉到區塊下方(區塊置頂)
             before, after = "", before
         by = {s.owner: s for s in secs}
-        by["control"] = Section("control", self._control_body(profile, session))
+        # 保留指令台連結(provision_command_link 寫在 control 段;approval 重建
+        # control 時別把它蓋掉)
+        prev = by.get("control")
+        cc = prev.data().get("command_console") if prev else None
+        body = self._control_body(profile, session)
+        if cc:
+            body += f"\ncommand_console: {cc}"
+        by["control"] = Section("control", body)
         by.setdefault("human", Section("human", self._human_body()))
         # render 依 canonical 序(human→control→agent)自動排,不需手排
         self.source.set_description(

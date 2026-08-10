@@ -26,7 +26,7 @@ from arcp.config import jira_credentials
 from arcp.control_api import ControlAPI
 from arcp.dispatcher import Dispatcher
 from arcp.form_server import FormServer
-from arcp.hil import apply_submission
+from arcp.hil import apply_submission, provision_command_link
 from arcp.jira_source import JiraCloudSource
 from arcp.paths import config_path, runtime_dir
 from arcp.poller import OuterLoop
@@ -174,12 +174,17 @@ def main(argv: list[str] | None = None) -> int:
         or ["完成", "Done", "Concluído"],
         bot_account_id=bot_id, profiles=profiles)      # W4.3 離手定格
 
+    def _command_link(ticket):
+        return provision_command_link(src, store, ticket.id, ticket.key,
+                                      form_base)
+
     loop = OuterLoop(
         src, store, routes, jql,
         dispatcher=disp, commands=cmds, external=ext,
         max_running=source_cfg.get("max_running", 1),
         concurrency=source_cfg.get("concurrency"),
         project=source_cfg.get("project", ""),             # jobs P2:agent-job 開票用
+        command_link_fn=_command_link,                     # 指令台佈建(取代 comment)
         triggers=load_triggers(cfg_path, profiles),        # W3.4 scheduled
         # W11:HIL(End) 表單。Q13:agent 數字自評 hook = self_score_fn(session)->0..10,
         # 只在關單首發 score_and_close 時呼叫一次(含一次真 agent resume+prompt,故屬

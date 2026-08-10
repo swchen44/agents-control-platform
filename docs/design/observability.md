@@ -71,6 +71,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `closed` | `agent_score`, `by`, `human_score`, `outcome`, `request_id` | `src/arcp/hil.py`, `src/arcp/scoring.py` |
 | `command_accepted` | `author`, `command`, `note` | `src/arcp/commands.py` |
 | `command_denied` | `author`, `command` | `src/arcp/commands.py` |
+| `command_link_posted` | — | `src/arcp/hil.py` |
 | `command_rejected` | `command`, `target` | `src/arcp/commands.py` |
 | `command_unknown` | `body` | `src/arcp/commands.py` |
 | `comment_added` | `author`, `body`, `comment_id` | `src/arcp/poller.py` |
@@ -106,7 +107,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 47 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 48 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -121,6 +122,9 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   route(jql/routes 設定問題)。
 - `adopted`:啟動「認養 pass」把當下已存在的票標為水位(只對之後的新事件反應,不重跑
   歷史)。啟動時大量出現屬正常。
+- `command_link_posted`:票首次成 `create_or_resume` 候選時佈建「指令台」——建綁票常駐
+  command token、把連結寫進 description 的 control 段 + 貼一則指路 comment(取代 @agent
+  comment 通道;冪等,每票一次)。人由此連結下 run/retry/hold/stop/cancel/next。
 
 **B. 派工 + 證據迴路(dispatcher.py)** —— 內圈跑 agent:
 - `profile_selected`(`original`/`chosen`/`method`):Q16 首次派工選了不同 profile(A/B 測試 /

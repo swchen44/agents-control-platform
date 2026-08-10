@@ -31,14 +31,17 @@ class OuterLoop:
                  routes: list[Route], jql: str, dispatcher=None,
                  commands=None, external=None, max_running: int = 1,
                  concurrency: dict | None = None, triggers=None,
-                 scoregate=None, project: str = ""):
+                 scoregate=None, project: str = "", command_link_fn=None):
         self.source = source
         self.store = store
         self.project = project          # jobs P2:agent-job create_ticket 的 project
         self.routes = routes
         self.jql = jql
         self.dispatcher = dispatcher   # None = pure grey mode (Phase 1)
-        self.commands = commands       # CommandHandler (Phase 3)
+        self.commands = commands       # CommandHandler (Phase 3;移除中→改指令台)
+        # 指令台佈建:command_link_fn(ticket)->events;票首次成 create_or_resume
+        # 候選時寫指令連結進 description + 貼指路 comment(冪等)。
+        self.command_link_fn = command_link_fn
         self.external = external       # ExternalChangePolicy (Phase 3)
         self.scoregate = scoregate     # W7.2 ScoreGate(終態抓評分/催評)
         self.triggers = triggers or []  # W3.4 內部觸發源(scheduled)
@@ -135,6 +138,12 @@ class OuterLoop:
             # first: a crash mid-dispatch must not replay watch events)
             if (route is not None and route.on_match == "create_or_resume"
                     and route.profile and self.dispatcher is not None):
+                # 佈建指令台連結(冪等;paused 時不動 Jira)
+                if self.command_link_fn is not None and not self.paused:
+                    try:
+                        events.extend(self.command_link_fn(t) or [])
+                    except Exception as e:  # noqa: BLE001 — 佈建失敗不擋派工
+                        log.warning("指令台佈建失敗 %s:%s", t.key, e)
                 to_dispatch.append((t, route.profile))
 
         # -- F1 分層資源閘門 + 並行 dispatch (v5 D10) ---------------------- #

@@ -24,6 +24,35 @@ def form_link(base_url: str, token: str) -> str:
     return f"{base_url.rstrip('/')}/form/{token}"
 
 
+def provision_command_link(source, store, issue_id: int, key: str,
+                           base_url: str, *, now: float | None = None) -> list:
+    """票首次成為 create_or_resume 候選時佈建「指令台」:建綁票常駐 command token、
+    把連結寫進 description 的 control 段(command_console:<url>,與 approval 共存)+
+    貼一則指路 comment。已佈建 → 冪等不重貼。回 events。取代 @agent comment 通道。"""
+    if store.get_command_interaction(issue_id) is not None:
+        return []                                     # 已佈建(冪等)
+    req = store.get_or_create_command_token(issue_id, key, now=now)
+    link = form_link(base_url, req.token)
+    t = source.get_ticket(issue_id)
+    desc = (getattr(t, "description", "") if t else "") or ""
+    before, secs, after = parse(desc)
+    if not secs and not after:                        # 原本無 ARCP 區塊 → 原述沉底
+        before, after = "", before
+    by = {s.owner: s for s in secs}
+    ctrl = by.get("control")
+    lines = [ln for ln in (ctrl.body.splitlines() if ctrl else [])
+             if not ln.strip().startswith("command_console:")]
+    lines.append(f"command_console: {link}")
+    by["control"] = Section("control", "\n".join(lines).strip())
+    source.set_description(issue_id, render(before, list(by.values()), after))
+    source.add_comment(
+        issue_id,
+        f"[agent] 指令台(下 run / retry / hold / stop / cancel / next,含各指令"
+        f"說明):{link}\n此連結綁本票、到結案前一直有效;請用它下指令(不必手打留言)。")
+    log.info("%s 佈建指令台連結", key)
+    return [store.journal("command_link_posted", issue_id, key)]
+
+
 def request_human(source, store, issue_id: int, key: str, schema_id: str, *,
                   question: str = "", payload_extra: dict | None = None,
                   base_url: str = "", mention: str = "", ttl_sec: float = 0.0,
@@ -193,6 +222,7 @@ def apply_submission(source, store, req: InteractionRequest, *,
                 # transition() 比對 statusCategory key(小寫 new/indeterminate/
                 # done),非狀態名——真 Jira curl 測抓到:須傳 "done" 非 "Done"
                 if source.transition(req.issue_id, "done"):
+                    store.invalidate_ticket_commands(req.issue_id)  # 指令台失效
                     evs.append(store.journal(       # closed(有別於 SUCCESS 的
                         "closed", req.issue_id, req.key, by="human",  # resolved)
                         request_id=req.request_id))
