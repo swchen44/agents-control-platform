@@ -25,19 +25,28 @@
   那是這兩張表以 numeric `issue_id` 為 key 記的。
 
 ```
- CQ CR ──(bridge*)──▶ Jira 票 ──poller 撿票──▶ route 命中 ──create_or_resume──▶ dispatch
-  BUGDB-1234           SCRUM-42                (config.routes)                      │
-                       label=filechain                                             ▼
-                       status=待辦                                          首次派工 triage(select)
-                                                                          選 profile → 鎖進 session
-                                                                                    │
-                                                                                    ▼
-                                                                        provision ws → 呼叫 claude code
-                                                                        → envelope 契約 → grader 判 outcome
-                                                                                    │
-                                                                      SUCCESS ──▶ 貼交付物 → HIL(End)/auto_close
-                                                                                    │
-                                                                      transition done ──▶ closed ──(CQ 回寫*)
+主線(系統自動):
+  CQ CR ─(bridge*)─▶ Jira 票 SCRUM-42(label=filechain、status=待辦)
+       │ poller 撿票
+       ▼
+  route 命中(config.routes)─ create_or_resume ─▶ dispatch(首次)
+       │                                            ├─▶ 佈建指令台連結(寫 description
+       │                                            │    control 段 + 指路 comment)
+       │                                            │    [command_link_posted]
+       │                                            └─▶ triage(select)→ 鎖 profile 進 session
+       ▼
+  provision ws ─▶ 呼叫 claude code ─▶ envelope 契約 ─▶ grader 判 outcome
+       │
+       ▼
+  SUCCESS ─▶ 貼交付物 ─▶ HIL(End)/auto_close ─▶ transition done ─▶ closed ─(CQ 回寫*)
+                                                                  (指令台失效)
+
+人的介入(隨時,連結綁本票、到 close 失效):
+  人 ─開指令台連結─▶ 選指令 + 填 email ─送出─▶ control_api POST /ticket/<id>/command
+                                                 └─▶ apply_command(poller 行程)
+       run / retry ─▶ 解 pending 續跑      hold ─▶ 立即 killpg + 開 hold 表單
+       stop ─▶ 交還人工                    cancel ─▶ ABORTED(破壞性,需確認)
+       next <profile> ─▶ 同票換手
  * = 設計已定、程式未接(見 §7)
 ```
 
@@ -206,3 +215,43 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
 
 證據在哪、每個事件什麼意思 → [可觀測性](design/observability.md);離線凍結版怎麼查 →
 [離線除錯導引](ai-debugging.md)。
+
+## 9. 案例 sequence chart:一張票走完(含人用指令台 hold 中斷)
+
+參與者:**人**(操作者)、**Jira**、**Poller**、**Dispatcher**、**claude code**、**指令台**
+(form_server)、**control_api**、**store**(SQLite)。`[event]` = journal 事件。
+
+**Phase 1 — 建票 + 進場**
+```
+bridge*  ─▶ Jira      : 建 SCRUM-42(label=filechain、status=待辦)
+Poller   ─▶ Jira      : search(jql) 撈到 SCRUM-42
+Poller   ─▶ store     : 無此票 → 寫 ticket_watch            [new_issue]
+Poller   ─▶ store     : route 命中 filechain-demo           [route_matched]
+```
+**Phase 2 — 首次派工 + 佈建指令台**
+```
+Poller   ─▶ store     : 建常駐 command token(kind=command)
+Poller   ─▶ Jira      : 連結寫進 description control 段 + 貼指路 comment  [command_link_posted]
+Disp     ─▶ select.py : triage → {"profile":"filechain_v2"}  [profile_selected]
+Disp     ─▶ store     : 鎖 profile 進 ticket_session(state=running)
+Disp     ─▶ claude    : provision ws + 跑 attempt   [session_created][attempt_started]
+```
+**Phase 3 — 人用指令台 hold(中途介入)**
+```
+人       ─▶ 指令台    : 開連結 → 見 state=running、可用 hold/stop/cancel/next
+人       ─▶ 指令台    : 填 email、選 hold、送出
+指令台   ─▶ control_api: POST /ticket/42/command {cmd:hold, by:email}
+control_api─▶apply_cmd : (poller 行程)寫 EVICT → killpg claude;state→hil_middle [command_accepted]
+apply_cmd─▶ Jira      : 開 hold 表單(@mention + 一次性連結)          [hil_requested]
+人       ─▶ hold 表單 : 填「改先跑測試」送出 → 寫 workspace 人類指示段  [hil_submitted][hil_resumed]
+```
+**Phase 4 — resume → 收尾**
+```
+Poller   ─▶ Disp      : 下輪 resume(帶人類指示)→ claude 續跑 → grader 過 [attempt_finished][resolved]
+Disp     ─▶ Jira      : 貼交付物                                       [deliverables_posted]
+HIL(End)/auto_close   : 人評分 or agent 自評 → transition done          [closed]
+close    ─▶ store     : invalidate_ticket_commands → 指令台連結顯示「已結案」
+```
+> 分支:人若改按 **cancel**(破壞性、需勾確認)→ state→aborted、`transition cancel_status`;
+> 按 **next `<profile>`** → 同票換手 `[handoff kind=command]`;**run/retry** 只解 pending、
+> 下輪重派(不中斷)。所有指令都經同一 `apply_command`(人走指令台、自動化走 REST API)。
