@@ -80,9 +80,9 @@ def _do_handoff(source, store, sess: TicketSession, req: InteractionRequest,
                 data: dict, profiles: dict, now: float) -> list[dict]:
     """W10.3 a2a handoff:人在 HIL 表單選「改派下一棒」。
 
-    kind=next(同票):reset session、pin 新 profile、workspace 哨值 → 下輪重 provision
+    kind=next(同票):reset session、鎖定新 profile、workspace 哨值 → 下輪重 provision
     由新 profile 接手同一張票(prompt 已隨表單寫進 description 人類段 → 新 TICKET.md)。
-    kind=base(跨票):系統在同 project 建新票、預建其 session(pin 新 profile + base_ref
+    kind=base(跨票):系統在同 project 建新票、預建其 session(鎖定新 profile + base_ref
     指回本票)→ 本票轉 ABORTED(交接出去,非失敗)→ 新票下輪由 dispatcher 注入 base 脈絡。
     資料不完整(無 kind / profile 無效)→ fail-safe 降級為續跑原 agent(不硬失敗)。
     """
@@ -126,7 +126,7 @@ def _do_handoff(source, store, sess: TicketSession, req: InteractionRequest,
         desc += ["", "## 交接指示", prompt]
     new_t = source.create_ticket(project, f"[base:{req.key}] {summary}",
                                  description="\n".join(desc), labels=labels)
-    store.upsert_session(TicketSession(          # 預建新票 session:pin + base_ref
+    store.upsert_session(TicketSession(          # 預建新票:鎖定 profile + base_ref
         issue_id=new_t.id, key=new_t.key, profile=target, workspace="(handoff)",
         session_id=None, attempts=0, outcome=None, pending_reason=None,
         cost_usd=0.0, base_ref=str(req.issue_id)))

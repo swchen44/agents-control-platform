@@ -8,8 +8,8 @@
 
 ## 何時選、選幾次
 
-- 只在 **session 首次建立(`sess is None`)** 時選一次,**pin 進 session**;resume 不重選
-  (pin 一次的手法同「同票換手(next)」),避免每輪 poll 換 profile 造成 workspace churn
+- 只在 **session 首次建立(`sess is None`)** 時選一次,**寫入 session**;resume 不重選
+  (鎖定一次的手法同「同票換手(next)」),避免每輪 poll 換 profile 造成 workspace churn
   → **同一票結果穩定、可重現**。
 - route 命中的 profile 是「main」;若 main 有 `select` → `select_profile` 從
   **[main] + candidates**(去重保序)選一個實際 profile → 用它 provision + 建 session。
@@ -113,7 +113,7 @@ profile 本身就帶了審批屬性,所以選 profile 的同時就決定了要�
 
 - **dashboard 事件時間軸**:該票詳情頁的時間軸會顯示 `profile_selected`(何時、選了誰)。
 - **REST API**:`GET /api/v1/tickets`(清單)與 `GET /api/v1/tickets/{ref}`(單票)回傳的
-  `profile` 欄 = 該票**實際 pin 的 profile**(即 chosen);單票的 `timeline` 摘要也含
+  `profile` 欄 = 該票**實際鎖定的 profile**(即 chosen);單票的 `timeline` 摘要也含
   `profile_selected` 事件。
 - **journal**:搜 `runtime/.../events.jsonl` 的 `profile_selected`
   (欄位 `original` / `chosen` / `method`)。

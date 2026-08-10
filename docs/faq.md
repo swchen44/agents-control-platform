@@ -41,7 +41,7 @@ A:有預算閘:profile `max_budget_usd`(單次)/ `max_budget_monthly_usd`(月),�
 **Q:同一種任務想比較兩個 profile(A/B 測試),或依票內容自動選 profile?**
 A:可以(Q16)。在 main profile 加 `select` 區塊:`candidates`(候選 profile,名字**須以 main
 名為前綴**)+ `method: random`(均勻分流)或 `method: script`(腳本吃 JSON stdin → stdout 印
-出 profile 名,可依 ticket 內容做條件式 triage)。**首次派工選一次並 pin 進 session**(resume
+出 profile 名,可依 ticket 內容做條件式 triage)。**首次派工選一次並 寫入 session**(resume
 不重選,同票結果穩定);任何失敗 fail-safe 回 main。journal 記 `profile_selected`(original /
 chosen / method),在 dashboard 事件時間軸 / `/api/v1/tickets` 可看「這票實際跑哪個 profile」。
 設計見 [design/selection.md](design/selection.md)。
@@ -71,7 +71,7 @@ A:存 `runtime/harness.db` 的 `interactions` 表(**永久儲存,非記憶體**)
 
 **Q:我可以把票交給另一個 agent/profile 嗎(handoff)?**
 A:可以。在 `score_and_close` / `decision` 表單選「改派下一棒」→ 選**換手種類** + 下一棒 profile:
-**同票換手(next)**(同一張票換 profile 接手 —— 重置 session、pin 新 profile、依新 profile 的
+**同票換手(next)**(同一張票換 profile 接手 —— 重置 session、鎖定新 profile、依新 profile 的
 template 重新佈建 workspace,**非 native resume**,脈絡全留在 Jira 票)或 **跨票換手(base)**
 (系統自動另開新票交接,新票首次佈建時把本票脈絡複製進 `ws/BASE_<票>/`,本票收 ABORTED 為
 交接非失敗)。也可留言 `@agent next <profile>` 做同票換手。沒填全換手種類 / profile →

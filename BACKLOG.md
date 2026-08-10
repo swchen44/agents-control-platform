@@ -7,7 +7,8 @@
 
 | # | 項目 | 狀態 |
 |---|---|---|
-| **W10.3** | a2a 交接由 HIL 表單驅動:同票 `next`(reset+pin)+ 跨票 `base`(系統 `create_ticket` 建新票 + 預建 pinned session `base_ref` + 本票 ABORTED + dispatcher 注入 base 脈絡到 `ws/BASE_<key>/`);fail-safe 降級續跑;新事件 `base_injected`(44 種) | ✅ 見 [architecture.md §4.1](docs/design/architecture.md);`test_handoff_hil.py` 32 檢查 |
+| **W10.3** | a2a 交接由 HIL 表單驅動:同票 `next`(reset+鎖定 profile)+ 跨票 `base`(系統 `create_ticket` 建新票 + 預建 session(鎖定 profile)`base_ref` + 本票 ABORTED + dispatcher 注入 base 脈絡到 `ws/BASE_<key>/`);fail-safe 降級續跑;新事件 `base_injected`(44 種) | ✅ 見 [architecture.md §4.1](docs/design/architecture.md);`test_handoff_hil.py` 32 檢查 |
+| **triage 結果模型** | select stdout 改嚴格 JSON `{profile,reason}`;`notfound`→**ABORTED(untriageable)**(profile=notfound + journal `aborted` + Jira 轉 `cancel_status`)、無效/錯→fail-safe 回 main;state 維持推導(不加 state 欄,理由寫進 architecture §3.1/開發者手冊/概念頁);新事件 `aborted`(47 種);術語「pin」→「鎖定/寫入 session 的 profile」;新增 **label=入場券** 比喻(architecture §2.1 + 操作手冊) | ✅ 2026-08-10 `25de867` + 本次;`test_triage_abort.py` 6 檢查 |
 | **W12** | 專業化打包:src-layout、pyproject/uv/MIT、GitHub CI(3.10–3.13)+CD、tests/ 與 scripts/ 分層 | ✅ CI 綠 |
 | **W13** | 離線內網文件自足(AI 自我除錯):ai-debugging / troubleshooting / observability(journal 事件字典,`gen_event_dict --check` 入 CI)+ docs/history + docs/lessons | ✅ 見 §主題 H |
 | **W14** | 研究策展 `docs/research/`(結論比較文 + 原始長文合併)+ **消除 harness/** → `config/` + `vendor/` + `runtime/`,路徑全走 `arcp.paths`;順修 W12.1 遺留 `_HARNESS_ROOT` bug | ✅ CI 綠 |
@@ -48,7 +49,7 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 
 | # | 項目 | 狀態 |
 |---|---|---|
-| **Q16** | profile A/B 測試 / 泛化 triage:main profile 加 `select`(candidates+method random\|script);首次派工選一次 pin 進 session;script 吃 JSON stdin(ticket/crid/候選+yaml)→ stdout 回名;fail-safe 回 main | ✅ 已建(`selection.py` + `test_selection.py` 11 檢查;見 [design/selection.md](docs/design/selection.md)) |
+| **Q16** | profile A/B 測試 / 泛化 triage:main profile 加 `select`(candidates+method random\|script);首次派工選一次寫入 session 的 profile 欄(鎖定);script 吃 JSON stdin(ticket/crid/候選+yaml)→ stdout 回**嚴格 JSON `{profile,reason}`**(`notfound`→ABORTED、無效/錯→fail-safe 回 main) | ✅ 已建(`selection.py` + `test_selection.py`;見 [design/selection.md](docs/design/selection.md)) |
 | **Q7** | triage(要不要人、選 profile) | ✅ **由 Q16 泛化涵蓋**:選到 require_approval 的 profile=要人、否則直跑;現行 per-profile require_approval 仍為基礎閘 |
 | **Q15** | config 改名 / 拆檔(命名精準 + 分檔 owner) | ✅ 已建:`routes.yaml`→`config.yaml`(不相容,未 release);profile 可拆到 `config/profiles/<名>.yaml`(檔名=名),`load_profiles` 自動合併主檔 inline + 拆檔、同名 fail-fast;`Profile.source_yaml` 記來源(Q16 script 拿 per-profile yaml)。`test_profiles_split.py` 7 檢查 |
 
@@ -237,6 +238,21 @@ grader 作關鍵任務的可選雙保險(profile 決定)。
   真需要時可再細化高風險事件。
 - troubleshooting 的除錯範例可補**真實 journal 片段**(需真跑一次,連同 V1 複驗)。
 - 可加 pre-commit hook 跑 `gen_event_dict.py --check`(目前只在 CI)。
+
+## 主題 I — CR/ClearQuest 橋接收尾 + close→CQ 回寫(2026-08-10 定案,待資料/實作)
+
+> triage 結果模型與 Jira 取消已落地(見近期完成)。以下三項是**同一批未收的尾**,
+> 設計都已定,列此待做。I1 阻塞於使用者提供 CQ 端資訊。
+
+| # | 項目 | 做法 | 阻塞 / effort | 價值 |
+|---|---|---|---|---|
+| **I1** | **close→CQ 回寫**(所有 close 若 `clearquest_id` 有值 → 回 CQ 寫 Jira 連結 + 結果) | 擴充點 `cq_writeback` 已預留(`base_url` + 欄位 map);於**每個 close 路徑**(HIL 關單 / auto_close / ABORTED)呼叫;純設計已定,HTTP 未接 | ⛔ **等使用者給 CQ base_url + 欄位名**;接上約低-中 | CR 來源的閉環:CQ 端看得到 Jira 進度與結果 |
+| **I2** | `fire_agent_job` 寫入 `clearquest_id` | 目前 job 建票只寫 profile/base_ref,沒把來源 CR id 寫進 session → CR 去重 + I1 回寫都需要它;`ticket_session.clearquest_id` 欄位已存在,只差在 `fire_agent_job` 帶入 | 低(欄位已在) | I1 的前置;避免同一 CR 重複開票 |
+| **I3** | CR-bridge「只建票 + 貼 label、不鎖定 profile」模式 | 讓 CR→Jira 的票走 **triage**(由 label 入場、profile 由 select 決定)而非建票即鎖定;job 增一個「不預鎖 profile」選項 | 低-中 | CR 票也能享用泛化 triage(A/B / 條件式選 profile),而非固定一個 profile |
+
+**已定的決策**:label = **入場券**(poller 靠命中 route 的 label 撿票);profile =
+進場後由 route/triage 決定並**鎖定在 session**(非 Jira label);「鎖定」取代舊詞 "pin"。
+close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知道被取消/失敗的結果。
 
 ## AI 建議(供參考,你決定)
 

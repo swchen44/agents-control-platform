@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """W10.3 a2a handoff(2026-08-09 定案):HIL 表單改派下一棒。
 
-覆蓋:①同票 next(reset+pin+哨值)②跨票 base(建新票+預建 pinned session+base_ref+
+覆蓋:①同票 next(reset+鎖定 profile+哨值)②跨票 base(建新票+預建鎖定 profile 的 session+base_ref+
 本票 ABORTED)③資料不完整 fail-safe 降級續跑 ④workspace 注入 base 脈絡到子票。
 (W2.5 的指令式 @agent next 換手另見 test_handoff.py)免 token/免真 Jira/agent,確定性。"""
 from __future__ import annotations
@@ -110,7 +110,7 @@ bad = _score_req(1, "handoff", "next", "不存在", "x")
 okb, errsb, _ = validate_submission("score_and_close", bad.submission, bad)
 check("validate:next_profile 非候選 → 擋", not okb)
 
-# ── ① 同票 next:reset + pin + workspace 哨值 ───────────────────────── #
+# ── ① 同票 next:reset + 鎖定 profile + workspace 哨值 ───────────────────────── #
 rt = tempfile.mkdtemp(); st = Store(rt); src = FakeSource()
 ws = os.path.join(rt, "tickets", "1", "ws"); os.makedirs(ws)
 st.upsert_session(_sess(1, ws))
@@ -131,7 +131,7 @@ check("next:handoff_prompt 寫進 description human 段",
       "接著做 Z" in src.descs.get(1, ""))
 st.close()
 
-# ── ② 跨票 base:建新票 + 預建 pinned session(base_ref)+ 本票 ABORTED ─ #
+# ── ② 跨票 base:建新票 + 預建鎖定 profile 的 session(base_ref)+ 本票 ABORTED ─ #
 rt = tempfile.mkdtemp(); st = Store(rt); src = FakeSource()
 ws = os.path.join(rt, "tickets", "1", "ws"); os.makedirs(ws)
 st.upsert_session(_sess(1, ws))
@@ -148,7 +148,7 @@ check("base:新票 description 含 base: 標記與交接指示",
       "base: SCRUM-1" in ct["description"] and "用新方向重做" in ct["description"])
 new_id = ct["id"]
 child = st.get_session(new_id)
-check("base:預建新票 session pin q2", child is not None and child.profile == "q2")
+check("base:預建新票 session 鎖定 q2", child is not None and child.profile == "q2")
 check("base:新票 base_ref 指回本票 issue_id",
       child.base_ref == "1" and child.workspace == "(handoff)")
 check("base:journal handoff kind=base 帶 new_ticket",
@@ -227,7 +227,7 @@ batt = os.path.join(rt, "tickets", "p-1", "attempts"); os.makedirs(batt)
 with open(os.path.join(batt, "a1.envelope.json"), "w") as f:
     f.write("{}")
 bs = _sess(1, base_ws); bs.outcome = "ABORTED"; st.upsert_session(bs)
-# base 子票 session:issue_id=2、pin q2、workspace 哨值、base_ref 指回 1
+# base 子票 session:issue_id=2、鎖定 q2、workspace 哨值、base_ref 指回 1
 st.upsert_session(TicketSession(
     issue_id=2, key="SCRUM-2", profile="q2", workspace="(handoff)",
     session_id=None, attempts=0, outcome=None, pending_reason=None,

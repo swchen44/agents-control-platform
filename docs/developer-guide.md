@@ -61,9 +61,9 @@ main。設計見 [selection.md](design/selection.md)。
 - **HIL 表單驅動**:`hil._do_handoff`(被 `apply_submission` 呼叫)。表單欄位(`handoff_kind`
   next/base + `next_profile` + `handoff_prompt`)定義在 `interaction.FORM_SCHEMAS` 的
   `score_and_close`/`decision`;下拉候選由 `scoring.ScoreGate.profiles_fn` 注入 payload。
-- **同票換手(next)**:reset session + pin profile + `workspace="(handoff)"` 哨值(與
+- **同票換手(next)**:reset session + 鎖定 profile + `workspace="(handoff)"` 哨值(與
   `dispatcher` 裡 agent 自發換手同一套機制)。
-- **跨票換手(base)**:`hil._do_handoff` 用 `source.create_ticket` 建新票 + 預建 pinned session
+- **跨票換手(base)**:`hil._do_handoff` 用 `source.create_ticket` 建新票 + 預建鎖定 profile 的 session
   (`store.TicketSession.base_ref` = 來源票 issue_id);`dispatcher._inject_base` 於新票首次
   佈建後呼 `workspace.inject_base_context` 複製脈絡進 `ws/BASE_<key>/`,一次性後清 `base_ref`。
 - **測試**:`tests/test_handoff.py`(指令式 @agent next)+ `tests/test_handoff_hil.py`(HIL 表單
@@ -122,7 +122,7 @@ outcome 保留、不覆寫 handoff。與 `require_approval` 是人機光譜兩�
 
 首次派工可從同族候選裡自動選一個 profile(A/B 分流或條件式 triage)。實作在
 `src/arcp/selection.py`(`select_profile`),接線在 `dispatcher.handle` 的**首次派工**分支
-(`sess is None` 且 main profile 有 `select`):選中的 profile 會 pin 進 session,resume 不
+(`sess is None` 且 main profile 有 `select`):選中的 profile 會 寫入 session,resume 不
 重選。設定(`select` 區塊 random/script 範例)、fail-safe、與 triage 的關係、觀測方式見
 [design/selection.md](design/selection.md)。
 

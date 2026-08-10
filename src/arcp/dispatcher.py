@@ -203,13 +203,13 @@ class Dispatcher:
         events: list[dict] = []
         profile = self.profiles[profile_name]
         sess = self.store.get_session(ticket.id)
-        # F3(W2.5):session pin 的 profile 優先於 route 推導——換手後 route
+        # F3(W2.5):session 鎖定的 profile 優先於 route 推導——換手後 route
         # 標籤仍指舊 profile,session 存在即以其 profile 為準
         if (sess is not None and sess.profile != profile.name
                 and sess.profile in self.profiles):
             profile = self.profiles[sess.profile]
         # Q16:首次派工(尚無 session)且 main profile 有 select → 選一個實際 profile
-        # (A/B 測試 / 泛化 triage);選中的由下方 session 建立時 pin 住,resume 不重選。
+        # (A/B 測試 / 泛化 triage);選中的由下方 session 建立時 鎖定,resume 不重選。
         elif sess is None and getattr(profile, "select", None):
             from .selection import UNTRIAGEABLE, select_profile
             chosen, meta = select_profile(ticket, profile, self.profiles)
@@ -415,7 +415,7 @@ class Dispatcher:
 
             # F3/G1(W2.5):agent 自報 handoff(status=handoff + next)→ 不
             # grade。kind=human:交人(pending:human-decision,不排 agent 隊列);
-            # kind=agent:重置 session pin 新 profile,下輪經 gate 重新排隊
+            # kind=agent:重置 session 鎖定新 profile,下輪經 gate 重新排隊
             #(目標 require_approval 則重走審批門)。A↔B 換手迴圈由 A4 budget
             # 上限擋(cost_usd 跨換手累計、不歸零)。
             nxt = (res.structured or {}).get("next") or {}

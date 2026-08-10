@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""泛化 job(P2):agent-job 開真 Jira 票 + pinned session + count 上限 + task_script。
+"""泛化 job(P2):agent-job 開真 Jira 票 + 鎖定 profile 的 session + count 上限 + task_script。
 
 設計見 docs/design/lifecycle.md §5.1。免網:FakeSource.create_ticket 攔建票。"""
 from __future__ import annotations
@@ -86,7 +86,7 @@ _tp = load_triggers(_cfg(profile="scanner", task="巡檢", count=0,
 check("load:合法 job 解析(count/task/labels)",
       _tp[0].count == 0 and _tp[0].task == "巡檢" and _tp[0].labels == ["agent"])
 
-# ── fire_agent_job:靜態 task → 一張票 + pinned session ────────────────── #
+# ── fire_agent_job:靜態 task → 一張票 + 鎖定 profile 的 session ────────────────── #
 st = Store(tempfile.mkdtemp()); src = FakeSource()
 evs = fire_agent_job(_job(task="每日巡檢", labels=["agent"]), src, st,
                      PROFILES, "SCRUM")
@@ -97,7 +97,7 @@ check("static:summary 帶 [job:scan]、labels 帶入",
       and src.created[0]["labels"] == ["agent"])
 new_id = src.created[0]["id"]
 sess = st.get_session(new_id)
-check("static:預建 pinned session(profile=scanner、(handoff) 哨值)",
+check("static:預建鎖定 profile 的 session(profile=scanner、(handoff) 哨值)",
       sess is not None and sess.profile == "scanner"
       and sess.workspace == "(handoff)")
 check("static:journal job_fired", any(
@@ -119,7 +119,7 @@ check("task_script:各自 summary/description",
       and src.created[1]["description"] == "修 CR-2")
 check("task_script:第二筆無 labels → 用 job 預設 labels",
       src.created[1]["labels"] == ["agent"])
-check("task_script:兩張都預建 pinned session",
+check("task_script:兩張都預建鎖定 profile 的 session",
       all(st.get_session(c["id"]) is not None for c in src.created))
 st.close()
 

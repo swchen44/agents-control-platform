@@ -96,7 +96,7 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # runtime 資料預設
 - **改派下一棒(handoff,W10.3)**:裁決選 `handoff` 後,再選**換手種類** + 下一棒 profile
   (下拉,候選=系統載入的全部 profile)+ 交接指示:
   - **同票換手(next)**:同一張票換一個 profile/引擎在**這張票**接手 —— 重置 session
-    (session_id、attempts 歸零)、pin 新 profile、依新 profile 的 template 重新佈建
+    (session_id、attempts 歸零)、鎖定新 profile、依新 profile 的 template 重新佈建
     workspace,回「進行中」。**非 native resume**(新 profile 重新開始,不接手前一棒的原生
     session);脈絡全留在這張 Jira 票(留言 / description / 人類指示 → 新 TICKET.md)。
   - **跨票換手(base)**:**系統自動**用 `create_ticket` 在同 project 另開一張**新票**交給

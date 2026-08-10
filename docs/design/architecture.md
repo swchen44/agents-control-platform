@@ -47,6 +47,18 @@ trigger/輸入/輸出/上下游見下表(與 `/concepts` 頁的職責表同內�
 | **transcript** | session → final HTML/打包(換手/交人/evict/close/被動按鈕) | finalize 事件 或 control gen_transcript | session 原始 log | final.html / transcript.tgz | dispatcher·commands·control_api → 檔案系統 |
 | **retention** | workspace 回收(過期/終態,釋放磁碟) | poller 週期(約每 240 輪 ≈ 每小時) | store session + profile 保留策略 | 回收 workspace + journal | poller → 檔案系統/store |
 
+### 2.1 比喻:label = 入場券,profile = 該票用哪個 agent(鎖在 session)
+
+兩件常被搞混、但屬**不同階段**的事:
+- **label(Jira 票上的標籤)= 入場券**:poller 只會**撿有命中 route 的 label 的票**去派工
+  (`routes[].when.labels` → `on_match: create_or_resume`)。沒有對到 route 的 label = 進不了場,
+  票再有效也不會被跑。**建票的那一刻決定要不要給這張入場券**(CR→Jira bridge / job / 人)。
+- **profile = 這張票要用哪個 agent**:進場後,由 routing 推導或 triage(select)決定,並**寫進
+  `ticket_session.profile`(鎖定,resume 不重選)**。route 只是初步指定,session 的 profile 最終為準。
+
+一句話:**label 管「進不進得來」,profile 管「進來後誰來做」**。(本文件與程式一律用「鎖定/
+寫入 session 的 profile」描述,不用 "pin" 這個詞。)
+
 ## 3. HIL 生命週期(6 態 + 概念終點)
 
 `todo → running ⇄ queued`,人介入時進 `HIL(Middle)`(過程中等人)或 `HIL(End)`
@@ -78,7 +90,7 @@ prompt。也保留 agent 自發(`@agent next` 指令 / envelope `status=handoff`
 
 | | **同票換手(next)** | **跨票換手(base)** |
 |---|---|---|
-| 做法 | 同一張 Jira,重置 session、pin 新 profile | **系統**在 agent 自己 project 建新票(`create_ticket`,一步完成)、預建其 session(pin 新 profile + `base_ref` 指回本票),本票收成 ABORTED(交接) |
+| 做法 | 同一張 Jira,重置 session、鎖定新 profile | **系統**在 agent 自己 project 建新票(`create_ticket`,一步完成)、預建其 session(鎖定新 profile + `base_ref` 指回本票),本票收成 ABORTED(交接) |
 | 脈絡 | 全留在同一票(留言/description/人類指示 → 新 TICKET.md) | dispatcher 於新票首次佈建後複製 base 的 `TICKET.md`+最後 envelope 進 `ws/BASE_<key>/` + human 指示段前置指路 |
 | 舊工作 | 同票由新 profile 重新開始(session 重置=session_id None/attempts 0,**非** native resume);workspace 重新 provision 為新 profile 的 template | 新票重新開始,但帶 base 脈絡 |
 | 開新票? | 否 | 是(**系統建**,非人手建;沿用本票 labels → 新票走同 route) |
@@ -97,7 +109,7 @@ prompt。也保留 agent 自發(`@agent next` 指令 / envelope `status=handoff`
 - **系統建新票 + 預建 session**(`hil._do_handoff`,不需人手建 Jira):
   1. `create_ticket` 在同 project(= 本票 key 前綴)建新票,summary=`[base:<key>] …`、
      description 含 `base: <key>` + 交接指示、**沿用本票 labels**(→ 新票走同 route 被撿);
-  2. 預建新票 `ticket_session`:pin 選定 profile、`workspace="(handoff)"` 哨值、
+  2. 預建新票 `ticket_session`:鎖定選定 profile、`workspace="(handoff)"` 哨值、
      `base_ref=<本票 issue_id>`(標記待注入 base 脈絡);
   3. 本票 session 收成 **ABORTED**(交接出去=終態,**不算 failure**,失敗率 KPI 才誠實;
      HIL 時本票非執行中,不需 killpg)。兩票互貼留言可於 dashboard 對照。

@@ -34,7 +34,7 @@ kill -9           強制:立即死(見 §4)
 | commands.allowed_commenters | ✅(W4.5 接線) | 原 hardcode 未接 config;現接線且可 reload |
 | external_change.cancel_states | ✅(W4.5 接線) | 同上 |
 | **進行中的 attempt** | ⚠️ | 用舊 profile 跑到本 attempt 結束;下一 attempt(同輪 while 迴圈內)即用新 profile 的 verify/budget——**同輪內混用是接受的限制** |
-| session pin 的 profile 名 | ⚠️ | reload 換的是 profile **內容**;pin(F3 換手)指的 profile **名字**不變。改名 profile → pin 失效退回 route 推導(dispatcher 查無此名) |
+| session 鎖定的 profile 名 | ⚠️ | reload 換的是 profile **內容**;鎖定(F3 換手)指的 profile **名字**不變。改名 profile → 鎖定失效退回 route 推導(dispatcher 查無此名) |
 | pending/queued 票 | ✅ | 不受影響;下次評估用新設定 |
 | snapshot_interval_sec | ❌ | Snapshotter 啟動時定;改間隔要重啟(快照器輕量,可接受) |
 | control host/port | ❌ | HTTP server 已綁定 |

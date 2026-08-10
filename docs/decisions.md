@@ -47,10 +47,10 @@ Jira 寫入/健康失敗 → poller 降級暫停(停寫/停派),poll 成功自�
 circuit-breaker 式暫停/恢復更簡單可靠。
 
 ### D10. agent↔agent 交接:同票換手(next) vs 跨票換手(base)(對等,依場景選)
-- **同票換手(next)**:同一張 Jira 票,重置 session(session_id/attempts 歸零)、pin 新
+- **同票換手(next)**:同一張 Jira 票,重置 session(session_id/attempts 歸零)、鎖定新
   profile、重新 provision workspace(**非** native resume)。觸發:HIL 表單「同票換手」/
   `@agent next`/agent 自發。適合「同一件事換人/換引擎重新來過」。
-- **跨票換手(base)**:系統 `create_ticket` 另開新票、預建 pinned session(`base_ref`)、
+- **跨票換手(base)**:系統 `create_ticket` 另開新票、預建鎖定 profile 的 session(`base_ref`)、
   本票收成 **ABORTED**;新票首次佈建後注入 `BASE_<key>/` 脈絡(來源票 TICKET.md/末次
   envelope + 指路)。觸發:HIL 表單「跨票換手」。適合「換引擎/重開/跨專案/人策展重啟」。
 **Why**:延續同一件事 vs 另開新票承接敘事脈絡,兩場景各有適用。兩者**都是乾淨重啟**

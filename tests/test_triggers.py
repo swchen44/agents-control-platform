@@ -208,7 +208,7 @@ def test_cron_wins_over_every_with_warning():
 
 def test_poller_agent_job_fires_and_creates_ticket():
     """P2:agent-job 不再受額度擋(它只開票);開的票由 dispatch 時才 F1 gate。
-    count=1 首輪立刻 fire → create_ticket + pinned session + job_fired,run_count→1。"""
+    count=1 首輪立刻 fire → create_ticket + 鎖定 profile 的 session + job_fired,run_count→1。"""
     from arcp.poller import OuterLoop
     from arcp.ticket import Ticket
 
@@ -247,7 +247,7 @@ def test_poller_agent_job_fires_and_creates_ticket():
     ev = loop.poll_once()
     assert any(e["type"] == "job_fired" for e in ev)         # 有開票
     assert src.created == ["SCRUM"]                          # create_ticket 到 SCRUM
-    assert store.get_session(999) is not None                # 預建 pinned session
+    assert store.get_session(999) is not None                # 預建鎖定 profile 的 session
     assert store.get_session(999).profile == "maint"
     assert store.trigger_run_count("t") == 1                 # count 記數
     # 再 poll 一次 → count 用完不再 fire

@@ -71,9 +71,13 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
 - **新增一個 agent(profile)**:在 `config/profiles/<名>.yaml` 建一個(檔名=profile 名,
   範例見 [設計/workspace](design/workspace.md)),`config.yaml` 的 `outer_loop.routes` 加比對
   規則指到它 → `POST /reload`。
+- **label vs profile(心智模型)**:**label = 入場券** —— poller 只撿「label 命中某條
+  `create_or_resume` route」的票去派工;沒對到 route 的 label 就進不了場。**profile = 進場後
+  誰來做** —— 由 route 或 triage 決定、鎖定在該票的 session。所以要讓一張票被跑:先給它一個
+  對得到 route 的 **label**(入場),profile 再由 route/triage 決定。
 - **A/B 測試 / 自動選 profile(Q16)**:main profile 加 `select` 區塊 —— `candidates`(候選
   profile 名清單,每個名字**須以 main 名為前綴**)+ `method: random | script` + `script`
-  (method=script 時的腳本路徑)。**首次派工時選一個實際 profile 並 pin 進 session**
+  (method=script 時的腳本路徑)。**首次派工時選一個實際 profile 並 寫入 session**
   (resume 不重選,確保同一票結果穩定)。`method=script` 時,腳本吃 JSON stdin(含 ticket 資訊 /
   clearquest_id / 候選及其 yaml 路徑)→ stdout 印出要用的 profile 名 → 可做條件式 triage。
   **任何失敗 fail-safe 回 main**;journal 記 `profile_selected`(original / chosen / method),

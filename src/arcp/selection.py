@@ -5,7 +5,7 @@
   method=random → 隨機分流(A/B 測試)。
   method=script → 把 ticket/clearquest/候選 等資訊以 JSON 餵給命令的 stdin,命令在
                   stdout 回傳選中的 profile 名(可據 description/crid… 做條件式 triage)。
-選中的由 dispatcher pin 進 session(resume 不重選)。任何失敗一律 fail-safe 回 main。
+選中的由 dispatcher 寫入 session(resume 不重選)。任何失敗一律 fail-safe 回 main。
 
 「選 profile」同時就是泛化的 triage:選到 require_approval=true 的 profile 就要人放行、
 選到 false 的就直接跑 —— triage 與 A/B 共用同一機制。

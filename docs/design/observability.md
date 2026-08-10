@@ -176,7 +176,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 
 **F. 排程觸發 / jobs(triggers.py)** —— 內部 job(P2):
 - `job_fired`(`job`/`run_name`/`profile`/`task_idx`):**agent-job 開了一張真 Jira 票**
-  (count 上限內、逢 cron/every 或 count=1 首輪);該票預建 pinned session(直接指定 profile),
+  (count 上限內、逢 cron/every 或 count=1 首輪);該票預建鎖定 profile 的 session(直接指定 profile),
   之後走正常 dispatch。task_script 多筆 → 同一輪多個 `job_fired`(task_idx 遞增)。
   script-job 走下面 script_run_* 系列(不開 Jira)。
 - `trigger_started` → `script_run_started`/`script_run_finished`(script 型)或
@@ -207,7 +207,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 
 **`profile_selected`** — Q16 首次派工選了不同 profile(dispatcher)
 - 何時:main profile 設了 `select`(A/B 測試 / 自動選 profile),首次派工選出 `chosen`。
-- 正常:每票至多一次;`chosen` 就是這票**實際跑**的 profile(已 pin 進 session,resume 不重選)。
+- 正常:每票至多一次;`chosen` 就是這票**實際跑**的 profile(已 寫入 session,resume 不重選)。
   `method=random` 剛好選回 main 時**不發**此事件(屬正常,不是漏)。
 - 異常:以為設了 script triage 卻選到非預期 profile → 對照 `original`/`chosen`/`method`,
   再看 script 的 stderr(以 `[select:<key>]` 記錄)。fail-safe 會回 main(見 selection.md)。

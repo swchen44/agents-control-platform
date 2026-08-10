@@ -125,7 +125,7 @@ agent-job 已改開真 Jira)。決策:
   下個 cron 點一次後停)、count=0 無上限(需 cron,每逢 cron)、count=N 跑 N 個 cron 點後停。
   count≠1 但無 cron → ConfigError。**count 省略預設 1**。持久化 `run_count`(store.trigger_state)。
 - **agent-job 統一開真 Jira**(Q1):每次執行 = harness `create_ticket`(source project)+
-  **預建 pinned session**(直接指定 profile、跳過 routing/HIL 選 profile;approval 由 profile
+  **預建鎖定 profile 的 session**(直接指定 profile、跳過 routing/HIL 選 profile;approval 由 profile
   自行決定)。票帶 **`labels`** → 對到既有 create_or_resume route(與 W10.3 跨票換手一致)→
   poller 正常派工 → 自動獲得 HIL/交付物/評分/dashboard/trace 全套。**移除 agent 的 pseudo-ticket
   inline 跑**。
@@ -137,7 +137,7 @@ agent-job 已改開真 Jira)。決策:
 - **script-job 維持不開 Jira**(Q1):跑腳本、結果進 journal/dashboard;簡易排程也可直接用 crontab。
 
 新事件:`job_fired`(job/run_name/profile/task_idx)。實作:`triggers.fire_agent_job`
-(create_ticket + pinned session)、`store.trigger_run_count`/`bump_trigger_run`、poller
+(create_ticket + 鎖定 profile 的 session)、`store.trigger_run_count`/`bump_trigger_run`、poller
 `_run_due_triggers`;`tests/test_jobs.py`。config 形狀:
 ```yaml
 outer_loop:

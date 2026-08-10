@@ -10,7 +10,7 @@ comment 只以 comment_added 事件出現一次);自家 [agent] 前綴留言不�
   retry  歸零 attempts + 解除 pending,從頭再試
   stop   交還人工:pending:human-decision
   cancel 撤銷:outcome=ABORTED,此後不再派工
-  next <profile>  F3 換手(W2.5):重置 session、pin 新 profile(dispatcher 以
+  next <profile>  F3 換手(W2.5):重置 session、鎖定新 profile(dispatcher 以
          session.profile 優先於 route)→ 下輪重新排隊;目標 require_approval
          則重走審批門;workspace 置哨值 → 下輪重 provision(新 instance)
 
@@ -133,7 +133,7 @@ class CommandHandler:
                 return [self.store.journal("command_rejected", t.id, t.key,
                                            command="next", target=target)]
             _finalize_leaving(sess, self.profiles, "handoff-cmd")  # W4.3/W6.4
-            # 重置 session、pin 新 profile;下輪 poll 經 gate 重新排隊,目標
+            # 重置 session、鎖定新 profile;下輪 poll 經 gate 重新排隊,目標
             # require_approval 則重走審批門;workspace 哨值→下輪重 provision
             sess.profile = target
             sess.session_id = None

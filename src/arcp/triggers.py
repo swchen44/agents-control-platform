@@ -319,7 +319,7 @@ def _resolve_tasks(trigger: Trigger) -> list[dict]:
 
 def fire_agent_job(trigger: Trigger, source, store, profiles: dict[str, Profile],
                    project: str, now: float | None = None) -> list[dict]:
-    """agent-job(P2):解析 task(s)→ 每筆 create_ticket + 預建 pinned session
+    """agent-job(P2):解析 task(s)→ 每筆 create_ticket + 預建鎖定 profile 的 session
     (直接指定 profile、跳過 routing/HIL)。票帶 labels 對到 route → poller 正常派工 →
     自動有 HIL/交付物/評分。**不 bump run_count**(呼叫者 poller 負責 at-most-once)。"""
     events: list[dict] = []
@@ -332,7 +332,7 @@ def fire_agent_job(trigger: Trigger, source, store, profiles: dict[str, Profile]
             events.append(store.journal("trigger_error", 0, trigger.run_name,
                                         error=str(e)[:200]))
             continue
-        store.upsert_session(TicketSession(   # pinned:dispatcher 直接用此 profile
+        store.upsert_session(TicketSession(   # 鎖定 profile:dispatcher 直接用此 profile
             issue_id=t.id, key=t.key, profile=trigger.profile,
             workspace="(handoff)", session_id=None, attempts=0, outcome=None,
             pending_reason=None, cost_usd=0.0))

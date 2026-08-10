@@ -166,7 +166,7 @@ class OuterLoop:
 
     def _run_due_triggers(self) -> list[dict]:
         """jobs P2:到期的 job → 觸發。**agent-job 開真 Jira 票**(fire_agent_job:
-        create_ticket + pinned session,票走正常 dispatch 由 F1 gate 管額度);
+        create_ticket + 鎖定 profile 的 session,票走正常 dispatch 由 F1 gate 管額度);
         **script-job inline 跑**(run_script_trigger,不開 Jira)。count 上限 + cron/every
         時機(count=1 無排程 → 首輪立刻一次);先 bump 再跑(at-most-once)。"""
         import time as _t
@@ -216,7 +216,7 @@ class OuterLoop:
             else:
                 need.append(idx)
         cand = []
-        for i in need:                                  # F3:session pin 優先
+        for i in need:                                  # F3:session 的 profile 優先
             prof = to_dispatch[i][1]                    # (與 dispatcher 一致)
             s = self.store.get_session(to_dispatch[i][0].id)
             if s is not None and s.profile in profiles:

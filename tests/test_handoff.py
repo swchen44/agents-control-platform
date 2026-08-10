@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """W2.5 — F3 換手 單元測(@agent next + G1 next 驅動;pytest-compatible,亦自跑)。
 
-涵蓋:@agent next 換 profile(重置 session + pin)、無效目標拒絕、dispatcher 用
-pin 的 profile 並重 provision、G1 handoff next.kind=agent 自動換手、kind=human
+涵蓋:@agent next 換 profile(重置 session + 鎖定 profile)、無效目標拒絕、dispatcher 用
+鎖定的 profile 並重 provision、G1 handoff next.kind=agent 自動換手、kind=human
 交人(pending:human-decision + assign)、換手到 require_approval profile 重走審批門。
 """
 from __future__ import annotations
@@ -124,18 +124,18 @@ def test_command_next_bare_rejected():
     assert [e["type"] for e in ev] == ["command_rejected"]
 
 
-# -- dispatcher:pin 優先 + 重 provision ------------------------------------ #
+# -- dispatcher:鎖定的 profile 優先 + 重 provision ------------------------------------ #
 def test_dispatcher_uses_pinned_profile_and_reprovisions():
     fork, calls = _fork_recorder()
     dmod.run_attempt = fork
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "s"))
-    store.upsert_session(_sess(profile="other"))    # 換手後:pin=other、哨值 ws
+    store.upsert_session(_sess(profile="other"))    # 換手後:鎖定=other、哨值 ws
     d = Dispatcher(MockSource(), store, dict(PROFILES), root=root)
     d.handle(_ticket(), "p")                        # route 仍說 p
     assert len(calls) == 1
     agent_cfg, ws = calls[0]
-    assert agent_cfg["tag"] == "other"              # 用 pin 的 profile
+    assert agent_cfg["tag"] == "other"              # 用鎖定的 profile
     assert "other-1" in ws                          # 新 instance 路徑(other 的命名)
     assert store.get_session(1).workspace == ws     # 路徑回存
 
@@ -154,7 +154,7 @@ def test_g1_handoff_to_agent():
     assert any(e["type"] == "handoff" and e.get("kind") == "agent"
                for e in ev)
     sess = store.get_session(1)
-    assert sess.profile == "other"                  # pin 新 profile
+    assert sess.profile == "other"                  # 鎖定新 profile
     assert sess.session_id is None and sess.attempts == 0
     assert sess.workspace == "(handoff)"
     assert any("同票換手" in c and "other" in c
@@ -206,7 +206,7 @@ def test_handoff_to_approval_profile_regates():
     profiles = {"p": _profile("p"),
                 "appr": _profile("appr", require_approval=True,
                                  approver="APPR", max_revisions=2)}
-    # 換手後 pin=appr(如 @agent next appr 之後的狀態)
+    # 換手後鎖定=appr(如 @agent next appr 之後的狀態)
     store.upsert_session(_sess(profile="appr"))
     src = MockSource()
     d = Dispatcher(src, store, profiles, root=root,

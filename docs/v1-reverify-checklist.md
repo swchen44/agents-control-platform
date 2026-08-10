@@ -106,7 +106,7 @@ default:
 `POST /reload` 或重起,建一張新測試票(label `agent`)。
 
 **預期 journal**:`profile_selected`(`original=default`、`chosen=default或default_v2`、`method`);
-`chosen` 就是實際跑的 profile,且 pin 進 session(resume 不重選)。
+`chosen` 就是實際跑的 profile,且 寫入 session(resume 不重選)。
 
 - ☐ journal 有 `profile_selected`(random 剛好選回 main 時**不發**,屬正常 → 多開幾張看到分流)
 - ☐ dashboard 該票的 profile 欄 = chosen;`/api/v1/tickets` 也是 chosen
