@@ -64,7 +64,7 @@ inner_loop:
         # common_hooks: [example-hook]   # 從 config/hooks/ 選子集,複製到 ws 的 hooks 目錄
         # inject_md: true                # 是否把 config/templates/inject_claude_md_end.md 貼到 CLAUDE.md/AGENTS.md 尾
       skills: []                    # 舊式逐檔 SKILL.md(相容;新專案用 common_skills)
-      # --- Q16 profile 選擇(A/B 測試 / 泛化 triage;首次派工選一次、pin 進 session)---
+      # --- Q16 profile 選擇(A/B 測試 / 泛化 triage;首次派工選一次、鎖定進 session)---
       # select:
       #   candidates: [default_v2]     # 候選 profile 名,prefix 須 = 本 profile 名;本 profile 自動納入池
       #   method: random               # random(隨機分流)| script(條件式)

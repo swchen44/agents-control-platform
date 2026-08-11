@@ -256,6 +256,19 @@ grader 作關鍵任務的可選雙保險(profile 決定)。
 進場後由 route/triage 決定並**鎖定在 session**(非 Jira label);「鎖定」取代舊詞 "pin"。
 close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知道被取消/失敗的結果。
 
+## 主題 J — job 泛化 + description 契約 + label 規範(2026-08-11 討論中)
+
+> I3 深化成「job 泛化」:agent-job = **像人一樣建票 → 走 poller route/triage**(不 pin、
+> 可 A/B)。設計大方向已定,**卡在 J2 的 description 契約格式**(crid 等要怎麼寫進票再讀進
+> session)。以下依賴關係:J1 需要 J2 先定格式。
+
+| # | 項目 | 做法 / 決策 | 現況 |
+|---|---|---|---|
+| **J1** | **agent-job 泛化(原 I3)** | 加 `trigger_type: agent-job\|script-job`;`task_script`→統一 `script`(和 script-job 共用「有 log 的執行」:cwd/stdout.log/stderr.log/run.tgz/dashboard);腳本放 `config/scripts/{subfolder}/`、cwd 進 subfolder;agent-job 跑 script→stdout JSON 任務→**像人 create_ticket**(不建 session、不 pin)→走 route/triage;非 JSON→`trigger_error`。**移除** job 的 `profile`/`task`/`prompt`、`fire_agent_job` 預建 session、legacy `run_trigger`(pin 機制本身 base 交接仍用)| 設計已定;**卡 J2** |
+| **J2** | **description → session 的機器可讀契約格式** | 定一個基本格式(`key=value` 或 control-段 yaml),讓建票時寫、dispatcher 建 session 時讀回。欄位例:`crid=WCNCR0123745`、`prompt=…`(放進 TICKET)、`email=…`(tag + 檢查一次性連結填的 email;此欄也可用一次性 ticket 連結改)。**需討論**:格式(=／yaml)、與現有 sections(human/control/agent)的關係、哪些欄位 | **待討論**;J1 前置 |
+| **J3** | **label 命名規範** | 所有 ARCP 用的 label 一律 `arcp-`/`arcp.` 前綴(避免撞別人 label);route/job/文件/範例統一改。J1 做完後再 refine | 待做(J1 後) |
+| **J4** | **select 泛化 / 遞歸** | select(A/B / triage)能不能「select 下去再 select」?把 select 視為「call 一個 script 決定最終鎖定哪個 profile」的泛化能力 | **待討論(概念)** |
+
 ## AI 建議(供參考,你決定)
 
 **若目標是「盡快能上生產用」** → high: **B1**(真實 Jira)+ **B3**(Resolve 轉狀態)
