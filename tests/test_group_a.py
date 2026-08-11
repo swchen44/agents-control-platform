@@ -47,7 +47,7 @@ class FakeSource:
 
 def _tk(iid=1):
     return Ticket(id=iid, key="SCRUM-1", summary="做事", state="進行中",
-                  assignee=None, assignee_id=None, labels=["agent"],
+                  assignee=None, assignee_id=None, labels=["arcp.agent"],
                   description="做 X", comments=[])
 
 

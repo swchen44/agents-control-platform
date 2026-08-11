@@ -42,7 +42,7 @@ def main() -> int:
 
     t = src.create_ticket("SCRUM", f"[e2e-m2] 檔案鏈任務 {int(time.time())}",
                           description=TASK_DESC,
-                          labels=["filechain"])
+                          labels=["arcp.filechain"])
     print(f"test ticket: #{t.id} {t.key}", flush=True)
 
     ev1 = [e for e in loop.poll_once() if e["issue_id"] == t.id]

@@ -11,7 +11,7 @@
   (不建 session、不鎖定 profile)→ 票走 route/triage。格式:
 
   ```json
-  [{"summary": "...", "description": "...", "labels": ["cr"], "crid": "WCNCR0123745"}]
+  [{"summary": "...", "description": "...", "labels": ["arcp.cr"], "crid": "WCNCR0123745"}]
   ```
 
   - `summary` / `description` 必要(至少 description);`labels` 省略則用 job 的 `labels`。

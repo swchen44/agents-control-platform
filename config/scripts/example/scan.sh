@@ -6,7 +6,7 @@ set -euo pipefail
 cat <<'JSON'
 [
   {"summary": "[demo] 範例任務 A", "description": "這是 agent-job 開的示範票 A。",
-   "labels": ["cr"], "crid": "WCNCR0000001"},
-  {"summary": "[demo] 範例任務 B", "description": "示範票 B(無 crid)。", "labels": ["cr"]}
+   "labels": ["arcp.cr"], "crid": "WCNCR0000001"},
+  {"summary": "[demo] 範例任務 B", "description": "示範票 B(無 crid)。", "labels": ["arcp.cr"]}
 ]
 JSON

@@ -34,10 +34,10 @@ outer_loop:
 
   routes:
     - name: hands-off
-      when: {labels: ['no-agent']}
+      when: {labels: ['arcp.no-agent']}
       on_match: ignore
     - name: agent-labeled
-      when: {labels: ['agent']}
+      when: {labels: ['arcp.agent']}
       profile: default
       on_match: create_or_resume
 

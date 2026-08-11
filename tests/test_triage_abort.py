@@ -51,7 +51,7 @@ def _profile(name, select=None):
 
 def _tk():
     return Ticket(id=1, key="SCRUM-1", summary="s", state="待辦", assignee=None,
-                  assignee_id=None, labels=["agent"], description="做 X")
+                  assignee_id=None, labels=["arcp.agent"], description="做 X")
 
 
 d = tempfile.mkdtemp()

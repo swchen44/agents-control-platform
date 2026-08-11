@@ -65,7 +65,7 @@ _, routes = load_config(config_path())
 profiles = load_profiles(config_path())   # filechain-rawcli = engine claude
 tickets = [Ticket(id=i, key=f"P-{i}", summary="s", state="To Do",
                   assignee=None, assignee_id=None,
-                  labels=["filechain-rawcli"]) for i in (101, 102, 103)]
+                  labels=["arcp.filechain-rawcli"]) for i in (101, 102, 103)]
 root = tempfile.mkdtemp()
 store = Store(os.path.join(root, "s"))
 disp = FakeDispatcher(store, profiles)

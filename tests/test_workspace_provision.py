@@ -25,7 +25,7 @@ def check(name: str, cond: bool) -> None:
 
 def _tk(**kw) -> Ticket:
     base = dict(id=7, key="SCRUM-7", summary="做一件事", state="待辦",
-                assignee=None, assignee_id=None, labels=["agent"],
+                assignee=None, assignee_id=None, labels=["arcp.agent"],
                 description="請建立 DONE.md", comments=[])
     base.update(kw)
     return Ticket(**base)

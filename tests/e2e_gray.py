@@ -3,7 +3,7 @@
 
 Proves the poller records-but-never-acts, and that re-polling is idempotent:
 
-  G1 create a test ticket (label 'agent') → poll #1 journals
+  G1 create a test ticket (label 'arcp.agent') → poll #1 journals
      new_issue + route_matched(agent-labeled, notify_only)
   G2 poll #2 immediately → zero events (state diff idempotent)
   G3 add a comment → poll #3 → exactly one comment_added
@@ -36,7 +36,7 @@ def main() -> int:
 
     t = src.create_ticket("SCRUM", f"[e2e-gray] agent smoke {int(time.time())}",
                           description="Phase 1 灰度驗證測試票(可關閉)",
-                          labels=["agent"])
+                          labels=["arcp.agent"])
     print(f"test ticket: #{t.id} {t.key}")
 
     ev1 = loop.poll_once()

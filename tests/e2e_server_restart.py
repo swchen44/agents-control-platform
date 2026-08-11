@@ -54,7 +54,7 @@ def main() -> int:
         ts = int(time.time())
         base = [src.create_ticket("SCRUM", f"[srv] 共享 {ts}-{i}",
                                   description=DESC,
-                                  labels=["srv-restart", "filechain-server"])
+                                  labels=["arcp.srv-restart", "arcp.filechain-server"])
                 for i in range(2)]
         loop.poll_once()
         pid1 = mgr.pid
@@ -67,7 +67,7 @@ def main() -> int:
         # 開一張新票,在它跑 conversation 時 kill server
         victim = src.create_ticket("SCRUM", f"[srv] 受害 {ts}",
                                    description=DESC,
-                                   labels=["srv-restart", "filechain-server"])
+                                   labels=["arcp.srv-restart", "arcp.filechain-server"])
 
         def kill_soon():
             time.sleep(6)  # 讓 conversation 起來後殺 server

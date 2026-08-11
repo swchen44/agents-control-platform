@@ -33,13 +33,13 @@ def test_load_valid_both_types():
 outer_loop:
   triggers:
     - {name: a, run_name: scan, trigger_type: agent-job, script: cq/scan.sh,
-       labels: ['cr'], count: 0, cron: '*/10 * * * *'}
+       labels: ['arcp.cr'], count: 0, cron: '*/10 * * * *'}
     - {name: b, run_name: clean, trigger_type: script-job,
        script: 'maint/clean.sh', every: 2h}
 """)
     ts = load_triggers(p)
     assert ts[0].trigger_type == "agent-job" and ts[0].script == ["cq/scan.sh"]
-    assert ts[0].labels == ["cr"] and ts[0].every_sec is None  # cron 優先
+    assert ts[0].labels == ["arcp.cr"] and ts[0].every_sec is None  # cron 優先
     assert ts[1].trigger_type == "script-job" and ts[1].every_sec == 7200
 
 

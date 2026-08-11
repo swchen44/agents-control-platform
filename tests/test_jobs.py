@@ -56,7 +56,7 @@ def _script(body, rel="cq/scan.sh"):
     return rel
 
 
-def _job(rel, labels=("cr",)):
+def _job(rel, labels=("arcp.cr",)):
     return Trigger("scan", "scan", "agent-job", [rel], every_sec=None,
                    labels=list(labels))
 
@@ -65,7 +65,7 @@ def _job(rel, labels=("cr",)):
 rel = _script(
     '#!/bin/bash\ncat <<\'J\'\n'
     '[{"summary":"CR-1","description":"修 CR-1","crid":"WCNCR0123745"},'
-    '{"summary":"CR-2","description":"修 CR-2","labels":["cr","urgent"]}]\nJ\n')
+    '{"summary":"CR-2","description":"修 CR-2","labels":["arcp.cr","urgent"]}]\nJ\n')
 st = Store(tempfile.mkdtemp()); src = FakeSource()
 evs = fire_agent_job(_job(rel), src, st, tempfile.mkdtemp(), "SCRUM")
 check("兩筆任務 → 兩張票", len(src.created) == 2)
@@ -76,8 +76,8 @@ check("第一筆 crid 寫進 description 最上面 yaml",
 check("第二筆無 crid → description 無 yaml 頭",
       not src.created[1]["description"].startswith("crid:"))
 check("labels:第一筆用 job 預設、第二筆用自己的",
-      src.created[0]["labels"] == ["cr"]
-      and src.created[1]["labels"] == ["cr", "urgent"])
+      src.created[0]["labels"] == ["arcp.cr"]
+      and src.created[1]["labels"] == ["arcp.cr", "urgent"])
 check("不建 session(agent-job 不 pin)",
       all(st.get_session(c["id"]) is None for c in src.created))
 check("journal job_fired 帶 crid、無 profile",

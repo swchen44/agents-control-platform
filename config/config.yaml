@@ -46,7 +46,7 @@ outer_loop:
   #     run_name: scan-cq          # 必填,[a-z0-9-](防 path 注入)
   #     trigger_type: agent-job
   #     script: cq/scan.sh         # = config/scripts/cq/scan.sh;cwd = config/scripts/cq/
-  #     labels: ['cr']             # 開的票貼此 label → 命中 route → triage(不 pin)
+  #     labels: ['arcp.cr']             # 開的票貼此 label → 命中 route → triage(不 pin)
   #     count: 0                   # 0=無上限(需 cron);1=單次;N=N 次
   #     cron: '*/10 * * * *'       # 每 10 分;* , - */N;cron 與 every 並存 cron 優先
   #   - name: disk-clean           # script-job:純做事、不開票
@@ -64,36 +64,36 @@ outer_loop:
     # 由上而下第一個 match 勝出;when 內欄位 AND、陣列值 OR
     - name: hands-off
       when:
-        labels: ['no-agent']
+        labels: ['arcp.no-agent']
       on_match: ignore
 
     - name: agent-labeled
       when:
-        labels: ['agent']
+        labels: ['arcp.agent']
       profile: default
       on_match: notify_only          # 灰度:只記 route_matched,不接管
 
     - name: filechain-server        # B+.2:走 agent-server backend(GUI/detail 可見)
       when:
-        labels: ['filechain-server']
+        labels: ['arcp.filechain-server']
       profile: filechain-server
       on_match: create_or_resume
 
     - name: filechain-rawcli         # C.3:走 rawcli backend(RawCLIAgent,細粒度)
       when:
-        labels: ['filechain-rawcli']
+        labels: ['arcp.filechain-rawcli']
       profile: filechain-rawcli
       on_match: create_or_resume
 
     - name: filechain-codex          # W3.1(D2):rawcli 第二引擎(codex exec)
       when:
-        labels: ['filechain-codex']
+        labels: ['arcp.filechain-codex']
       profile: filechain-codex
       on_match: create_or_resume
 
     - name: filechain-demo          # Phase 2 M2:第一條會「動手」的 route
       when:
-        labels: ['filechain']
+        labels: ['arcp.filechain']
       profile: filechain
       on_match: create_or_resume
 
@@ -106,31 +106,31 @@ outer_loop:
 
     - name: fault-retry             # fault-injection:驗證 retry+evidence 迴路
       when:
-        labels: ['faultretry']
+        labels: ['arcp.faultretry']
       profile: faultretry
       on_match: create_or_resume
 
     - name: fault-dead              # fault-injection:驗證 UNKNOWN 路徑
       when:
-        labels: ['faultdead']
+        labels: ['arcp.faultdead']
       profile: faultdead
       on_match: create_or_resume
 
     - name: cmd-demo                # Phase 3:指令通道 E2E 用
       when:
-        labels: ['cmddemo']
+        labels: ['arcp.cmddemo']
       profile: faultdead            # 10s timeout → 快速進 pending:unknown
       on_match: create_or_resume
 
     - name: approval-demo           # W2a 真 Jira 實測:審批門 + human_email
       when:
-        labels: ['approval-demo']
+        labels: ['arcp.approval-demo']
       profile: approval-demo
       on_match: create_or_resume
 
     - name: handoff-demo            # W2.5 真 Jira 實測:G1 handoff kind=human
       when:
-        labels: ['handoff-demo']
+        labels: ['arcp.handoff-demo']
       profile: handoff-demo
       on_match: create_or_resume
 

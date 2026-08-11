@@ -49,7 +49,7 @@ class FakeSource:
 
     def get_ticket(self, iid):
         return Ticket(id=iid, key=f"SCRUM-{iid}", summary="原任務", state="進行中",
-                      assignee=None, assignee_id=None, labels=["agent", "team-x"],
+                      assignee=None, assignee_id=None, labels=["arcp.agent", "team-x"],
                       description=self.descs.get(iid, "做 X"), comments=[])
 
     def set_description(self, iid, d):
@@ -143,7 +143,7 @@ check("base:本票 outcome=ABORTED(交接非失敗)", old.outcome == "ABORTED")
 check("base:create_ticket 被呼叫一次", len(src.created) == 1)
 ct = src.created[0]
 check("base:新票同 project=SCRUM", ct["project"] == "SCRUM")
-check("base:新票沿用本票 labels", ct["labels"] == ["agent", "team-x"])
+check("base:新票沿用本票 labels", ct["labels"] == ["arcp.agent", "team-x"])
 check("base:新票 description 含 base: 標記與交接指示",
       "base: SCRUM-1" in ct["description"] and "用新方向重做" in ct["description"])
 new_id = ct["id"]
@@ -233,7 +233,7 @@ st.upsert_session(TicketSession(
     session_id=None, attempts=0, outcome=None, pending_reason=None,
     cost_usd=0.0, base_ref="1"))
 child_tk = Ticket(id=2, key="SCRUM-2", summary="子票", state="待辦",
-                  assignee=None, assignee_id=None, labels=["agent"],
+                  assignee=None, assignee_id=None, labels=["arcp.agent"],
                   description="base: SCRUM-1\n用新方向重做", comments=[])
 d = Dispatcher(src, st, {"p": _profile("p"), "q2": _profile("q2")}, root=rt)
 evs = d.handle(child_tk, "q2")

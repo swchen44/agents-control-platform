@@ -45,7 +45,7 @@ def main() -> int:
     ts = int(time.time())
     tickets = [src.create_ticket("SCRUM", f"[par] 並行 {ts}-{i}",
                                  description=DESC,
-                                 labels=["par-demo", "filechain-rawcli"])
+                                 labels=["arcp.par-demo", "arcp.filechain-rawcli"])
                for i in range(N)]
     print("tickets:", [t.key for t in tickets], flush=True)
 

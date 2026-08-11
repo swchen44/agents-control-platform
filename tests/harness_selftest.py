@@ -40,15 +40,15 @@ print("routing (using the real config.yaml):")
 # 否則 CI 的 config.example.yaml 缺這些 route 會誤判失敗)。
 _, routes = load_config(os.path.join(config_dir(), "config.yaml"))
 check("label agent -> agent-labeled(notify_only)",
-      (r := match(t(labels=["agent"]), routes)) is not None
+      (r := match(t(labels=["arcp.agent"]), routes)) is not None
       and r.name == "agent-labeled" and r.on_match == "notify_only")
 check("label no-agent 優先於其他 -> ignore",
-      match(t(labels=["no-agent", "agent"]), routes).on_match == "ignore")
+      match(t(labels=["arcp.no-agent", "arcp.agent"]), routes).on_match == "ignore")
 check("summary bug -> triage-keyword",
       match(t(summary="fix login bug"), routes).name == "triage-keyword")
 check("無條件命中 -> None", match(t(summary="plain"), routes) is None)
 check("label filechain -> create_or_resume",
-      match(t(labels=["filechain"]), routes).on_match == "create_or_resume")
+      match(t(labels=["arcp.filechain"]), routes).on_match == "create_or_resume")
 
 print("config guards (fail-fast):")
 with tempfile.TemporaryDirectory() as tmp:
