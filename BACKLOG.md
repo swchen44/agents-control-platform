@@ -270,6 +270,22 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 | **J4** | **select 泛化 / 遞歸** | ✅ **定案+實作(2026-08-11,`a5de847`)**。**軸 B**:`method=script` 可回**任何已定義 profile**(不限同族候選;`_parse_select` 對 script 模式放寬——candidates 選填、免 prefix;random 仍限同族+必填);stdin 加 `all_profiles`。**軸 A(遞歸)**:選中的 profile 若自己也有 `select` 就再跑一層 →多層 triage 樹;終止=無 select(葉)/回自己/繞圈(走過的)/fail-safe/**第 10 層截斷**,`notfound` 任一層即中止;meta 帶 `chain`。dispatcher 把票的 crid 傳進 select。test_selection 16 檢查全綠 | ✅ **完成** |
 | **J5** | **全文件 + web introduction 總檢查更新** | ✅ **完成(2026-08-11,`7ac223d`)**。盤點 docs/ 26 檔(排 history/research)+ web 概念頁 + README + config 註解。**web `/concepts` 新增「進場·選型·排程·指令·額度」靜態概念節**;selection.md 大幅更新(軸 B/遞歸整節);12 處裸 label 加 `arcp.`;index/idempotency 的 @agent/comment 指令→指令台;pin 殘留清除;README budget→6 層。多數手冊前幾波已對齊,故實改集中少數過時處 | ✅ **完成** |
 
+## 主題 K — 負責人 email 身分門禁(2026-08-12 逐題定案 + 實作,全完成)
+
+> description 契約的 email 首建存進 `session.owner_email` 當負責人;HIL 表單/指令台提交
+> 必填 email 且比對(選填門禁:有 owner 才擋)。設計正本:`docs/design/identity-gate.md`。
+> K1–K4 全數完成(2026-08-12):K1 `98a991c`、K2 `ef98c8f`、K3 `94c5c7a`、K4 `ce9f524`。
+
+| # | 項目 | 做法 / 決策 | 現況 |
+|---|---|---|---|
+| **K1** | **門禁核心** | 選填(owner 空→放行)+ HIL/指令台都比對 + 管理者豁免(owner / config `admin_emails` / profile.approver)+ 正規化(strip+lower)。`identity.owner_gate`;`TicketSession.owner_email`(+migration);dispatcher 首建存入;`admin_emails` 載入+reload;form_server HIL email 欄 + 兩表單 `_gate` | ✅ `98a991c` |
+| **K2** | **稽核 IP** | 兩種提交都存 email + 來源 IP + 資料。`interactions.submitted_ip`;`apply_command` journal 帶 `ip`;control_api REST 取 client_address | ✅ `ef98c8f` |
+| **K3** | **set_email 改負責人** | 指令台指令改 `owner_email`;re-tag 新人(find_account_id→@mention,查不到退 email)+ 重貼待填表單;門禁閉環(現負責人/管理者/審批者才能下);破壞性二次確認;event `owner_changed` | ✅ `94c5c7a` |
+| **K4** | **approver watcher** | 首建 session(鎖定 profile)把 `profile.approver` 加 Jira watcher(email 先轉 accountId);best-effort;`jira_source.add_watcher`;event `watcher_added` | ✅ `ce9f524` |
+| **K5** | **文件** | 設計文件 `identity-gate.md` + index + operator/user-guide + web `/concepts` 補門禁 | ✅ 完成 |
+
+**未做(可未來擴充)**:多負責人(目前單一 email);description email 改了自動同步(現定案=鎖定,只走 set_email)。
+
 ## AI 建議(供參考,你決定)
 
 **若目標是「盡快能上生產用」** → high: **B1**(真實 Jira)+ **B3**(Resolve 轉狀態)

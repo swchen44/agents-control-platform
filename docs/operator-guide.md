@@ -62,16 +62,35 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
 
 ### 2.1 指令台(人下指令的介面,取代舊 `@agent` 留言)
 
-人的指令(run/retry/hold/stop/cancel/next)改走「**指令台**」表單:每張被接管的票,poller
-首次派工時把連結寫進 **description 的 control 段** + 貼一則指路 comment(事件
+人的指令(run/retry/hold/stop/cancel/next/**set_email**)改走「**指令台**」表單:每張被接管的
+票,poller 首次派工時把連結寫進 **description 的 control 段** + 貼一則指路 comment(事件
 `command_link_posted`),綁票、可重複用、票 close 才失效。表單依票**當前狀態**動態列可用指令、
-附說明,需填 email、破壞性指令(cancel/stop)要二次確認。
+附說明,需填 email、破壞性指令(cancel/stop/set_email)要二次確認。
 
 - **自動化 / 程式**走 REST:`POST :8787/ticket/<id>/command`,body `{cmd,args,by}`
-  (`args.profile` 供 next),回 `{ok,message}`。與指令台同一套核心、在 poller 行程(hold
-  能正確 killpg)。
+  (`args.profile` 供 next、`args.email` 供 set_email),回 `{ok,message}`。與指令台同一套
+  核心、在 poller 行程(hold 能正確 killpg)。
+- **`set_email`(改負責人)**:改該票 `owner_email`(email 身分門禁的比對對象)。改後
+  re-tag 新負責人 + 重貼待填表單。**門禁閉環**:只有現負責人 / 管理者 / 審批者能下此指令。
+  見 [身分門禁設計](design/identity-gate.md)。
 - **已移除**舊的 `@agent` 留言指令通道與 `commands.allowed_commenters` 白名單(未 release,
   不相容)。REST 端點沿用 control API 的信任模型(綁 127.0.0.1;要開放見 §8 安全)。
+
+### 2.2 負責人 email 身分門禁(選填)
+
+票的 `description` 頂端 yaml 填了 `email`,該票就**上鎖**:HIL 表單 / 指令台提交的 email 必須
+== 負責人 / ∈ 全站 `admin_emails` / == 該票 profile `approver` 才放行(沒填 email 的票不受限)。
+全站管理者豁免名單設在 config(可 hot reload):
+
+```yaml
+outer_loop:
+  admin_emails:
+    - ops@company.com
+    - lead@company.com
+```
+
+所有提交都留稽核:`interactions.submitted_by`(email)/ `submitted_ip`(來源 IP)/ 提交資料;
+指令走 journal(`author` + `ip`)。詳見 [身分門禁設計](design/identity-gate.md)。
 
 ## 3. 監控健康:Dashboard **Server 頁**
 

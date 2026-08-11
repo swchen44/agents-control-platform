@@ -99,6 +99,25 @@ class Dispatcher:
         log.info("%s triage untriageable → ABORTED", ticket.key)
         return events
 
+    def _add_approver_watcher(self, ticket: Ticket, profile: Profile) -> list:
+        """K:首建 session(鎖定 profile)時把該 profile.approver 加為 Jira watcher
+        (best-effort;approver 為 email 先轉 accountId、已是 accountId 直接用;
+        查不到 / 失敗都不擋派工)。"""
+        approver = getattr(profile, "approver", None)
+        if not approver:
+            return []
+        try:
+            acct = (self.source.find_account_id(approver)
+                    if "@" in str(approver) else approver)
+            if not acct:
+                return []
+            self.source.add_watcher(ticket.id, acct)
+            return [self.store.journal("watcher_added", ticket.id, ticket.key,
+                                       approver=str(approver))]
+        except Exception as e:  # noqa: BLE001 — watcher 是加值,失敗不擋派工
+            log.warning("%s 加 approver watcher 失敗:%s", ticket.key, e)
+            return []
+
     def _post_deliverables(self, sess: TicketSession, ticket: Ticket,
                            outcome: str, res, events: list[dict]) -> None:
         """終態:記 agent 自評分(contract.score)+ 貼交付物(OUTPUT.json → ADF + 附件)。
@@ -343,6 +362,7 @@ class Dispatcher:
                     outcome=None, pending_reason=None, cost_usd=0.0,
                     clearquest_id=_meta.get("crid"),
                     owner_email=normalize_email(_meta.get("email")))
+                events.extend(self._add_approver_watcher(ticket, profile))
             decision = self.approval.gate(ticket, profile, sess)
             self.store.upsert_session(sess)
             events.append(self.store.journal(
@@ -374,6 +394,7 @@ class Dispatcher:
             events.append(self.store.journal(
                 "session_created", ticket.id, ticket.key,
                 profile=profile.name, workspace=ws))
+            events.extend(self._add_approver_watcher(ticket, profile))
         else:
             healthy, reason = health_check(
                 sess.workspace, ticket, profile,

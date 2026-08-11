@@ -85,6 +85,9 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # runtime 資料預設
 ## 7. 人怎麼介入(HIL)
 
 - **通知**:agent 需要你時,在票上留言並 `@mention` 你,附一次性表單連結(不改 assignee)。
+- **填表單要填 email(你是誰)**:供稽核。若票的 description 頂端填了 `email`(指定負責人),
+  表單/指令台就**上鎖**——只有負責人 / 管理者 / 該 profile 審批者的 email 能提交(沒指定的
+  票不受限)。見 [身分門禁](design/identity-gate.md)。
 - **表單型別**:`need_info`(補資訊)/ `decision`(選項核可)/ `score_and_close`
   (評分 0–10 + 裁決:關單 / 續跑 / **改派下一棒**)。
 - 你填完送出 → 系統回寫 Jira description 的 human 段 + 貼稽核 comment,並讓 agent

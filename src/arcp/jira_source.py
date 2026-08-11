@@ -315,6 +315,13 @@ class JiraCloudSource:
                       body={"accountId": account_id})
         self._notify_write("assign", id_or_key, account_id or "(取消指派)")
 
+    def add_watcher(self, id_or_key: str | int, account_id: str) -> None:
+        """加 watcher(關注者)by accountId(K:開票時把 profile.approver 加關注)。
+        Jira watcher API 特別:POST body 是**裸 accountId 字串**(非物件)。"""
+        self._request("POST", f"/rest/api/3/issue/{id_or_key}/watchers",
+                      body=account_id)
+        self._notify_write("watcher", id_or_key, account_id)
+
     # -- mapping ------------------------------------------------------------ #
     def _to_ticket(self, issue: dict) -> Ticket:
         f = issue.get("fields", {}) or {}

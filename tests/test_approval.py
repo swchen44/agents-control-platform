@@ -28,6 +28,7 @@ class MockSource:
         self.desc = {}
         self.comments = []
         self.assigns = []
+        self.watchers = []
 
     def set_description(self, iid, text):
         self.desc[iid] = text
@@ -37,6 +38,9 @@ class MockSource:
 
     def assign(self, iid, acct):
         self.assigns.append((iid, acct))
+
+    def add_watcher(self, iid, acct):     # K:approver watcher
+        self.watchers.append((iid, acct))
 
 
 def _profile(**kw):
@@ -208,6 +212,25 @@ def test_dispatcher_resume_skips_gate():
     # 「desc 未被寫」當代理判準;直接看 pending_reason 不是 approval)
     assert store.get_session(1).pending_reason != "approval"
     assert calls != []                             # 直接 resume/fork
+
+
+def test_approver_added_as_watcher():
+    """K:首建 session(鎖定 profile)把 profile.approver 加為 Jira watcher。"""
+    root = tempfile.mkdtemp()
+    store = Store(os.path.join(root, "s"))
+    src = MockSource()                              # approver=accountId 直接用
+    d = Dispatcher(src, store, {"p": _profile()}, root=root)
+    evs = d._add_approver_watcher(_ticket(), _profile(approver="ACC-1"))
+    assert src.watchers == [(1, "ACC-1")]
+    assert any(e["type"] == "watcher_added" for e in evs)
+    src2 = MockSourceWithSearch()                  # approver=email → 先解析
+    d2 = Dispatcher(src2, store, {"p": _profile()}, root=root)
+    d2._add_approver_watcher(_ticket(), _profile(approver="boss@x.tw"))
+    assert src2.watchers == [(1, "ACCT-BOSS")]     # KNOWN["boss@x.tw"]
+    src3 = MockSource()                            # 無 approver → 不加、不報錯
+    d3 = Dispatcher(src3, store, {"p": _profile()}, root=root)
+    assert d3._add_approver_watcher(_ticket(), _profile(approver=None)) == []
+    assert src3.watchers == []
 
 
 if __name__ == "__main__":
