@@ -199,9 +199,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # 指令核心閉包:人的表單 console 與自動化 REST API 共用同一條(在 poller 行程,
     # 故 hold 能正確 killpg 跑中的 agent)。取代舊 @agent comment 通道。
-    def _command_fn(issue_id, cmd, args, by):
+    def _command_fn(issue_id, cmd, args, by, ip=""):
         return apply_command(src, store, profiles, issue_id, cmd, args or {},
-                             by, base_url=form_base, mention=mention)
+                             by, base_url=form_base, mention=mention, ip=ip)
 
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,

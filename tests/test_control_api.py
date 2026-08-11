@@ -74,8 +74,8 @@ def test_command_endpoint():
     """POST /ticket/<id>/command → command_fn;回 200{ok,message};請求壞→4xx/501。"""
     calls = []
 
-    def _cmd_fn(iid, cmd, args, by):
-        calls.append((iid, cmd, args, by))
+    def _cmd_fn(iid, cmd, args, by, ip=""):
+        calls.append((iid, cmd, args, by))   # ip 稽核另測
         if cmd == "boom":
             return False, "不適用", []
         return True, f"已執行:{cmd}", [{"type": "command_accepted"}]

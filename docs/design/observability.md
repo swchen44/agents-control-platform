@@ -69,7 +69,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
 | `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
 | `closed` | `agent_score`, `by`, `human_score`, `outcome`, `request_id` | `src/arcp/hil.py`, `src/arcp/scoring.py` |
-| `command_accepted` | `author`, `command` | `src/arcp/commands.py` |
+| `command_accepted` | `author`, `command`, `ip` | `src/arcp/commands.py` |
 | `command_link_posted` | — | `src/arcp/hil.py` |
 | `comment_added` | `author`, `body`, `comment_id` | `src/arcp/poller.py` |
 | `deliverables_posted` | `has_output`, `mode`, `n_attachments`, `skipped` | `src/arcp/deliverables.py` |
@@ -77,7 +77,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `evicted` | `count`, `session` | `src/arcp/dispatcher.py` |
 | `external_abort` | `state` | `src/arcp/commands.py` |
 | `external_cleared` | `cause` | `src/arcp/dispatcher.py` |
-| `handoff` | `author`, `from_profile`, `kind`, `new_ticket`, `to`, `via` | `src/arcp/commands.py`, `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
+| `handoff` | `author`, `from_profile`, `ip`, `kind`, `new_ticket`, `to`, `via` | `src/arcp/commands.py`, `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
 | `handoff_invalid` | `kind`, `to`, `via` | `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
 | `hil_requested` | `request_id`, `schema` | `src/arcp/hil.py` |
 | `hil_resumed` | `reason`, `request_id`, `schema` | `src/arcp/hil.py` |

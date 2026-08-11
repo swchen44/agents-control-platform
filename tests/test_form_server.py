@@ -79,6 +79,18 @@ def test_owner_gate_wired():
     st.close()
 
 
+def test_submitted_ip_audited():
+    """K:process_submission 記提交 email + 來源 IP(稽核追查)。"""
+    req = build_request(1, "P-1", "need_info", now=1.0)
+    st = _store_with(req)
+    ok, _ = process_submission(st, req, {"answer": "x"}, jira_up=True,
+                               by="u@x.com", ip="203.0.113.7", now=2.0)
+    got = st.get_interaction(req.token)
+    assert ok and got.submitted_by == "u@x.com"
+    assert got.submitted_ip == "203.0.113.7"     # 來源 IP 落地
+    st.close()
+
+
 def test_process_jira_down_does_not_persist():
     req = build_request(1, "P-1", "need_info", now=1.0)
     st = _store_with(req)

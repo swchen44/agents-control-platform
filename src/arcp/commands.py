@@ -116,10 +116,12 @@ def available_commands(sess) -> list[str]:
 
 def apply_command(source, store, profiles, issue_id: int, cmd: str,
                   args: dict | None = None, by: str = "", *,
-                  base_url: str = "", mention: str = "") -> tuple[bool, str, list]:
+                  base_url: str = "", mention: str = "",
+                  ip: str = "") -> tuple[bool, str, list]:
     """執行一個指令(人的表單 console 與自動化 REST API 共用的唯一核心)。
 
-    回 (ok, 人看的結果訊息, events)。by=提交者身分(email,稽核)。args={profile:…}
+    回 (ok, 人看的結果訊息, events)。by=提交者身分(email,稽核)、ip=來源 IP(稽核)。
+    args={profile:…}
     供 next。在 poller 行程內呼叫 → hold 能正確 killpg。狀態不適用 / 目標無效 →
     (False, 原因, [])。"""
     args = args or {}
@@ -134,7 +136,8 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
                 f"指令「{cmd}」在目前狀態({canonical_state(sess)})不適用。", [])
 
     def _audit(extra: str = "") -> None:
-        source.add_comment(issue_id, f"[agent] 指令 {cmd} by {by or '—'}"
+        _ip = f" ip={ip}" if ip else ""            # K:來源 IP 稽核
+        source.add_comment(issue_id, f"[agent] 指令 {cmd} by {by or '—'}{_ip}"
                                      f"(via 指令表單){extra}")
 
     if cmd == "next":
@@ -155,7 +158,7 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
         log.info("%s 換手指令 → %s by %s", key, target, by)
         return (True, f"已換手 → {target};下輪重新排隊接手。",
                 [store.journal("handoff", issue_id, key, kind="command",
-                               to=target, author=by)])
+                               to=target, author=by, ip=ip)])
 
     if cmd == "hold":
         _write_evict(sess)                         # 立即 killpg(不耗 attempt)
@@ -170,7 +173,7 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
         log.info("%s hold:evict + 開 hold 表單 by %s", key, by)
         return (True, "已中斷,agent 已停;請再填 hold 表單給新指示。",
                 [store.journal("command_accepted", issue_id, key,
-                               command="hold", author=by)])
+                               command="hold", author=by, ip=ip)])
 
     if cmd in ("run", "retry"):
         if cmd == "retry":
@@ -185,7 +188,7 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
     log.info("%s 指令 %s by %s", key, cmd, by)
     return (True, f"已執行:{cmd}。",
             [store.journal("command_accepted", issue_id, key,
-                           command=cmd, author=by)])
+                           command=cmd, author=by, ip=ip)])
 
 
 class ExternalChangePolicy:

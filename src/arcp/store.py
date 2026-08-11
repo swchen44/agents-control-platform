@@ -135,6 +135,7 @@ class Store:
                 submission     TEXT,
                 submitted_at   REAL NOT NULL DEFAULT 0,
                 submitted_by   TEXT NOT NULL DEFAULT '',
+                submitted_ip   TEXT NOT NULL DEFAULT '',
                 reminders      INTEGER NOT NULL DEFAULT 0,
                 reminded_at    REAL NOT NULL DEFAULT 0
             )""")
@@ -185,6 +186,9 @@ class Store:
         if "kind" not in icols:                    # 指令 console:hil/command
             self._db.execute("ALTER TABLE interactions ADD COLUMN"
                              " kind TEXT NOT NULL DEFAULT 'hil'")
+        if "submitted_ip" not in icols:            # K:提交來源 IP(稽核)
+            self._db.execute("ALTER TABLE interactions ADD COLUMN"
+                             " submitted_ip TEXT NOT NULL DEFAULT ''")
 
     def get(self, issue_id: int) -> TicketWatch | None:
         with self._lock:
@@ -400,7 +404,8 @@ class Store:
     # -- W11.2 互動請求(一次性 token 表單)------------------------------------ #
     _IX_COLS = ("request_id, token, issue_id, key, schema_id, schema_version,"
                 " created_at, expires_at, status, payload, submission,"
-                " submitted_at, submitted_by, reminders, reminded_at, kind")
+                " submitted_at, submitted_by, reminders, reminded_at, kind,"
+                " submitted_ip")
 
     @staticmethod
     def _row_to_interaction(row):
@@ -413,7 +418,8 @@ class Store:
             submission=json.loads(row[10]) if row[10] else None,
             submitted_at=row[11], submitted_by=row[12],
             reminders=row[13], reminded_at=row[14],
-            kind=row[15] if len(row) > 15 and row[15] else "hil")
+            kind=row[15] if len(row) > 15 and row[15] else "hil",
+            submitted_ip=row[16] if len(row) > 16 and row[16] else "")
 
     def upsert_interaction(self, r) -> None:
         with self._lock, self._db:
@@ -423,22 +429,23 @@ class Store:
                     (request_id, token, issue_id, key, schema_id,
                      schema_version, created_at, expires_at, status, payload,
                      submission, submitted_at, submitted_by, reminders,
-                     reminded_at, kind)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     reminded_at, kind, submitted_ip)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(request_id) DO UPDATE SET
                     status=excluded.status, payload=excluded.payload,
                     submission=excluded.submission,
                     submitted_at=excluded.submitted_at,
                     submitted_by=excluded.submitted_by,
                     reminders=excluded.reminders,
-                    reminded_at=excluded.reminded_at
+                    reminded_at=excluded.reminded_at,
+                    submitted_ip=excluded.submitted_ip
             """, (r.request_id, r.token, r.issue_id, r.key, r.schema_id,
                   r.schema_version, r.created_at, r.expires_at, r.status,
                   json.dumps(r.payload, ensure_ascii=False),
                   json.dumps(r.submission, ensure_ascii=False)
                   if r.submission is not None else None,
                   r.submitted_at, r.submitted_by, r.reminders, r.reminded_at,
-                  getattr(r, "kind", "hil")))
+                  getattr(r, "kind", "hil"), getattr(r, "submitted_ip", "")))
 
     def get_interaction(self, token: str):
         """依 token 取請求(表單服務入口用);查無回 None。"""

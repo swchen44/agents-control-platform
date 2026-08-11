@@ -157,8 +157,10 @@ class ControlAPI:
             return 400, {"error": "missing cmd"}
         args = body.get("args") or {}
         by = str(body.get("by") or "").strip()
+        ip = (handler.client_address[0]           # K:REST 來源 IP 稽核
+              if getattr(handler, "client_address", None) else "")
         try:
-            ok, msg, _ = self.command_fn(iid, cmd, args, by)
+            ok, msg, _ = self.command_fn(iid, cmd, args, by, ip)
         except Exception as e:  # noqa: BLE001 — 指令錯不弄死 API
             log.warning("control: command %s/%s 失敗:%s", iid, cmd, e)
             return 500, {"error": str(e)}

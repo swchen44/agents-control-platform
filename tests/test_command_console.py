@@ -33,8 +33,8 @@ def _sess(**kw):
 
 
 def _server(store, calls):
-    def _cmd_fn(iid, cmd, args, by):
-        calls.append((iid, cmd, args, by))
+    def _cmd_fn(iid, cmd, args, by, ip=""):
+        calls.append((iid, cmd, args, by))   # ip 稽核另測(test_form_server)
         return True, f"已執行:{cmd}", []
     return FormServer(store, host="127.0.0.1", port=0,
                       command_fn=_cmd_fn,

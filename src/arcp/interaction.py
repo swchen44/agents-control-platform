@@ -143,6 +143,7 @@ class InteractionRequest:
     submission: dict | None = None
     submitted_at: float = 0.0
     submitted_by: str = ""
+    submitted_ip: str = ""            # K:提交來源 IP(稽核追查)
     reminders: int = 0
     reminded_at: float = 0.0
 

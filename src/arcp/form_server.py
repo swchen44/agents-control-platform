@@ -368,7 +368,7 @@ def render_command_result(req, cmd: str, ok: bool, msg: str) -> str:
 
 def process_submission(store, req, data, jira_up: bool = True,
                        on_submit=None, now: float | None = None,
-                       by: str = "") -> tuple[bool, list[str]]:
+                       by: str = "", ip: str = "") -> tuple[bool, list[str]]:
     """驗證 + 依 Jira 健康決定是否落地。→ (ok, errors)。
     Jira 異常 → 回錯、**不落地**(不做 queue,避免不同步)。"""
     now = time.time() if now is None else now
@@ -383,6 +383,7 @@ def process_submission(store, req, data, jira_up: bool = True,
     req.submission = cleaned
     req.submitted_at = now
     req.submitted_by = by
+    req.submitted_ip = ip                 # K:來源 IP 稽核
     store.upsert_interaction(req)
     if on_submit is not None:
         try:
@@ -494,8 +495,9 @@ class FormServer:
                 raw = self.rfile.read(n).decode("utf-8") if n else ""
                 data = {k: v[0] for k, v in
                         urllib.parse.parse_qs(raw, keep_blank_values=True).items()}
+                ip = (self.client_address[0] if self.client_address else "")
                 if getattr(req, "kind", "hil") == "command":
-                    return self._html(*api._command_submit(req, data))
+                    return self._html(*api._command_submit(req, data, ip))
                 jira_up = bool(api.jira_health_fn())
                 by = (data.get("by") or "").strip()      # K:HIL 也必填 email
                 if not by:
@@ -508,7 +510,7 @@ class FormServer:
                         req, jira_up=jira_up, errors=[gmsg], values=data))
                 ok, errors = process_submission(
                     api.store, req, data, jira_up=jira_up,
-                    on_submit=api.on_submit, by=by)
+                    on_submit=api.on_submit, by=by, ip=ip)
                 if ok:
                     return self._html(200, render_submitted_page(req))
                 # 未過:重顯表單帶錯誤 + 使用者已填值(若 Jira 異常也回填)
@@ -569,9 +571,9 @@ class FormServer:
             req, sess, self.profiles_list(),
             jira_up=bool(self.jira_health_fn()))
 
-    def _command_submit(self, req, data) -> tuple[int, str]:
+    def _command_submit(self, req, data, ip: str = "") -> tuple[int, str]:
         """指令台 POST:驗 email + 可用性 + 破壞性確認 → command_fn。不翻 SUBMITTED
-        (綁票可重複用)。"""
+        (綁票可重複用)。ip=來源 IP(稽核)。"""
         if req.status == INVALIDATED:
             return 410, render_message_page(
                 "已結案", "本票已結案,指令台已停用。")
@@ -598,7 +600,7 @@ class FormServer:
         if self.command_fn is None:
             return _re("指令核心未接線(command_fn)。")
         ok, msg, _ = self.command_fn(
-            req.issue_id, cmd, {"profile": data.get("profile", "")}, by)
+            req.issue_id, cmd, {"profile": data.get("profile", "")}, by, ip)
         return 200, render_command_result(req, cmd, ok, msg)
 
     def _view(self, req) -> tuple[int, str]:
