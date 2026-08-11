@@ -51,6 +51,34 @@ def test_process_valid_persists_and_calls_hook():
     st.close()
 
 
+def test_owner_gate_wired():
+    """K:FormServer._gate 從 store 取該票 owner_email 做門禁(選填);
+    admin_emails_fn 豁免;無 owner_email 的票放行。"""
+    from arcp.store import TicketSession
+
+    def _sess(iid, key, owner):
+        return TicketSession(
+            issue_id=iid, key=key, profile="default", workspace="ws",
+            session_id=None, attempts=0, outcome=None, pending_reason=None,
+            cost_usd=0.0, owner_email=owner)
+
+    req = build_request(10030, "SCRUM-30", "need_info", payload={"question": "q"})
+    st = _store_with(req)
+    st.upsert_session(_sess(10030, "SCRUM-30", "boss@x.com"))
+    form = FormServer(st, port=0, admin_emails_fn=lambda: ["admin@x.com"])
+    assert form._gate(req, "boss@x.com")[0] is True      # 負責人本人
+    assert form._gate(req, "  BOSS@X.com ")[0] is True   # 正規化
+    assert form._gate(req, "admin@x.com")[0] is True     # 管理者豁免
+    assert form._gate(req, "stranger@x.com")[0] is False  # 非授權擋下
+    # 無 owner_email 的票 → 門禁未啟用(放行)
+    req2 = build_request(10031, "SCRUM-31", "need_info",
+                         payload={"question": "q"})
+    st.upsert_interaction(req2)
+    st.upsert_session(_sess(10031, "SCRUM-31", None))
+    assert form._gate(req2, "anyone@x.com")[0] is True
+    st.close()
+
+
 def test_process_jira_down_does_not_persist():
     req = build_request(1, "P-1", "need_info", now=1.0)
     st = _store_with(req)
@@ -86,7 +114,9 @@ def test_http_end_to_end():
         base = f"http://127.0.0.1:{srv.port}/form/{req.token}"
         g = urllib.request.urlopen(base, timeout=5).read().decode()
         assert "缺哪個 API key?" in g and "<form" in g
-        body = urllib.parse.urlencode({"answer": "用 env ANTHROPIC_API_KEY"})
+        assert "你是誰(email)" in g            # K:HIL 表單有 email 必填欄
+        body = urllib.parse.urlencode({"answer": "用 env ANTHROPIC_API_KEY",
+                                       "by": "tester@x.com"})
         p = urllib.request.urlopen(base, data=body.encode(),
                                    timeout=5).read().decode()
         assert "已提交" in p

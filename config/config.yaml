@@ -37,6 +37,13 @@ outer_loop:
     # base_url: 'http://<intranet-host>:8790'   # 選填;預設 http://host:port
     # mention_account_id: '...'                  # 選填
 
+  # K:全站管理者 email(選填)。負責人 email 門禁的「豁免名單」——HIL 表單/指令台
+  # 提交的 email 若 ∈ 此清單即放行(不必等於該票負責人 owner_email)。可 hot reload。
+  # 門禁僅在票有 owner_email(description 契約填了 email)時啟用;沒填的票不受限。
+  # admin_emails:
+  #   - ops@company.com
+  #   - lead@company.com
+
   # 內部 job(J1 統一,不經 Jira 票驅動、由排程觸發;config 即授權)。每個 job 必填
   # trigger_type + script(相對 config/scripts/<subfolder>/;執行 cwd 進 subfolder,
   # log 存 runs/…/transcript/,dashboard 可看可下載)。scheduled 由 poller 檢 due;

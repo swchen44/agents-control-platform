@@ -19,6 +19,7 @@ import uuid
 from .contract import agent_score, summarize
 from .deliverables import post_deliverables
 from .grader import AllOf, CommandGrader, FileChecklistGrader, JsonGrader
+from .identity import normalize_email
 from .inner_runner import run_attempt
 from .jira_source import JiraCloudSource
 from .logutil import get_logger
@@ -74,6 +75,7 @@ class Dispatcher:
         self.global_budget = global_budget or {}
         self.form_base_url = form_base_url      # budget soft 破→發增額表單連結
         self.mention = mention
+        self.admin_emails: list[str] = []       # K:全站管理者 email(門禁豁免;可 reload)
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
                             events: list[dict]) -> list[dict]:
@@ -334,12 +336,13 @@ class Dispatcher:
                          and not sess.inactive
                          and sess.pending_reason in (None, "approval")))):
             if sess is None:
+                _meta = parse_ticket_meta(ticket.description)
                 sess = TicketSession(
                     issue_id=ticket.id, key=ticket.key, profile=profile.name,
                     workspace="(pending-approval)", session_id=None, attempts=0,
                     outcome=None, pending_reason=None, cost_usd=0.0,
-                    clearquest_id=parse_ticket_meta(
-                        ticket.description).get("crid"))
+                    clearquest_id=_meta.get("crid"),
+                    owner_email=normalize_email(_meta.get("email")))
             decision = self.approval.gate(ticket, profile, sess)
             self.store.upsert_session(sess)
             events.append(self.store.journal(
@@ -360,11 +363,13 @@ class Dispatcher:
         if sess is None:
             ws = provision(self.root, ticket, profile,
                                       getattr(self.source, "base_url", None))
+            _meta = parse_ticket_meta(ticket.description)
             sess = TicketSession(
                 issue_id=ticket.id, key=ticket.key, profile=profile.name,
                 workspace=ws, session_id=None, attempts=0,
                 outcome=None, pending_reason=None, cost_usd=0.0,
-                clearquest_id=parse_ticket_meta(ticket.description).get("crid"))
+                clearquest_id=_meta.get("crid"),
+                owner_email=normalize_email(_meta.get("email")))
             self.store.upsert_session(sess)
             events.append(self.store.journal(
                 "session_created", ticket.id, ticket.key,

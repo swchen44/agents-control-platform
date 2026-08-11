@@ -65,6 +65,7 @@ def _get(base, token):
 
 
 def _post(base, token, data):
+    data = {"by": "tester@example.com", **data}   # K:HIL 表單必填 email(供稽核)
     body = urllib.parse.urlencode(data).encode()
     try:
         r = urllib.request.urlopen(f"{base}/form/{token}", data=body, timeout=5)

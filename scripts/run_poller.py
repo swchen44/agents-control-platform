@@ -80,6 +80,7 @@ def make_reload(loop, disp, ext, config_path: str = "config.yaml"):
         loop.triggers = new_triggers                   # W4.5:triggers 可 reload
         disp.profiles = new_profiles
         disp.global_budget = s_cfg.get("budget") or {}  # budget:全站上限可 reload
+        disp.admin_emails = s_cfg.get("admin_emails") or []  # K:管理者可 reload
         ext.profiles = new_profiles                    # W4.5:離手定格查表同步
         new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
         if new_cancel:
@@ -154,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
                       approval=ApprovalGate(src, store, bot_id),
                       cancel_status=source_cfg.get("cancel_status", ""),  # triage 失敗
                       global_budget=source_cfg.get("budget") or {})  # 全站月度上限
+    disp.admin_emails = source_cfg.get("admin_emails") or []  # K:管理者 email 門禁豁免
     # budget soft 破→發增額表單需 form base_url/mention(下方 fcfg 定義後補設)
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
@@ -228,7 +230,8 @@ def main(argv: list[str] | None = None) -> int:
                       on_submit=lambda r: apply_submission(
                           src, store, r, profiles=profiles),  # W10.3 handoff 候選
                       command_fn=_command_fn,                 # 指令台(取代 comment)
-                      profiles_fn=lambda: profiles)           # next 下拉候選
+                      profiles_fn=lambda: profiles,           # next 下拉候選
+                      admin_emails_fn=lambda: disp.admin_emails)  # K:門禁豁免(可 reload)
     form.start()
     print(f"[poller] form service on {form_base} (一次性表單;/form/<token>)",
           flush=True)

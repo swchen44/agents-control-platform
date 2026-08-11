@@ -251,8 +251,13 @@ def render_form_page(req, jira_up: bool = True, errors=None,
     if errors:
         err = ("<div class='err'>請修正:<ul>"
                + "".join(f"<li>{_esc(e)}</li>" for e in errors) + "</ul></div>")
-    fields = "".join(_field_html(f, req, values.get(f["key"]))
-                     for f in schema["fields"])
+    # K:email 必填欄(供稽核 + 負責人門禁;票有 owner_email 才會比對)
+    email_v = _esc(values.get("by", ""))
+    email_field = ("<label>你是誰(email)*</label>"
+                   f"<input type='email' name='by' value='{email_v}' "
+                   "autocomplete='email' required placeholder='you@company.com'>")
+    fields = email_field + "".join(_field_html(f, req, values.get(f["key"]))
+                                   for f in schema["fields"])
     body = (f"<h1>{_esc(schema.get('title'))}</h1>"
             f"<div class='card'>{_ctx_html(req)}</div>"
             f"{_deliverables_html(req)}"           # 自足評分駕駛艙(交付物)
@@ -393,7 +398,7 @@ class FormServer:
 
     def __init__(self, store, host: str = "127.0.0.1", port: int = 8790,
                  jira_health_fn=None, on_submit=None,
-                 command_fn=None, profiles_fn=None):
+                 command_fn=None, profiles_fn=None, admin_emails_fn=None):
         self.store = store
         self.jira_health_fn = jira_health_fn or (lambda: True)
         self.on_submit = on_submit
@@ -401,6 +406,8 @@ class FormServer:
         # 故 hold 能 killpg);profiles_fn 供 next 的 profile 下拉候選。
         self.command_fn = command_fn
         self.profiles_fn = profiles_fn
+        # K:負責人 email 門禁——admin_emails_fn()→全站管理者清單(可 reload)。
+        self.admin_emails_fn = admin_emails_fn
         api = self
 
         class _H(BaseHTTPRequestHandler):
@@ -490,9 +497,18 @@ class FormServer:
                 if getattr(req, "kind", "hil") == "command":
                     return self._html(*api._command_submit(req, data))
                 jira_up = bool(api.jira_health_fn())
+                by = (data.get("by") or "").strip()      # K:HIL 也必填 email
+                if not by:
+                    return self._html(200, render_form_page(
+                        req, jira_up=jira_up,
+                        errors=["請填 email(你是誰),供稽核。"], values=data))
+                gok, gmsg = api._gate(req, by)            # K:身分門禁
+                if not gok:
+                    return self._html(200, render_form_page(
+                        req, jira_up=jira_up, errors=[gmsg], values=data))
                 ok, errors = process_submission(
                     api.store, req, data, jira_up=jira_up,
-                    on_submit=api.on_submit)
+                    on_submit=api.on_submit, by=by)
                 if ok:
                     return self._html(200, render_submitted_page(req))
                 # 未過:重顯表單帶錯誤 + 使用者已填值(若 Jira 異常也回填)
@@ -532,6 +548,17 @@ class FormServer:
         except Exception:      # noqa: BLE001 — 取不到候選不擋 console
             return []
 
+    def _gate(self, req, submitted: str) -> tuple[bool, str]:
+        """K:負責人 email 門禁。回 (放行?, 拒絕訊息)。此票 owner_email 為空 →
+        門禁未啟用(回 True);否則 submitted 須 == owner_email / ∈ admin_emails /
+        == 該票 profile.approver。"""
+        from .identity import owner_gate
+        sess = self.store.get_session(req.issue_id)
+        profs = (self.profiles_fn() or {}) if self.profiles_fn else {}
+        prof = profs.get(sess.profile) if sess else None
+        admins = (self.admin_emails_fn() or []) if self.admin_emails_fn else []
+        return owner_gate(submitted, sess, prof, admins)
+
     def _command_view(self, req) -> tuple[int, str]:
         """指令台 GET:綁票常駐、依當前狀態列可用指令;close→失效唯讀。"""
         if req.status == INVALIDATED:
@@ -561,6 +588,9 @@ class FormServer:
         cmd = (data.get("cmd") or "").strip()
         if not by:
             return _re("請填 email(你是誰),供稽核。")
+        gok, gmsg = self._gate(req, by)          # K:身分門禁(選填,票有 owner 才擋)
+        if not gok:
+            return _re(gmsg)
         if not cmd or cmd not in avail:
             return _re("請選一個目前可用的指令(狀態可能已變更,已更新可用清單)。")
         if cmd in DESTRUCTIVE and data.get("confirm") != "yes":
