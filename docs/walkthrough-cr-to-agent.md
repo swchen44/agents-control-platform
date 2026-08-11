@@ -26,7 +26,7 @@
 
 ```
 主線(系統自動):
-  CQ CR ─(bridge*)─▶ Jira 票 SCRUM-42(label=filechain、status=待辦)
+  CQ CR ─(bridge*)─▶ Jira 票 SCRUM-42(label=arcp.filechain、status=待辦)
        │ poller 撿票
        ▼
   route 命中(config.routes)─ create_or_resume ─▶ dispatch(首次)
@@ -59,7 +59,7 @@
   outer_loop:
     routes:
       - name: filechain-demo          # 第一條會「動手」的 route
-        when: { labels: ['filechain'] }
+        when: { labels: ['arcp.filechain'] }
         profile: filechain
         on_match: create_or_resume    # ← 真接管派工
   inner_loop:
@@ -82,7 +82,7 @@
 CR-bridge 在 `agent` 自己的 Jira project 開一張票:
 
 - summary=`登入頁在 Safari 崩潰`、description 帶 CR 摘要
-- **貼 label `filechain`**(= 入場券;選哪張入場券 = 選走哪條 route)
+- **貼 label `arcp.filechain`**(= 入場券;選哪張入場券 = 選走哪條 route)
 - status=**待辦**(To Do)
 - 記下 CR id 供未來去重 / 回寫(→ `ticket_session.clearquest_id`,**欄位已預留**)
 
@@ -96,7 +96,7 @@ CR-bridge 在 `agent` 自己的 Jira project 開一張票:
 poller 每輪 `search(jql)` 撈到 SCRUM-42:
 
 1. `store.get(42)` → `None`(沒看過)→ journal **`new_issue`**
-2. `match(ticket, routes)` → 命中 `filechain-demo`(票有 `filechain` label)→ journal
+2. `match(ticket, routes)` → 命中 `filechain-demo`(票有 `arcp.filechain` label)→ journal
    **`route_matched`**(`route=filechain-demo`, `profile=filechain`, `on_match=create_or_resume`)
 3. 寫 **`ticket_watch`**:
 
@@ -188,7 +188,7 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
 
 | 問題 | 看哪裡 | 說明 |
 |---|---|---|
-| 這票**會不會被跑**? | label vs `config.routes[].when.labels` | 命中 `create_or_resume` 才跑;`no-agent`→ignore、`agent`→notify_only(不接管) |
+| 這票**會不會被跑**? | label vs `config.routes[].when.labels` | 命中 `create_or_resume` 才跑;`arcp.no-agent`→ignore、`arcp.agent`→notify_only(不接管) |
 | 用**哪個 agent**? | `config.routes[].profile` → 首次派工 triage → `ticket_session.profile` | route 是初選,session 的 profile 才是**最終鎖定** |
 | **跑到哪了**? | `ticket_session`(outcome/attempts) | 不是看 label,也不是 Jira status |
 | **看過哪些留言/變更**? | `ticket_watch`(last_comment_id/last_state) | 水位去重,以 issue_id 為 key |
@@ -206,7 +206,7 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
 
 | 症狀 | 先看 | 常見原因 |
 |---|---|---|
-| 票**完全沒反應** | 有沒有 `route_matched`? | 沒有 = label 沒對到任何 `create_or_resume` route(光有 `agent` label 不夠,那條是 notify_only);或 jql 沒撈到 |
+| 票**完全沒反應** | 有沒有 `route_matched`? | 沒有 = label 沒對到任何 `create_or_resume` route(光有 `arcp.agent` label 不夠,那條是 notify_only);或 jql 沒撈到 |
 | 命中了但**沒開始跑** | 有 `route_matched` 無 `session_created`? | route 是 `notify_only`/`ignore`(灰度);或 F1 額滿(看 `queued`) |
 | **一直卡住** | journal `pending`(讀 `reason`) | 預算超限 / 需人 / 外部變更;指令台 `run` 解 |
 | **選錯 agent** | journal `profile_selected`(`chosen`) | select 腳本邏輯;無此事件=用了 route 原 profile |
@@ -223,7 +223,7 @@ poller 每輪 `search(jql)` 撈到 SCRUM-42:
 
 **Phase 1 — 建票 + 進場**
 ```
-bridge*  ─▶ Jira      : 建 SCRUM-42(label=filechain、status=待辦)
+bridge*  ─▶ Jira      : 建 SCRUM-42(label=arcp.filechain、status=待辦)
 Poller   ─▶ Jira      : search(jql) 撈到 SCRUM-42
 Poller   ─▶ store     : 無此票 → 寫 ticket_watch            [new_issue]
 Poller   ─▶ store     : route 命中 filechain-demo           [route_matched]

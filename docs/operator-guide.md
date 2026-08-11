@@ -118,7 +118,7 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   誰來做** —— 由 route 或 triage 決定、鎖定在該票的 session。所以要讓一張票被跑:先給它一個
   對得到 route 的 **label**(入場),profile 再由 route/triage 決定。
 - **A/B 測試 / 自動選 profile(Q16)**:main profile 加 `select` 區塊 —— `candidates`(候選
-  profile 名清單,每個名字**須以 main 名為前綴**)+ `method: random | script` + `script`
+  profile 名清單;**random 候選須同族前綴,script 可回任何已定義 profile 且可遞歸**)+ `method: random | script` + `script`
   (method=script 時的腳本路徑)。**首次派工時選一個實際 profile 並 寫入 session**
   (resume 不重選,確保同一票結果穩定)。`method=script` 時,腳本吃 JSON stdin(含 ticket 資訊 /
   clearquest_id / 候選及其 yaml 路徑)→ stdout 印出要用的 profile 名 → 可做條件式 triage。
@@ -164,7 +164,7 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
         run_name: scan-cq
         trigger_type: agent-job
         script: cq/scan.sh        # config/scripts/cq/scan.sh;stdout 回 JSON 任務清單
-        labels: [cr]              # 開的票貼此 → 命中 route → triage
+        labels: [arcp.cr]         # 開的票貼此 → 命中 route → triage
         count: 0
         cron: "*/10 * * * *"
       - name: disk-clean

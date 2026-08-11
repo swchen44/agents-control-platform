@@ -46,7 +46,7 @@ outer_loop:
   #     run_name: scan-cq          # 必填,[a-z0-9-](防 path 注入)
   #     trigger_type: agent-job
   #     script: cq/scan.sh         # = config/scripts/cq/scan.sh;cwd = config/scripts/cq/
-  #     labels: ['arcp.cr']             # 開的票貼此 label → 命中 route → triage(不 pin)
+  #     labels: ['arcp.cr']             # 開的票貼此 label → 命中 route → triage(不預鎖 profile)
   #     count: 0                   # 0=無上限(需 cron);1=單次;N=N 次
   #     cron: '*/10 * * * *'       # 每 10 分;* , - */N;cron 與 every 並存 cron 優先
   #   - name: disk-clean           # script-job:純做事、不開票

@@ -29,7 +29,7 @@
 - **跨 backend/引擎統一契約**:rawcli(純 stdlib,免 venv)/ openhands-acp /
   openhands-server × claude / codex,共用同一 envelope,換執行單元零改動。
 - **韌性**:native resume(crash 不重工)、bounded retry、stall 看門狗、killpg evict、
-  預算閘(單次/月)。
+  預算閘(每票 / 每月每 agent / 全站 × token/usd 共 6 層,每輪派工前 precheck)。
 - **HIL 人機介面**:一次性 token 受控表單(補資訊/決策/評分關單)取代人手編 Jira;
   全程可稽核(hash + journal)。
 - **可觀測**:唯讀 dashboard(KPI/trace/事件時間軸/狀態機/架構圖)+ transcript,
@@ -154,7 +154,7 @@ Jira 事件 ─▶ poller(diff→journal)─▶ routing ─▶ gate(F1 額度)�
   `[agent]` 留言互相忽略);但若不慎讓兩實例落到**同一 project**,一方會把另一方的
   assignee/留言當「外部變更」處理 → 再次強調:**分 project**。
 - **claude / codex 登入**(`~/.claude`、`~/.codex`)全域共用:沒問題,但兩實例的
-  agent 併發會共用同一組 API rate limit 與**花費**。預算上限(單次/月)是
+  agent 併發會共用同一組 API rate limit 與**花費**。預算上限(6 層 token/usd)是
   **per-instance**(各讀自己的 journal),**跨實例總花費不會合計** → 併發時把每實例的
   `concurrency` 設保守一點,避免合計超過機器/額度。
 - **agent session / transcript 檔**(`~/.claude/projects`、`~/.codex/sessions`)全域:

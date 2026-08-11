@@ -63,7 +63,7 @@
 
 ## Step 1 — 基本派工 + 證據迴路(runner spawn / envelope)
 
-**做什麼**:在測試 project 建一張票、summary 寫「建立 DONE.md 檔」、**加 label `agent`**(對到
+**做什麼**:在測試 project 建一張票、summary 寫「建立 DONE.md 檔」、**加 label `arcp.agent`**(對到
 example route)。等一輪 poll。
 
 **預期 journal**:`route_matched` → `session_created` → `attempt_started` →
@@ -103,7 +103,7 @@ default:
   select: {candidates: [default_v2], method: random}   # 或 method: script
   # …其餘同上
 ```
-`POST /reload` 或重起,建一張新測試票(label `agent`)。
+`POST /reload` 或重起,建一張新測試票(label `arcp.agent`)。
 
 **預期 journal**:`profile_selected`(`original=default`、`chosen=default或default_v2`、`method`);
 `chosen` 就是實際跑的 profile,且 寫入 session(resume 不重選)。

@@ -17,7 +17,7 @@
 | # | 路徑 | 寫入順序 | crash 重放後果 | 防護(層) | 判定 |
 |---|---|---|---|---|---|
 | 1 | poller watch 事件(status/assignee/comment journal) | 處理→`upsert(TicketWatch)` | 該輪事件重放一次:journal 重複行、external policy 重跑 | watermark(harness);policy 狀態操作冪等(inactive=True 再設無害) | at-least-once,可接受(journal 消費端容忍重複) |
-| 2 | comment 指令(run/retry/stop/cancel/next) | 執行+ack→watermark upsert | 指令重執行 + ack 重複一則 | 狀態操作冪等(cancel 兩次仍 ABORTED、next 重置冪等);**反向排序會丟指令,比重複更糟** | at-least-once,可接受(設計選擇,本檔記錄) |
+| 2 | 指令台 / REST `apply_command`(run/retry/hold/stop/cancel/next) | 驗身分/可用性→`apply_command`→journal | REST 同步呼叫,**無 poll 重放窗口**;僅呼叫端逾時重送才會重執行 | 狀態操作冪等(cancel 兩次仍 ABORTED、next 重置冪等);指令台依**當前狀態**擋不合法指令 | 冪等(狀態操作)+ 呼叫端負責重試 |
 | 3 | dispatcher 終態/pending comment(SUCCESS/FAILURE/unknown/budget/external/handoff) | **upsert→comment→journal** | 只會漏 comment/journal,不重複、不重跑(終態 skip) | 寫入順序 = 冪等 key(harness);store 是真相 | **at-most-once ✓**(W1 起即如此,本檔確認) |
 | 4 | approval gate(首貼 plan/退回/escalate) | (W3.2 前)外寫在 gate 內、store 在 dispatcher 返回後 | revisions/pending 丟失 → 退回計數重置,**escalate 上限跨 crash 失效** | **W3.2 修正:gate 內先 upsert 再外寫**;首貼冪等 key = description 已有 control 段(重跑走 awaiting) | **at-most-once ✓(本波修)** |
 | 5 | attempt 中途 harness crash(agent 已 spawn) | (W5.1 前)attempts/sid 在 attempt 完成後才 upsert | (修前)重跑整個 attempt、錢重花 | **W5.1 已修**:attempt 開跑前先持久化 attempts+預派 sid(rawcli+claude `--session-id`)+ journal `attempt_started`;重啟偵測 `a{N}.envelope` 缺 → 有 sid(任一引擎)退還 attempt + native resume(transcript 重放不重工);無 sid(codex 首跑)→ UNKNOWN 交人 | **✓(W5.1)**;殘邊角:persist 與 spawn 間 crash → resume 不存在的 session → 該 attempt 以 error 收場(機率極低,接受) |
@@ -33,8 +33,9 @@
 1. **#4 修正**:`approval.gate` 每次 session 變更(pending/revisions)先
    `store.upsert_session` 再外寫(comment/assign/description)。
 2. **#3 確認測試**:終態後重跑 handle 不重派、不重留言(test_idempotency)。
-3. **#2/#5 記錄**:#2 是設計選擇(丟指令比重複糟);#5 留 W4+(sid 預派 +
-   attempt_started 標記 → 缺 envelope 判 UNKNOWN)。
+3. **#2/#5 記錄**:#2 原為 comment 留言指令通道(靠 watermark、有排序丟指令風險);
+   後已改**指令台/REST `apply_command`**(狀態操作冪等、不再靠 comment watermark)。
+   #5 留 W4+(sid 預派 + attempt_started 標記 → 缺 envelope 判 UNKNOWN)。
 
 ## 不做(本波)
 

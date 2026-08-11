@@ -32,7 +32,7 @@
   `source.jql` 沒涵蓋它(project/狀態/label 條件),或 poller 沒在跑。處置:用
   `scripts/smoke_jira.py`(唯讀)確認 jql 撈得到該票;確認 `run_poller.py` 有在跑。
 - **有 `new_issue` 沒 `route_matched`**:沒命中任何 route。處置:對照
-  `config.yaml` 的 `routes`,檢查 label/keyword/assignee 條件;`no-agent` 之類的
+  `config.yaml` 的 `routes`,檢查 label/keyword/assignee 條件;`arcp.no-agent` 之類的
   排除 route 是否先命中。
 - **`route_matched` 的 `on_match` 是 `ignore`/`notify_only`**:設計上就不派工
   (灰度只記錄)。要真的派工需 `create_or_resume`。

@@ -130,7 +130,7 @@ outcome 保留、不覆寫 handoff。與 `require_approval` 是人機光譜兩�
 
 ## A/B 測試 / 自動選 profile
 
-首次派工可從同族候選裡自動選一個 profile(A/B 分流或條件式 triage)。實作在
+首次派工可自動選一個 profile(random 限同族;script 可回任何已定義 profile,並可遞歸至葉)。實作在
 `src/arcp/selection.py`(`select_profile`),接線在 `dispatcher.handle` 的**首次派工**分支
 (`sess is None` 且 main profile 有 `select`):選中的 profile 會 寫入 session,resume 不
 重選。設定(`select` 區塊 random/script 範例)、fail-safe、與 triage 的關係、觀測方式見

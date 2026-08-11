@@ -42,7 +42,7 @@ attempt 前檢查、達上限即 pending:budget。model 也可選(haiku 省、op
 
 **Q:同一種任務想比較兩個 profile(A/B 測試),或依票內容自動選 profile?**
 A:可以(Q16)。在 main profile 加 `select` 區塊:`candidates`(候選 profile,名字**須以 main
-名為前綴**)+ `method: random`(均勻分流)或 `method: script`(腳本吃 JSON stdin → stdout 印
+名為前綴**;script 候選選填、可回任何已定義 profile 且可遞歸)+ `method: random`(均勻分流)或 `method: script`(腳本吃 JSON stdin → stdout 印
 出 profile 名,可依 ticket 內容做條件式 triage)。**首次派工選一次並 寫入 session**(resume
 不重選,同票結果穩定);任何失敗 fail-safe 回 main。journal 記 `profile_selected`(original /
 chosen / method),在 dashboard 事件時間軸 / `/api/v1/tickets` 可看「這票實際跑哪個 profile」。

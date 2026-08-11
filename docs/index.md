@@ -9,7 +9,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 
 | 你是… | 讀這份 |
 |---|---|
-| **用它辦事的使用者** | [使用者手冊](user-guide.md) — 開票/貼標籤、HIL 表單、`@agent` 指令、看 dashboard |
+| **用它辦事的使用者** | [使用者手冊](user-guide.md) — 開票/貼標籤、HIL 表單、指令台下指令、看 dashboard |
 | **營運平台的管理者** | [管理者手冊](operator-guide.md) — 起停、控制面、監控、調設定、備份還原、多實例、異常處置 |
 | **改程式的開發者** | [開發者手冊](developer-guide.md) — 架構、模組、測試、加 backend/profile、CI/CD |
 | **想看全貌** | [專案檔案介紹](project-overview.md) — 目錄地圖、每個檔案在幹嘛 |

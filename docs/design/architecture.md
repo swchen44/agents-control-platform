@@ -57,7 +57,7 @@ trigger/輸入/輸出/上下游見下表(與 `/concepts` 頁的職責表同內�
   `ticket_session.profile`(鎖定,resume 不重選)**。route 只是初步指定,session 的 profile 最終為準。
 
 一句話:**label 管「進不進得來」,profile 管「進來後誰來做」**。(本文件與程式一律用「鎖定/
-寫入 session 的 profile」描述,不用 "pin" 這個詞。)
+寫入 session 的 profile」描述,不用舊的英文說法。)
 
 ## 3. HIL 生命週期(6 態 + 概念終點)
 
