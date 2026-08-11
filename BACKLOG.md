@@ -259,16 +259,17 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 ## 主題 J — job 泛化 + description 契約 + label 規範(2026-08-11 討論中)
 
 > I3 深化成「job 泛化」:agent-job = **像人一樣建票 → 走 poller route/triage**(不 pin、
-> 可 A/B)。**J1 + J2 已完成(2026-08-11,commit 747b526)**;剩 J3(label `arcp-` 前綴,
-> 可隨時做)、J4(select 泛化/遞歸,概念待討論)、**J5(全文件 + web 介紹總檢查,J4 後批次做)**。
+> 可 A/B)。**J1 + J2 已完成(2026-08-11,commit 747b526)**;**J4 已完成(2026-08-11,
+> commit a5de847)**;剩 J3(label `arcp-` 前綴,可隨時做)、**J5(全文件 + web 介紹總
+> 檢查,J4 後批次做)**——現在可以做了。
 
 | # | 項目 | 做法 / 決策 | 現況 |
 |---|---|---|---|
 | **J1** | **agent-job 泛化(原 I3)** | 加 `trigger_type: agent-job\|script-job`;`task_script`→統一 `script`(和 script-job 共用「有 log 的執行」:cwd/stdout.log/stderr.log/run.tgz/dashboard);腳本放 `config/scripts/{subfolder}/`、cwd 進 subfolder;agent-job 跑 script→stdout JSON 任務→**像人 create_ticket**(不建 session、不 pin)→走 route/triage;非 JSON→`trigger_error`。**移除** job 的 `profile`/`task`/`prompt`、`fire_agent_job` 預建 session、legacy `run_trigger`(鎖定機制本身 base 交接仍用)| ✅ **完成**(2026-08-11,`747b526`;test_triggers/test_jobs) |
 | **J2** | **description → session 的契約格式** | ✅ **定案+實作(2026-08-11,隨 J1)**:**yaml**(`key: value`)、放 description **最上面**、**人寫**(或 agent-job 腳本像人一樣寫)、**不放 ARCP section**(那三段是機器寫的紀錄,與人寫的分開)。欄位:`crid: WCNCR…`→session.clearquest_id(已實作);`prompt`/`email` 保留(email→tag + 檢查一次性連結填的 email,也可用一次性連結改)。harness 只認**已知 key**(`crid`/`prompt`/`email`)→ 到空行止、解析安全。`parse_ticket_meta` | ✅ 完成(crid) |
 | **J3** | **label 命名規範** | 所有 ARCP 用的 label 一律 `arcp-`/`arcp.` 前綴(避免撞別人 label);route/job/文件/範例統一改 | 待做(可隨時) |
-| **J4** | **select 泛化 / 遞歸** | select(A/B / triage)能不能「select 下去再 select」?把 select 視為「call 一個 script 決定最終鎖定哪個 profile」的泛化能力 | **待討論(概念)** |
-| **J5** | **全文件 + web introduction 總檢查更新** | **J4 完成後**做一次:所有手冊/設計/走一遍 + **dashboard `/concepts` 網頁介紹**跟著這批(指令台/budget/job 泛化/label 規範/select 泛化)全面對齊。使用者定案(2026-08-11):批次做一次,不逐項零碎更新 | 待做(**J4 後**) |
+| **J4** | **select 泛化 / 遞歸** | ✅ **定案+實作(2026-08-11,`a5de847`)**。**軸 B**:`method=script` 可回**任何已定義 profile**(不限同族候選;`_parse_select` 對 script 模式放寬——candidates 選填、免 prefix;random 仍限同族+必填);stdin 加 `all_profiles`。**軸 A(遞歸)**:選中的 profile 若自己也有 `select` 就再跑一層 →多層 triage 樹;終止=無 select(葉)/回自己/繞圈(走過的)/fail-safe/**第 10 層截斷**,`notfound` 任一層即中止;meta 帶 `chain`。dispatcher 把票的 crid 傳進 select。test_selection 16 檢查全綠 | ✅ **完成** |
+| **J5** | **全文件 + web introduction 總檢查更新** | **J4 完成後**做一次:所有手冊/設計/走一遍 + **dashboard `/concepts` 網頁介紹**跟著這批(指令台/budget/job 泛化/label 規範/select 泛化)全面對齊。使用者定案(2026-08-11):批次做一次,不逐項零碎更新 | 🟢 **可做了**(J4 已完成) |
 
 ## AI 建議(供參考,你決定)
 
