@@ -346,13 +346,20 @@ def render_command_console(req, sess, profiles, jira_up: bool = True,
         prof_sel = ("<label>換手(next)目標 profile</label>"
                     f"<select name='profile'><option value=''>—</option>"
                     f"{po}</select>")
+    email_sel = ""                                # K:set_email 的新負責人 email
+    if "set_email" in avail:
+        email_sel = ("<label>改負責人(set_email)→ 新 email</label>"
+                     f"<input type='email' name='email' "
+                     f"value='{_esc(values.get('email', ''))}' "
+                     "placeholder='new-owner@company.com'>")
     confirm = ""
     if any(c in DESTRUCTIVE for c in avail):
         confirm = ("<label style='font-weight:400;margin-top:10px'>"
                    "<input type='checkbox' name='confirm' value='yes'> "
-                   "我確認要執行破壞性指令(cancel / stop 用)</label>")
+                   "我確認要執行破壞性指令(cancel / stop / set_email 用)</label>")
     form = (f"<form method='POST' class='card'><h2>下指令</h2>{email}"
-            f"<div style='margin-top:10px'>{opts}</div>{prof_sel}{confirm}"
+            f"<div style='margin-top:10px'>{opts}</div>"
+            f"{prof_sel}{email_sel}{confirm}"
             "<button type='submit'>送出指令</button></form>")
     return _page(f"指令台 {req.key}", head + warn + err + form
                  + _command_reference())
@@ -600,7 +607,10 @@ class FormServer:
         if self.command_fn is None:
             return _re("指令核心未接線(command_fn)。")
         ok, msg, _ = self.command_fn(
-            req.issue_id, cmd, {"profile": data.get("profile", "")}, by, ip)
+            req.issue_id, cmd,
+            {"profile": data.get("profile", ""),      # next 用
+             "email": data.get("email", "")},         # K:set_email 用
+            by, ip)
         return 200, render_command_result(req, cmd, ok, msg)
 
     def _view(self, req) -> tuple[int, str]:

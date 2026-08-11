@@ -54,16 +54,18 @@ def _sess(**kw):
 
 # ── available_commands 依推導狀態 ─────────────────────────────────────── #
 check("avail:todo(無 session)→ 空", available_commands(None) == [])
-check("avail:running → hold/stop/cancel/next",
-      available_commands(_sess()) == ["hold", "stop", "cancel", "next"])
-check("avail:queued → stop/cancel/next",
-      available_commands(_sess(queued=True)) == ["stop", "cancel", "next"])
-check("avail:hil_middle(pending)→ run/retry/cancel/next",
+check("avail:running → hold/stop/cancel/next/set_email",
+      available_commands(_sess())
+      == ["hold", "stop", "cancel", "next", "set_email"])
+check("avail:queued → stop/cancel/next/set_email",
+      available_commands(_sess(queued=True))
+      == ["stop", "cancel", "next", "set_email"])
+check("avail:hil_middle(pending)→ run/retry/cancel/next/set_email",
       available_commands(_sess(pending_reason="approval"))
-      == ["run", "retry", "cancel", "next"])
-check("avail:hil_end(終態)→ retry/cancel/next",
+      == ["run", "retry", "cancel", "next", "set_email"])
+check("avail:hil_end(終態)→ retry/cancel/next/set_email",
       available_commands(_sess(outcome="SUCCESS"))
-      == ["retry", "cancel", "next"])
+      == ["retry", "cancel", "next", "set_email"])
 check("avail:aborted → 空(不再接指令)",
       available_commands(_sess(outcome="ABORTED")) == [])
 
@@ -135,6 +137,41 @@ check("不適用:running 下 run → 拒絕", (not o) and evs == []
 st = Store(tempfile.mkdtemp()); src = FakeSource()
 o, msg, evs = apply_command(src, st, PROFILES, 99, "cancel", by="a@x.tw")
 check("無 session → 拒絕", (not o) and evs == [])
+
+
+# ── K:set_email 改負責人 + re-tag ─────────────────────────────────────── #
+st = Store(tempfile.mkdtemp()); src = FakeSource()
+st.upsert_session(_sess(owner_email="old@x.com"))       # running
+o, msg, evs = apply_command(src, st, PROFILES, 1, "set_email",
+                            {"email": "New@X.com"}, by="admin@x.com",
+                            ip="1.2.3.4")
+check("set_email:改 owner_email(正規化 lower)",
+      o and st.get_session(1).owner_email == "new@x.com")
+check("set_email:journal owner_changed(old/new/by/ip)",
+      any(e["type"] == "owner_changed" and e["new"] == "new@x.com"
+          and e["old"] == "old@x.com" and e["ip"] == "1.2.3.4" for e in evs))
+check("set_email:re-tag 留言(FakeSource 無 find_account_id → 純文字 email)",
+      any("new@x.com" in c for _, c in src.comments))
+
+st = Store(tempfile.mkdtemp()); src = FakeSource()
+st.upsert_session(_sess(owner_email="old@x.com"))
+o, _, evs = apply_command(src, st, PROFILES, 1, "set_email",
+                          {"email": "notanemail"}, by="admin@x.com")
+check("set_email:無效 email → 擋、不改",
+      (not o) and evs == [] and st.get_session(1).owner_email == "old@x.com")
+
+
+class _SrcAcct(FakeSource):
+    def find_account_id(self, email):
+        return "acc-123"
+
+
+st = Store(tempfile.mkdtemp()); src = _SrcAcct()
+st.upsert_session(_sess(owner_email="old@x.com"))
+apply_command(src, st, PROFILES, 1, "set_email",
+              {"email": "new@x.com"}, by="admin@x.com")
+check("set_email:查得到帳號 → @mention accountId",
+      any("[~accountid:acc-123]" in c for _, c in src.comments))
 
 
 # ── command token 生命週期(綁票、可重複用、close 失效)─────────────────── #
