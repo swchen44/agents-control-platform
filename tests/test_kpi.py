@@ -16,13 +16,11 @@ import _env  # noqa: E402,F401  (把 scripts/ 放進 sys.path)
 from detail_server import overview_cards, saved_minutes  # noqa: E402
 
 from arcp import dispatcher as dmod  # noqa: E402
-from arcp import triggers as tmod  # noqa: E402
 from arcp.dispatcher import Dispatcher  # noqa: E402
 from arcp.inner_runner import AttemptResult  # noqa: E402
 from arcp.profiles import Profile  # noqa: E402
 from arcp.store import Store  # noqa: E402
 from arcp.ticket import Ticket  # noqa: E402
-from arcp.triggers import Trigger, run_trigger  # noqa: E402
 
 
 class MockSource:
@@ -68,16 +66,6 @@ def test_dispatcher_no_est_uses_default_240():
     ev = d.handle(_ticket(), "p")
     resolved = [e for e in ev if e["type"] == "resolved"]
     assert resolved and resolved[0]["human_minutes_saved"] == 240.0
-
-
-def test_trigger_success_records_kpi():
-    tmod.run_attempt = _fork_ok
-    root = tempfile.mkdtemp()
-    profs = {"maint": _profile(est=45, name="maint")}
-    ev = run_trigger(Trigger("t", "maint", "job", "x", None),
-                     profs, Store(os.path.join(root, "s")), root)
-    fin = [e for e in ev if e["type"] == "trigger_finished"]
-    assert fin and fin[0]["human_minutes_saved"] == 45
 
 
 def test_saved_minutes_sums_success_only():

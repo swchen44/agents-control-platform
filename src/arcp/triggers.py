@@ -1,22 +1,15 @@
-"""W3.4 — scheduled/oneshot 內部觸發源(DESIGN §5 / W20)。
+"""內部觸發源(job)——不靠 Jira 票、由排程驅動(J1 統一,2026-08-11)。
 
-profile 不只被 Jira 票驅動,也能被內部觸發器啟動,走同一條
-provision→fork→grade 管線,差別只在:
-- **無票面**:pseudo-Ticket(id=timestamp、key=run_name)→ 命名自然成為
-  DESIGN §2 的無票格式 `{agent}__{run_name}__{timestamp}`;prompt 來自
-  trigger config,渲染進 TICKET.md(agent 讀法不變)。
-- **不經審批門**(W20):config 寫了 trigger 即視為授權。
-- **結果進 journal/dashboard**,不寫 Jira comment。
+每個 job 有 `trigger_type`,兩者都跑 `config/scripts/<subfolder>/…`(cwd 進 subfolder、
+log 存 transcript,共用 `_run_logged_script`):
+- **script-job**:純做事,stdout 只是 log,不開票。
+- **agent-job**:stdout 應為 JSON 任務清單 → 每筆**像人一樣** `create_ticket`
+  (description 最上面寫 yaml meta 含 crid;**不建 session、不鎖定 profile**)→ 票走
+  poller 既有 route/triage 流程。stdout 非 JSON → `trigger_error`。
 
-觸發方式:
-- scheduled 間隔:`every: 24h`(級距 Nm/Nh/Nd,「距上次 ≥N 就 due」)。
-- scheduled 牆鐘:`cron: "0 3 * * *"`(W4.6,五欄位 crontab:分 時 日 月 週;
-  支援 `*`、`*/N`、`N-M`、逗號列表;dom/dow 都受限時取 OR——vixie cron 慣例;
-  分鐘粒度;停機期間錯過的點**補跑一次**,回溯上限 2 天;首次啟動不回溯,
-  只看當下分鐘)。**cron 與 every 同時給時 cron 優先 + warning**。
-- oneshot:`python3 run_trigger.py <名>`(CLI,忽略排程/last_run)。
-冪等取向:**先記 last_run 再跑**(at-most-once——crash 寧可少跑一輪,
-下次 due 再補,不重複跑)。
+排程:`every: 24h`(間隔)或 `cron: "0 3 * * *"`(五欄位牆鐘;`*`/`*/N`/`N-M`/逗號;
+dom/dow 都受限時 OR;停機補跑回溯 2 天;cron 與 every 並存 cron 優先)。`count` 次數上限。
+冪等:**先記 last_run 再跑**(at-most-once)。
 """
 
 from __future__ import annotations
@@ -28,14 +21,10 @@ from dataclasses import dataclass, field
 
 import yaml
 
-from .dispatcher import BASE_PROMPT, _grader
-from .inner_runner import run_attempt
 from .logutil import get_logger
-from .profiles import Profile
+from .paths import job_scripts_dir
 from .routing import ConfigError
 from .store import TicketSession
-from .ticket import Ticket
-from .workspace import provision
 
 log = get_logger("triggers")
 
@@ -121,24 +110,27 @@ def _cron_due(c: dict, last_run: float, now: float) -> bool:
 
 @dataclass
 class Trigger:
+    """J1(2026-08-11):統一 job。trigger_type 決定行為,兩者都跑 `script`
+    (config/scripts/<subfolder>/…;執行 cwd 進 subfolder;log 存 transcript):
+    - script-job:純做事,stdout 只是 log。
+    - agent-job:stdout 應為 JSON 任務清單 → 每筆像人一樣 create_ticket(不建
+      session、不鎖定 profile)→ 走 poller route/triage。"""
     name: str
-    profile: str | None          # 與 script 互斥
     run_name: str
-    prompt: str
-    every_sec: float | None      # None = 只能 oneshot(CLI)
-    script: list[str] | None = None   # W4.4:任意執行檔 argv(uvx/npx/.sh/.py…)
-    timeout_sec: float = 600.0        # script 用
+    trigger_type: str                 # "agent-job" | "script-job"
+    script: list[str]                 # 相對 config/scripts/ 的 argv(argv[0]=腳本檔)
+    every_sec: float | None = None    # None = 只能 oneshot(CLI)
+    timeout_sec: float = 600.0
     cron: str | None = None           # W4.6:原始 cron 字串(顯示/journal 用)
     cron_spec: dict | None = None     # 解析後(parse_cron);優先於 every
-    # -- jobs P2(泛化 job:agent 開真 Jira 票)-------------------------------
     count: int = 1                    # 次數上限(0=無上限,需 cron;1=單次;N=N 次)
-    task: str | None = None           # 靜態任務(→ Jira 票 description)
-    task_script: list[str] | None = None  # 動態:跑腳本 → stdout JSON(多筆→每筆開一票)
-    labels: list[str] = field(default_factory=list)  # 開票帶的 labels(對到 route)
+    labels: list[str] = field(default_factory=list)  # agent-job 開票帶的 labels
 
 
-def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
-    """fail-fast 載入(壞 config 死在 load,不是觸發時)。"""
+def load_triggers(path: str, profiles: dict | None = None) -> list[Trigger]:
+    """fail-fast 載入(壞 config 死在 load,不是觸發時)。J1:每個 trigger 必填
+    trigger_type(agent-job/script-job)+ script;agent-job 建議設 labels(開票路由用)。"""
+    import shlex
     with open(path) as f:
         doc = yaml.safe_load(f) or {}
     out: list[Trigger] = []
@@ -149,26 +141,21 @@ def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
         if not _RUN_NAME_RE.match(run_name):
             raise ConfigError(f"trigger {name}: run_name 必填且限 [a-z0-9-]"
                               f"(拿到 {run_name!r})")
-        prof = t.get("profile")
+        ttype = str(t.get("trigger_type") or "")
+        if ttype not in ("agent-job", "script-job"):
+            raise ConfigError(f"trigger {name}: trigger_type 必填為 "
+                              f"agent-job 或 script-job(拿到 {ttype!r})")
         script = t.get("script")
-        if (prof is None) == (script is None):        # W4.4:恰好其一
-            raise ConfigError(f"trigger {name}: profile 與 script 擇一必填")
-        if script is not None:                        # 萬用 script(argv)
-            if isinstance(script, str):
-                import shlex
-                script = shlex.split(script)
-            if not (isinstance(script, list) and script
-                    and all(isinstance(x, str) for x in script)):
-                raise ConfigError(f"trigger {name}: script 需字串或字串列表")
-        else:
-            if prof not in profiles:
-                raise ConfigError(f"trigger {name}: profile 不存在: {prof!r}")
-            # agent-job(P2):task(靜態)或 task_script(動態)或舊 prompt(相容)擇一必填
-            if not (str(t.get("task") or "").strip()
-                    or t.get("task_script")
-                    or str(t.get("prompt") or "").strip()):
-                raise ConfigError(f"trigger {name}: task / task_script / prompt "
-                                  f"至少一個(agent-job 的任務內容)")
+        if isinstance(script, str):
+            script = shlex.split(script)
+        if not (isinstance(script, list) and script
+                and all(isinstance(x, str) for x in script)):
+            raise ConfigError(f"trigger {name}: script 必填(字串或字串列表;"
+                              f"argv[0]=config/scripts/ 下的腳本路徑)")
+        labels = list(t.get("labels") or [])
+        if ttype == "agent-job" and not labels:
+            raise ConfigError(f"trigger {name}: agent-job 需 labels"
+                              f"(開的票靠它命中 route)")
         every = t.get("every")
         every_sec = None
         if every is not None:
@@ -180,7 +167,6 @@ def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
         cron = t.get("cron")
         cron_spec = parse_cron(str(cron)) if cron is not None else None
         if cron_spec is not None and every_sec is not None:
-            # 使用者定案(2026-08-06):並存時 cron 優先 + warning
             log.warning("trigger %s: cron 與 every 並存 → cron 優先"
                         "(every=%s 忽略)", name, every)
             every_sec = None
@@ -190,19 +176,11 @@ def load_triggers(path: str, profiles: dict[str, Profile]) -> list[Trigger]:
         if count != 1 and cron_spec is None and every_sec is None:
             raise ConfigError(f"trigger {name}: count={count}(循環/多次)需要 "
                               f"cron 或 every 排程")
-        task_script = t.get("task_script")
-        if isinstance(task_script, str):
-            import shlex
-            task_script = shlex.split(task_script)
-        out.append(Trigger(name=name, profile=prof, run_name=run_name,
-                           prompt=str(t.get("prompt") or ""),
-                           every_sec=every_sec, script=script,
+        out.append(Trigger(name=name, run_name=run_name, trigger_type=ttype,
+                           script=script, every_sec=every_sec,
                            timeout_sec=float(t.get("timeout_sec", 600)),
                            cron=str(cron) if cron is not None else None,
-                           cron_spec=cron_spec, count=count,
-                           task=(t.get("task") or t.get("prompt") or None),
-                           task_script=task_script,
-                           labels=list(t.get("labels") or [])))
+                           cron_spec=cron_spec, count=count, labels=labels))
     return out
 
 
@@ -218,206 +196,150 @@ def due(trigger: Trigger, store, now: float | None = None) -> bool:
     return now - store.trigger_last_run(trigger.name) >= trigger.every_sec
 
 
-def run_script_trigger(trigger: Trigger, store, root: str,
-                       now: float | None = None) -> list[dict]:
-    """W4.4 萬用 script trigger:任意執行檔(uvx/npx/.sh/.py…)argv 直接跑。
+def _resolve_script(argv):
+    """argv[0] = 相對 config/scripts/ 的腳本檔 → (abs_argv, cwd=腳本所在資料夾)。
+    擋路徑穿越(必須在 config/scripts/ 內)。"""
+    base = job_scripts_dir()
+    if not base:
+        raise RuntimeError("找不到 config/scripts/(job_scripts_dir() 為 None)")
+    real_base = os.path.realpath(base)
+    full = os.path.realpath(os.path.join(base, argv[0]))
+    if full != real_base and not full.startswith(real_base + os.sep):
+        raise ConfigError(f"script 路徑越界 config/scripts/:{argv[0]!r}")
+    return [full, *argv[1:]], os.path.dirname(full)
 
-    run dir = <root>/runs/{name}__{run_name}__{ts}/:
-        ws/                script 的 cwd(產物留原地,retention 照收)
-        transcript/        stdout.log / stderr.log / run.tgz(gzip -9)
-    結束後註冊 TicketSession(issue_id=ts、profile=script:<name>)→ dashboard
-    列表/徽章/transcript 卡(log 檢視+tgz 下載)/retention 全部自動重用。
-    rc==0 → SUCCESS;rc!=0 或 timeout → FAILURE(journal 記 rc/timeout)。
-    """
+
+_META_KEYS = ("crid", "prompt", "email")
+
+
+def _ticket_meta_yaml(meta) -> str:
+    """已知欄位 → description 最上面的 yaml 區塊(J2;人可讀,dispatcher 讀回)。"""
+    lines = [f"{k}: {meta[k]}" for k in _META_KEYS
+             if meta.get(k) not in (None, "")]
+    return ("\n".join(lines) + "\n\n") if lines else ""
+
+
+def parse_ticket_meta(description) -> dict:
+    """讀 description 最上面的 yaml 契約區塊(J2:key: value,只認已知 key,到空行止;
+    ARCP sections 之外,人寫或 agent-job 寫)。回 {crid?, prompt?, email?}。"""
+    from .sections import parse
+    before, _secs, after = parse(description or "")
+    text = before if before.strip() else after   # 佈建前在 before、後在 after
+    out: dict = {}
+    for line in text.splitlines():
+        if not line.strip():
+            break                                 # 空行 → meta 區塊結束
+        k, sep, v = line.partition(":")
+        if sep and k.strip() in _META_KEYS:
+            out[k.strip()] = v.strip()
+    return out
+
+
+def _run_logged_script(trigger: "Trigger", store, root: str,
+                       now: float | None = None):
+    """跑 trigger.script(cwd 進 config/scripts/<subfolder>)並存 log:
+    runs/{name}__{run_name}__{ts}/ 下 ws/ + transcript/(stdout/stderr.log + run.tgz)。
+    註冊 TicketSession(profile=<type>:<name>)→ dashboard 可見可下載。回
+    (rc, stdout 文字, events)。rc==0→SUCCESS,否則 FAILURE。兩種 trigger_type 共用。"""
     import subprocess
     import tarfile
     now = time.time() if now is None else now
     ts = int(now)
-    store.set_trigger_last_run(trigger.name, now)    # 先記水位(at-most-once)
+    store.set_trigger_last_run(trigger.name, now)     # 先記水位(at-most-once)
     base = f"{root}/runs/{trigger.name}__{trigger.run_name}__{ts}"
-    ws = f"{base}/ws"
-    tdir = f"{base}/transcript"
+    ws, tdir = f"{base}/ws", f"{base}/transcript"
     os.makedirs(ws, exist_ok=True)
     os.makedirs(tdir, exist_ok=True)
+    try:
+        abs_argv, cwd = _resolve_script(trigger.script)
+    except (ConfigError, RuntimeError) as e:
+        return None, "", [store.journal("trigger_error", ts, trigger.run_name,
+                                        error=str(e)[:200])]
     events = [store.journal("script_run_started", ts, trigger.run_name,
-                            trigger=trigger.name, script=trigger.script,
-                            cwd=ws)]
-    log.info("script trigger %s 啟動:%s", trigger.name, trigger.script)
-    rc: int | None = None
-    timed_out = False
+                            trigger=trigger.name,
+                            script=" ".join(trigger.script), cwd=cwd)]
+    log.info("%s %s 啟動:%s(cwd=%s)", trigger.trigger_type, trigger.name,
+             " ".join(trigger.script), cwd)
+    rc, timed_out = None, False
     t0 = time.time()
     with open(f"{tdir}/stdout.log", "wb") as so, \
             open(f"{tdir}/stderr.log", "wb") as se:
         try:
-            rc = subprocess.run(trigger.script, cwd=ws, stdout=so, stderr=se,
+            rc = subprocess.run(abs_argv, cwd=cwd, stdout=so, stderr=se,
                                 stdin=subprocess.DEVNULL,
                                 timeout=trigger.timeout_sec).returncode
         except subprocess.TimeoutExpired:
             timed_out = True
-        except OSError as e:                        # 找不到執行檔等
+        except OSError as e:
             se.write(f"[arcp] 無法執行:{e}".encode())
     dur = time.time() - t0
     with tarfile.open(f"{tdir}/run.tgz", "w:gz", compresslevel=9) as tf:
         for n in ("stdout.log", "stderr.log"):
             tf.add(f"{tdir}/{n}", arcname=n)
+    try:
+        stdout_text = open(f"{tdir}/stdout.log", encoding="utf-8",
+                           errors="replace").read()
+    except OSError:
+        stdout_text = ""
     outcome = "SUCCESS" if rc == 0 else "FAILURE"
-    from .store import TicketSession
     store.upsert_session(TicketSession(
-        issue_id=ts, key=trigger.run_name, profile=f"script:{trigger.name}",
-        workspace=ws, session_id=None, attempts=1, outcome=outcome,
-        pending_reason=None, cost_usd=0.0))
+        issue_id=ts, key=trigger.run_name,
+        profile=f"{trigger.trigger_type}:{trigger.name}", workspace=ws,
+        session_id=None, attempts=1, outcome=outcome, pending_reason=None,
+        cost_usd=0.0))
     events.append(store.journal(
         "script_run_finished", ts, trigger.run_name, trigger=trigger.name,
-        rc=rc, timeout=timed_out, duration_sec=round(dur, 1),
-        outcome=outcome))
-    log.info("script trigger %s %s(rc=%s%s,%.1fs)", trigger.name, outcome,
-             rc, ",timeout" if timed_out else "", dur)
+        rc=rc, timeout=timed_out, duration_sec=round(dur, 1), outcome=outcome))
+    log.info("%s %s %s(rc=%s%s,%.1fs)", trigger.trigger_type, trigger.name,
+             outcome, rc, ",timeout" if timed_out else "", dur)
+    return rc, stdout_text, events
+
+
+def run_script_trigger(trigger: "Trigger", store, root: str,
+                       now: float | None = None) -> list[dict]:
+    """script-job:純跑 script(logged)、不開票。回 events。"""
+    _rc, _out, events = _run_logged_script(trigger, store, root, now)
     return events
 
 
-def _resolve_tasks(trigger: Trigger) -> list[dict]:
-    """回 [{summary, description, labels}]。task_script:跑腳本 → stdout JSON(list 或
-    單 obj,每項 {summary?, description, labels?})→ 每筆一票;否則用靜態 task/prompt。"""
-    if trigger.task_script:
-        import json as _json
-        import subprocess
-        try:
-            r = subprocess.run(trigger.task_script, capture_output=True,
-                               text=True, timeout=trigger.timeout_sec,
-                               stdin=subprocess.DEVNULL)
-        except (subprocess.TimeoutExpired, OSError) as e:
-            log.warning("job %s task_script 無法執行:%s", trigger.name, e)
-            return []
-        if r.returncode != 0:
-            log.warning("job %s task_script rc=%s:%s", trigger.name,
-                        r.returncode, (r.stderr or "")[-200:])
-            return []
-        try:
-            data = _json.loads(r.stdout or "[]")
-        except ValueError as e:
-            log.warning("job %s task_script stdout 非 JSON:%s", trigger.name, e)
-            return []
-        items = data if isinstance(data, list) else [data]
-        out = []
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            desc = str(it.get("description") or it.get("summary") or "").strip()
-            if not desc:
-                continue
-            out.append({
-                "summary": str(it.get("summary")
-                               or f"job:{trigger.run_name}")[:200],
-                "description": desc,
-                "labels": list(it.get("labels") or trigger.labels),
-                # crid = ClearQuest CR id(來源 CR 的 job,如 scan_cq 掃出;寫進
-                # session.clearquest_id 供去重 + close→CQ 回寫)。非 CR job 省略。
-                "crid": (str(it.get("crid")).strip() or None
-                         if it.get("crid") is not None else None)})
-        return out
-    task = (trigger.task or trigger.prompt or "").strip()
-    head = task.splitlines()[0][:120] if task else trigger.run_name
-    return [{"summary": f"[job:{trigger.run_name}] {head}",
-             "description": task, "labels": list(trigger.labels), "crid": None}]
-
-
-def fire_agent_job(trigger: Trigger, source, store, profiles: dict[str, Profile],
+def fire_agent_job(trigger: "Trigger", source, store, root: str,
                    project: str, now: float | None = None) -> list[dict]:
-    """agent-job(P2):解析 task(s)→ 每筆 create_ticket + 預建鎖定 profile 的 session
-    (直接指定 profile、跳過 routing/HIL)。票帶 labels 對到 route → poller 正常派工 →
-    自動有 HIL/交付物/評分。**不 bump run_count**(呼叫者 poller 負責 at-most-once)。"""
-    events: list[dict] = []
-    for idx, tk in enumerate(_resolve_tasks(trigger)):
+    """agent-job:跑 script(logged)→ stdout JSON 任務清單 → 每筆**像人一樣**
+    create_ticket(description 最上面寫 yaml meta 含 crid;不建 session、不鎖定 profile)
+    → 票走 poller route/triage。stdout 非 JSON(應為任務)→ trigger_error。回 events。"""
+    import json as _json
+    rc, out_text, events = _run_logged_script(trigger, store, root, now)
+    if rc != 0:
+        events.append(store.journal("trigger_error", 0, trigger.run_name,
+                                    error=f"agent-job script rc={rc}"))
+        return events
+    try:
+        data = _json.loads(out_text or "[]")
+    except ValueError:
+        events.append(store.journal(
+            "trigger_error", 0, trigger.run_name,
+            error="agent-job stdout 非 JSON(應為任務清單;看 transcript/stderr.log)"))
+        return events
+    items = data if isinstance(data, list) else [data]
+    for idx, it in enumerate(items):
+        if not isinstance(it, dict):
+            continue
+        desc = str(it.get("description") or it.get("summary") or "").strip()
+        if not desc:
+            continue
+        summary = str(it.get("summary") or f"job:{trigger.run_name}")[:200]
+        labels = list(it.get("labels") or trigger.labels)
+        crid = it.get("crid")
+        full_desc = _ticket_meta_yaml({"crid": crid}) + desc
         try:
-            t = source.create_ticket(project, tk["summary"], tk["description"],
-                                     labels=tk["labels"])
-        except Exception as e:  # noqa: BLE001 — 單筆建票失敗不擋其餘
+            t = source.create_ticket(project, summary, full_desc, labels=labels)
+        except Exception as e:  # noqa: BLE001 — 單筆失敗不擋其餘
             log.warning("job %s create_ticket 失敗:%s", trigger.name, e)
             events.append(store.journal("trigger_error", 0, trigger.run_name,
                                         error=str(e)[:200]))
             continue
-        crid = tk.get("crid")                 # I2:CR 來源 job → 記 clearquest_id
-        store.upsert_session(TicketSession(   # 鎖定 profile:dispatcher 直接用此 profile
-            issue_id=t.id, key=t.key, profile=trigger.profile,
-            workspace="(handoff)", session_id=None, attempts=0, outcome=None,
-            pending_reason=None, cost_usd=0.0, clearquest_id=crid))
-        events.append(store.journal("job_fired", t.id, t.key,
-                                    job=trigger.name, run_name=trigger.run_name,
-                                    profile=trigger.profile, task_idx=idx,
+        events.append(store.journal("job_fired", t.id, t.key, job=trigger.name,
+                                    run_name=trigger.run_name, task_idx=idx,
                                     crid=crid))
-        log.info("job %s → 開票 %s(profile=%s)",
-                 trigger.name, t.key, trigger.profile)
-    return events
-
-
-def run_trigger(trigger: Trigger, profiles: dict[str, Profile], store,
-                root: str, now: float | None = None) -> list[dict]:
-    """(legacy)跑一輪 trigger:pseudo-ticket → provision → 證據迴圈 → journal。
-
-    迷你派工(dispatcher 減去 Jira 面):同 grader/三態語意;session 存
-    TicketSession(issue_id=timestamp,不與 Jira id 衝突)→ dashboard 可見、
-    retention 照收。script 型 trigger(W4.4)委派 run_script_trigger。
-    """
-    if trigger.script is not None:                  # W4.4 萬用 script
-        return run_script_trigger(trigger, store, root, now)
-    now = time.time() if now is None else now
-    ts = int(now)
-    profile = profiles[trigger.profile]
-    store.set_trigger_last_run(trigger.name, now)   # 先記水位(at-most-once)
-    ticket = Ticket(id=ts, key=trigger.run_name, summary=f"trigger:{trigger.name}",
-                    state="internal", assignee=None, assignee_id=None,
-                    description=trigger.prompt)
-    ws = provision(root, ticket, profile)
-    sess = TicketSession(issue_id=ts, key=trigger.run_name,
-                         profile=profile.name, workspace=ws, session_id=None,
-                         attempts=0, outcome=None, pending_reason=None,
-                         cost_usd=0.0)
-    store.upsert_session(sess)
-    events = [store.journal("trigger_started", ts, trigger.run_name,
-                            trigger=trigger.name, profile=profile.name,
-                            workspace=ws)]
-    log.info("trigger %s 啟動(run=%s ws=%s)", trigger.name, trigger.run_name, ws)
-
-    grader = _grader(profile)
-    artifacts = f"{ws.rstrip('/').rsplit('/ws', 1)[0]}/attempts" \
-        if ws.endswith("/ws") else ws + ".attempts"
-    feedback: str | None = None
-    while sess.attempts < profile.max_attempts:
-        sess.attempts += 1
-        prompt = BASE_PROMPT if not feedback else (
-            f"{BASE_PROMPT}\n\n上次嘗試未過驗證,失敗證據:\n{feedback}\n"
-            f"請只修正缺失的部分。")
-        res = run_attempt(dict(profile.agent), ws, prompt, artifacts,
-                          sess.attempts, resume_session_id=sess.session_id)
-        sess.session_id = res.session_id or sess.session_id
-        sess.cost_usd += res.cost_usd or 0.0
-        events.append(store.journal(
-            "attempt_finished", ts, trigger.run_name, attempt=sess.attempts,
-            raw=res.raw_outcome, error_kind=res.error_kind,
-            cost=res.cost_usd or 0.0, profile=profile.name))  # W7.3 月預算彙總
-        if res.raw_outcome == "unknown":            # 同 v5 D3:不自動重試
-            sess.outcome, sess.pending_reason = "UNKNOWN", "unknown"
-            store.upsert_session(sess)
-            events.append(store.journal("trigger_finished", ts,
-                                        trigger.run_name, outcome="UNKNOWN"))
-            return events
-        verdict = grader.grade(ws)
-        if verdict.passed and res.raw_outcome == "completed":
-            sess.outcome = "SUCCESS"
-            store.upsert_session(sess)
-            events.append(store.journal(       # W3.5 C3 / W7 R3:預設 240 分
-                "trigger_finished", ts, trigger.run_name, outcome="SUCCESS",
-                attempts=sess.attempts, cost_usd=sess.cost_usd,
-                human_minutes_saved=profile.est_minutes()))
-            log.info("trigger %s SUCCESS(%d attempt, $%.4f)",
-                     trigger.name, sess.attempts, sess.cost_usd)
-            return events
-        feedback = verdict.summary()
-        store.upsert_session(sess)
-
-    sess.outcome, sess.pending_reason = "FAILURE", "max-attempts"
-    store.upsert_session(sess)
-    events.append(store.journal("trigger_finished", ts, trigger.run_name,
-                                outcome="FAILURE", attempts=sess.attempts))
-    log.info("trigger %s FAILURE(max-attempts)", trigger.name)
+        log.info("job %s → 開票 %s(不 pin、走 route)", trigger.name, t.key)
     return events

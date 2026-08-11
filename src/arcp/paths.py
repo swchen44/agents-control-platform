@@ -50,6 +50,13 @@ def templates_dir() -> str | None:
     return _under_root("config", "templates")
 
 
+def job_scripts_dir() -> str | None:
+    """job(trigger)腳本的家:config/scripts/<subfolder>/xxx.sh(trigger.script 相對
+    此;執行時 cwd 進 <subfolder>)。git 追蹤。(注意:與下方 scripts_dir=repo 的
+    scripts/ runner 目錄不同。)"""
+    return _under_root("config", "scripts")
+
+
 def common_skills_dir() -> str | None:
     """common skills 庫(config/skills/<name>/;profile.common_skills 選子集)。"""
     return _under_root("config", "skills")

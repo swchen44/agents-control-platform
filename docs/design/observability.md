@@ -65,7 +65,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `assignee_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `assignee_restored` | — | `src/arcp/commands.py` |
 | `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py` |
-| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `tokens`, `truly_resumed` | `src/arcp/dispatcher.py`, `src/arcp/triggers.py` |
+| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `tokens`, `truly_resumed` | `src/arcp/dispatcher.py` |
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
 | `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
 | `closed` | `agent_score`, `by`, `human_score`, `outcome`, `request_id` | `src/arcp/hil.py`, `src/arcp/scoring.py` |
@@ -84,7 +84,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `hil_stalled` | `reminders`, `request_id` | `src/arcp/scoring.py` |
 | `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py` |
 | `jira_write` | `action`, `detail` | `scripts/run_poller.py` |
-| `job_fired` | `crid`, `job`, `profile`, `run_name`, `task_idx` | `src/arcp/triggers.py` |
+| `job_fired` | `crid`, `job`, `run_name`, `task_idx` | `src/arcp/triggers.py` |
 | `new_issue` | `state`, `summary` | `src/arcp/poller.py` |
 | `pending` | `cause`, `cost_usd`, `reason`, `scope`, `tokens` | `src/arcp/dispatcher.py` |
 | `profile_selected` | `chosen`, `method`, `original` | `src/arcp/dispatcher.py` |
@@ -99,12 +99,10 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `status_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py`, `src/arcp/dispatcher.py` |
 | `trigger_error` | `error` | `src/arcp/poller.py`, `src/arcp/triggers.py` |
-| `trigger_finished` | `attempts`, `cost_usd`, `human_minutes_saved`, `outcome` | `src/arcp/triggers.py` |
-| `trigger_started` | `profile`, `trigger`, `workspace` | `src/arcp/triggers.py` |
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 45 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 43 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -180,17 +178,17 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   ⚠️ `hil_stalled`(`reminders` 達上限仍沒人回)。**票停在等人**時看這串:停在
   `hil_requested`/`score_requested` 沒有後續 = 在等人填表單(正常等待,非 bug)。
 
-**F. 排程觸發 / jobs(triggers.py)** —— 內部 job(P2):
-- `job_fired`(`job`/`run_name`/`profile`/`task_idx`/`crid`):**agent-job 開了一張真 Jira 票**
-  (count 上限內、逢 cron/every 或 count=1 首輪);該票預建鎖定 profile 的 session(直接指定 profile),
-  之後走正常 dispatch。task_script 多筆 → 同一輪多個 `job_fired`(task_idx 遞增)。
-  `crid` = 來源 ClearQuest CR id(CR 來源 job,如 scan_cq;task_script 每筆回 `crid` →
-  寫進 `session.clearquest_id` 供去重 + close→CQ 回寫。非 CR job 為 None)。
-  script-job 走下面 script_run_* 系列(不開 Jira)。
-- `trigger_started` → `script_run_started`/`script_run_finished`(script 型)或
-  `attempt_finished`(agent 型)→ `trigger_finished`(`outcome`)。
-- ⚠️ `trigger_error` / `dispatch_error`(`error`):觸發或派工時擲例外。連看 `error`
-  字串 + poller 主控台輸出。
+**F. 排程觸發 / jobs(triggers.py,J1 統一)** —— 兩種 job 都先 `script_run_*`:
+- `script_run_started`(`cwd`/`script`)→ `script_run_finished`(`rc`/`outcome`/`timeout`/
+  `duration_sec`):跑 `config/scripts/<subfolder>/…`(cwd 進 subfolder),log 存
+  `runs/…/transcript/`(stdout/stderr.log + run.tgz;dashboard 可看可下載)。兩種 type 共用。
+- `job_fired`(`job`/`run_name`/`task_idx`/`crid`):**agent-job** 解析 script stdout 的 JSON
+  任務 → **像人一樣 create_ticket**(不建 session、不鎖定 profile)→ 票走正常 route/triage。
+  多筆 → 同輪多個 `job_fired`(task_idx 遞增)。`crid` = 來源 ClearQuest CR id → 寫進票的
+  description 最上面 yaml(`crid: …`)→ dispatcher 建 session 時讀回 `session.clearquest_id`
+  (去重 + close→CQ 回寫;非 CR job 為 None)。**script-job 不開票**(只有 script_run_*)。
+- ⚠️ `trigger_error`(`error`):script rc≠0、stdout 非 JSON(agent-job 該回任務清單)、
+  或 create_ticket 失敗、script 路徑越界。連看該 run 的 `transcript/stderr.log`。
 
 **G. 額度閘 + 觀測(poller/control_api/dispatcher/retention)**:
 - `queued`(`engine`/`profile`):F1 分層額度滿 → 排隊(FIFO)。正常的節流;**大量堆積**

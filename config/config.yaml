@@ -37,27 +37,24 @@ outer_loop:
     # base_url: 'http://<intranet-host>:8790'   # 選填;預設 http://host:port
     # mention_account_id: '...'                  # 選填
 
-  # W3.4 內部觸發源(scheduled/oneshot,不經 Jira 票、不經審批門;config 即授權)
-  # folder = {agent}__{run_name}__{timestamp};結果進 journal/dashboard。
-  # 範例(打開即生效——scheduled 由 poller 檢 due;省略 every = 只能
-  # `python3 run_trigger.py <name>` oneshot 觸發):
+  # 內部 job(J1 統一,不經 Jira 票驅動、由排程觸發;config 即授權)。每個 job 必填
+  # trigger_type + script(相對 config/scripts/<subfolder>/;執行 cwd 進 subfolder,
+  # log 存 runs/…/transcript/,dashboard 可看可下載)。scheduled 由 poller 檢 due;
+  # 省略 cron/every 且 count=1 = 首輪立刻一次或 `python3 run_trigger.py <name>` oneshot。
   # triggers:
-  #   - name: nightly-maintain
-  #     profile: filechain-rawcli
-  #     run_name: nightly          # 必填,[a-z0-9-](防 path 注入)
-  #     every: 24h                 # N[mhd] 級距;省略=oneshot only
-  #     prompt: "檢查工作區並整理暫存檔,完成後回覆 TASK_DONE。"
-  #   - name: disk-report          # W4.4 萬用 script(與 profile 擇一):
-  #     script: "./scripts/report.sh --fast"   # 字串或 argv 列表;uvx/npx/.py 均可
-  #     run_name: disk
-  #     every: 24h
-  #     timeout_sec: 600           # stdout/stderr 存 transcript/,完跑打 run.tgz
-  #   - name: nightly-clean        # W4.6 牆鐘排程:五欄位 crontab(分 時 日 月 週)
-  #     script: "uvx some-cleaner"
-  #     run_name: clean
-  #     cron: "0 3 * * 1-5"        # 平日 03:00;支援 * , - */N;cron 與 every
-  #                                # 並存時 cron 優先(warning);分鐘粒度,
-  #                                # 停機錯過補跑一次(回溯上限 2 天)
+  #   - name: scan-cq              # agent-job:script stdout 回 JSON 任務清單
+  #     run_name: scan-cq          # 必填,[a-z0-9-](防 path 注入)
+  #     trigger_type: agent-job
+  #     script: cq/scan.sh         # = config/scripts/cq/scan.sh;cwd = config/scripts/cq/
+  #     labels: ['cr']             # 開的票貼此 label → 命中 route → triage(不 pin)
+  #     count: 0                   # 0=無上限(需 cron);1=單次;N=N 次
+  #     cron: '*/10 * * * *'       # 每 10 分;* , - */N;cron 與 every 並存 cron 優先
+  #   - name: disk-clean           # script-job:純做事、不開票
+  #     run_name: disk-clean
+  #     trigger_type: script-job
+  #     script: maint/clean.sh     # cwd = config/scripts/maint/
+  #     cron: '0 3 * * 1-5'        # 平日 03:00;停機錯過補跑一次(回溯 2 天)
+  #     timeout_sec: 600
 
   # 外部變更政策(人的指令改走「指令台」表單/REST,不再有 @agent 留言白名單)
   external_change:

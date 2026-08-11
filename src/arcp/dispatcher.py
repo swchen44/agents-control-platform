@@ -27,6 +27,7 @@ from .store import Store, TicketSession
 from .ticket import Ticket
 from .transcript import engine_of_agent
 from .transcript import finalize as finalize_transcript
+from .triggers import parse_ticket_meta
 from .workspace import health_check, inject_base_context, provision
 
 BASE_PROMPT = ("請先閱讀工作目錄裡的 TICKET.md,完成其中「描述」段落交付的任務。"
@@ -334,7 +335,9 @@ class Dispatcher:
                 sess = TicketSession(
                     issue_id=ticket.id, key=ticket.key, profile=profile.name,
                     workspace="(pending-approval)", session_id=None, attempts=0,
-                    outcome=None, pending_reason=None, cost_usd=0.0)
+                    outcome=None, pending_reason=None, cost_usd=0.0,
+                    clearquest_id=parse_ticket_meta(
+                        ticket.description).get("crid"))
             decision = self.approval.gate(ticket, profile, sess)
             self.store.upsert_session(sess)
             events.append(self.store.journal(
@@ -358,7 +361,8 @@ class Dispatcher:
             sess = TicketSession(
                 issue_id=ticket.id, key=ticket.key, profile=profile.name,
                 workspace=ws, session_id=None, attempts=0,
-                outcome=None, pending_reason=None, cost_usd=0.0)
+                outcome=None, pending_reason=None, cost_usd=0.0,
+                clearquest_id=parse_ticket_meta(ticket.description).get("crid"))
             self.store.upsert_session(sess)
             events.append(self.store.journal(
                 "session_created", ticket.id, ticket.key,

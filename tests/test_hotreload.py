@@ -24,7 +24,7 @@ outer_loop:
   concurrency: {max_running: 2, per_engine: {}, per_profile: {}}
   external_change: {cancel_states: ['Done']}
   triggers:
-    - {name: t1, script: '/bin/true', run_name: r1, every: 1h}
+    - {name: t1, trigger_type: script-job, script: 'x/t.sh', run_name: r1, every: 1h}
   routes:
     - {name: r1, when: {labels: ['x']}, profile: p, on_match: create_or_resume}
 inner_loop:
@@ -39,9 +39,9 @@ inner_loop:
 GOOD_V2 = GOOD_V1.replace("jql-v1", "jql-v2") \
     .replace("['Done']", "['完成']") \
     .replace("max_running: 2", "max_running: 5") \
-    .replace("- {name: t1, script: '/bin/true', run_name: r1, every: 1h}",
-             "- {name: t1, script: '/bin/true', run_name: r1, every: 1h}\n"
-             "    - {name: t2, script: '/bin/echo', run_name: r2, every: 2h}")
+    .replace("- {name: t1, trigger_type: script-job, script: 'x/t.sh', run_name: r1, every: 1h}",
+             "- {name: t1, trigger_type: script-job, script: 'x/t.sh', run_name: r1, every: 1h}\n"
+             "    - {name: t2, trigger_type: script-job, script: 'x/e.sh', run_name: r2, every: 2h}")
 
 BAD = GOOD_V1.replace("create_or_resume", "not-a-real-on-match")
 

@@ -177,7 +177,7 @@ class OuterLoop:
         時機(count=1 無排程 → 首輪立刻一次);先 bump 再跑(at-most-once)。"""
         import time as _t
         evs: list[dict] = []
-        profiles = self.dispatcher.profiles
+        root = self.dispatcher.root
         for tr in self.triggers:
             run_count = self.store.trigger_run_count(tr.name)
             if tr.count > 0 and run_count >= tr.count:
@@ -189,12 +189,11 @@ class OuterLoop:
                 continue
             self.store.bump_trigger_run(tr.name, _t.time())   # 先記(at-most-once)
             try:
-                if tr.script is not None:             # script-job:inline、不開 Jira
-                    evs.extend(run_script_trigger(tr, self.store,
-                                                  self.dispatcher.root))
-                else:                                 # agent-job:開真 Jira 票
+                if tr.trigger_type == "script-job":   # 純跑 script、不開票
+                    evs.extend(run_script_trigger(tr, self.store, root))
+                else:                                 # agent-job:像人建票→走 route
                     evs.extend(fire_agent_job(tr, self.source, self.store,
-                                              profiles, self.project))
+                                              root, self.project))
             except Exception as e:      # 單一 job 壞不擋 poll
                 evs.append(self.store.journal(
                     "trigger_error", 0, tr.name, error=str(e)[:200]))
