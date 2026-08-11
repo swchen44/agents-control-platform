@@ -341,5 +341,5 @@ def fire_agent_job(trigger: "Trigger", source, store, root: str,
         events.append(store.journal("job_fired", t.id, t.key, job=trigger.name,
                                     run_name=trigger.run_name, task_idx=idx,
                                     crid=crid))
-        log.info("job %s → 開票 %s(不 pin、走 route)", trigger.name, t.key)
+        log.info("job %s → 開票 %s(不鎖定 profile、走 route)", trigger.name, t.key)
     return events
