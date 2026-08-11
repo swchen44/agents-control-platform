@@ -152,8 +152,10 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   (1 單次 / 0 無上限需 cron / N 次)+ **`cron`/`every`**。
   - **agent-job**:script stdout **必為 JSON 任務清單** → 每筆**像人一樣開一張 Jira 票**
     (**不建 session、不鎖定 profile**)→ 票靠 `labels` 命中 route → **走 triage**(A/B / 條件式
-    選 profile;固定 profile 就讓 route 直接指定)。任務可帶 `crid` → 寫進票 description 最上面
-    yaml → 進 `session.clearquest_id`。stdout 非 JSON / rc≠0 → `trigger_error`(看 stderr.log)。
+    選 profile;固定 profile 就讓 route 直接指定)。**`labels` 兩層**:job 的 `labels`
+    (agent-job 必填)是每票**保底入場券**;單筆任務可回自己的 `labels` **覆寫**以分流到別的
+    route(省略則用保底)。任務可帶 `crid` → 寫進票 description 最上面 yaml → 進
+    `session.clearquest_id`。stdout 非 JSON / rc≠0 → `trigger_error`(看 stderr.log)。
   - **script-job**:純做事、**不開票**,stdout 只是 log。
   - 看 journal `script_run_*`(兩種)+ `job_fired`(agent-job:`job`/`run_name`/`task_idx`/`crid`)。
     腳本清單見 `config/scripts/README.md`。範例:

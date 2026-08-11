@@ -14,7 +14,12 @@
   [{"summary": "...", "description": "...", "labels": ["arcp.cr"], "crid": "WCNCR0123745"}]
   ```
 
-  - `summary` / `description` 必要(至少 description);`labels` 省略則用 job 的 `labels`。
+  - `summary` / `description` 必要(至少 description)。
+  - `labels`(**兩層:預設 vs 覆寫**):job 的 `labels`(config,agent-job **必填**)是每張票的
+    **保底入場券**——確保開出來的票一定命中某條 route、不會變沒人撿的孤兒票。單筆任務**省略**
+    `labels` 就用這個保底;只有想把同一個 job 的不同任務**分流到不同 route** 時,才在該筆回自己
+    的 `labels` **覆寫**(例:緊急筆回 `["arcp.urgent"]`、一般筆省略走保底)。程式:
+    `it.get("labels") or trigger.labels`(`triggers.py`)。
   - `crid`(選填):來源 ClearQuest CR id → 寫進票 description 最上面的 yaml
     (`crid: …`)→ dispatcher 建 session 時讀回 `session.clearquest_id`(去重 + close→CQ 回寫)。
 
