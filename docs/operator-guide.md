@@ -146,24 +146,32 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
   - **看用量**:dashboard **Agent Detail 頁「budget 當月用量 vs 上限」卡**(全站 + 各 profile
     月 cost/tokens vs 上限,綠<80%/黃≥80%/紅≥100%)。達上限 = `pending:budget`。
 - **控管並發**:`outer_loop.concurrency`(global + per-engine + per-profile);超額 QUEUED。
-- **排程 / 單次 job(週期或一次執行 agent)**:`outer_loop.triggers[]` 每個 job:
-  `run_name` + `profile`(agent-job)或 `script`(script-job)+ **`count`**(次數上限:
-  1=單次、0=無上限需 cron、N=N 次;預設 1)+ **`cron`/`every`**(時機)。**agent-job 會開
-  一張真 Jira 票**(`create_ticket` + 直接指定 profile,跳過 routing/HIL)—— 任務內容給
-  `task`(靜態字串)或 `task_script`(跑腳本→stdout JSON,可多筆→每筆開一張,如「掃 CQ 新
-  CR」);票帶 `labels` **須對到一條 create_or_resume route** 才會被派工。無人值守就讓該
-  profile 設 `auto_close`。**script-job 不開 Jira**(inline 跑、結果進 dashboard;簡易排程
-  也可直接用 crontab)。看 journal `job_fired`(profile/task_idx)。範例:
+- **排程 / 單次 job(J1 統一)**:`outer_loop.triggers[]` 每個 job 必填 **`trigger_type`**
+  (`agent-job`/`script-job`)+ **`script`**(相對 `config/scripts/<subfolder>/`;執行 cwd 進
+  subfolder;log 存 `runs/…/transcript/`,dashboard 可看可下載)+ `run_name` + **`count`**
+  (1 單次 / 0 無上限需 cron / N 次)+ **`cron`/`every`**。
+  - **agent-job**:script stdout **必為 JSON 任務清單** → 每筆**像人一樣開一張 Jira 票**
+    (**不建 session、不鎖定 profile**)→ 票靠 `labels` 命中 route → **走 triage**(A/B / 條件式
+    選 profile;固定 profile 就讓 route 直接指定)。任務可帶 `crid` → 寫進票 description 最上面
+    yaml → 進 `session.clearquest_id`。stdout 非 JSON / rc≠0 → `trigger_error`(看 stderr.log)。
+  - **script-job**:純做事、**不開票**,stdout 只是 log。
+  - 看 journal `script_run_*`(兩種)+ `job_fired`(agent-job:`job`/`run_name`/`task_idx`/`crid`)。
+    腳本清單見 `config/scripts/README.md`。範例:
   ```yaml
   outer_loop:
     triggers:
-      - run_name: daily-scan
-        profile: scanner          # agent-job → 開真 Jira 票
-        count: 0                  # 0=無上限(需 cron);1=單次;N=N 次
-        cron: "0 3 * * *"
-        labels: [agent]           # 須對到 create_or_resume route
-        task: "巡檢昨日失敗票並回報"
-        # task_script: 'uv run gen_tasks.py'   # 改動態:stdout JSON [{summary,description,labels?}]
+      - name: scan-cq
+        run_name: scan-cq
+        trigger_type: agent-job
+        script: cq/scan.sh        # config/scripts/cq/scan.sh;stdout 回 JSON 任務清單
+        labels: [cr]              # 開的票貼此 → 命中 route → triage
+        count: 0
+        cron: "*/10 * * * *"
+      - name: disk-clean
+        run_name: disk-clean
+        trigger_type: script-job
+        script: maint/clean.sh
+        cron: "0 3 * * 1-5"
   ```
 - **自動關單 `auto_close`(profile 欄,無人值守用)**:`off`(預設,正常 HIL 人評分)/
   `on_success`(只 SUCCESS 自動關,FAILURE/UNKNOWN 仍發表單交人)/ `all`(全終態自動關)。

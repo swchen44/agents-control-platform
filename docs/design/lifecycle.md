@@ -116,47 +116,48 @@ param:                                # ← 選填
 profile 不只被 Jira 票驅動,還能被**內部 job(觸發器)**啟動。現況(W3.4)= 內部觸發器
 用 pseudo-ticket inline 跑、不開 Jira。
 
-### 5.1 泛化 job 設計(2026-08-09,Q1–Q6 決策樹定案;**已實作**)
+### 5.1 統一 job(J1,2026-08-11 定案+實作)
 
-把「週期執行」與「單次執行」合併成**一個泛化 job**(舊版 pseudo-ticket 內跑見 §5.2,
-agent-job 已改開真 Jira)。決策:
+一個 job = **跑一個 `script`**(相對 `config/scripts/<subfolder>/`,執行 **cwd 進該 subfolder**;
+log 存 `runs/…/transcript/{stdout.log,stderr.log,run.tgz}`,dashboard 可看可下載——兩種 type
+共用 `_run_logged_script`)。`trigger_type` 決定 stdout 怎麼用:
 
-- **`count`=次數上限、`cron`/`every`=時機**:count=1 單次(無 cron→下輪立刻一次;有 cron→
-  下個 cron 點一次後停)、count=0 無上限(需 cron,每逢 cron)、count=N 跑 N 個 cron 點後停。
-  count≠1 但無 cron → ConfigError。**count 省略預設 1**。持久化 `run_count`(store.trigger_state)。
-- **agent-job 統一開真 Jira**(Q1):每次執行 = harness `create_ticket`(source project)+
-  **預建鎖定 profile 的 session**(直接指定 profile、跳過 routing/HIL 選 profile;approval 由 profile
-  自行決定)。票帶 **`labels`** → 對到既有 create_or_resume route(與 W10.3 跨票換手一致)→
-  poller 正常派工 → 自動獲得 HIL/交付物/評分/dashboard/trace 全套。**移除 agent 的 pseudo-ticket
-  inline 跑**。
-- **任務來源(Q5)兩者**:`task`(靜態字串 → 票 description)**或** `task_script`(跑腳本 →
-  stdout JSON,可多筆 → 每筆開一張 agent 票;泛化到「掃 CQ 新 CR → 每張開票」)。
-- **收尾**:job 開的票走正常終態;無人值守就讓 job 的 **profile 設 `auto_close`**(見
-  [agent-output.md §9](agent-output.md);on_success/all → 跳過 HIL、human_score=agent 自評、
-  自動關)。auto_close 是 profile 欄,與 job 解耦。
-- **script-job 維持不開 Jira**(Q1):跑腳本、結果進 journal/dashboard;簡易排程也可直接用 crontab。
+- **script-job**:純做事,stdout 只是 log,**不開票**。
+- **agent-job**:stdout **必須是 JSON 任務清單** → 每筆**像人一樣** `create_ticket`
+  (**不建 session、不鎖定 profile**)→ 票走 poller 既有 route/triage 流程(所以能享用
+  A/B / 條件式選 profile;固定 profile 就讓 route 直接指定)。stdout 非 JSON / rc≠0 →
+  `trigger_error`(看該 run 的 `stderr.log`)。
 
-新事件:`job_fired`(job/run_name/profile/task_idx)。實作:`triggers.fire_agent_job`
-(create_ticket + 鎖定 profile 的 session)、`store.trigger_run_count`/`bump_trigger_run`、poller
-`_run_due_triggers`;`tests/test_jobs.py`。config 形狀:
+- **排程**:`count`=次數上限(1 單次、0 無上限需 cron、N 個 cron 點)、`cron`/`every`=時機
+  (cron 優先);count 省略預設 1;持久化 `run_count`。
+- **crid 通道(J2 契約)**:任務可帶 `crid` → agent-job 寫進票 **description 最上面的 yaml**
+  (`crid: WCNCR…`,人可讀;只認已知 key `crid`/`prompt`/`email`)→ dispatcher 建 session 時
+  `parse_ticket_meta` 讀回 → `session.clearquest_id`(去重 + close→CQ 回寫)。
+- **收尾**:job 開的票走正常終態;無人值守就讓對到的 profile 設 `auto_close`(見
+  [agent-output.md §9](agent-output.md))——與 job 解耦。
+
+事件:`script_run_started`/`script_run_finished`(兩種 type)、`job_fired`
+(`job`/`run_name`/`task_idx`/`crid`,agent-job)。實作:`triggers._run_logged_script` /
+`fire_agent_job` / `parse_ticket_meta`、poller `_run_due_triggers`(依 trigger_type 分流);
+`tests/test_triggers.py` / `test_jobs.py`。config:
+
 ```yaml
 outer_loop:
-  jobs:                      # (現 triggers 演進)
-    - run_name: daily-scan
-      profile: scanner
-      count: 0               # 0=無上限;1=單次;N=N 次
-      cron: "0 3 * * *"
-      labels: [agent]        # 對到 create_or_resume route
-      task: "巡檢昨日失敗票並回報"          # 靜態;或改用 task_script
-      # task_script: 'uv run gen_tasks.py'  # stdout JSON:[{summary,description,labels?,crid?}]
-      #                                     # crid=來源 ClearQuest CR id(掃 CQ job 用)
+  triggers:
+    - name: scan-cq
+      run_name: scan-cq
+      trigger_type: agent-job
+      script: cq/scan.sh         # = config/scripts/cq/scan.sh;cwd 進 cq/
+      labels: ['cr']             # 開的票貼此 → 命中 route → triage(不 pin)
+      count: 0
+      cron: '*/10 * * * *'
+    - name: disk-clean
+      run_name: disk-clean
+      trigger_type: script-job
+      script: maint/clean.sh     # 純做事、不開票
+      cron: '0 3 * * 1-5'
 ```
-
-### 5.2 現況(W3.4,將被 5.1 取代)
-
-- **scheduled**:profile 定時 maintain(`cron`/`every`);**oneshot**:CLI `run_trigger.py <名>`。
-- 兩者**要求 run name**;folder = `<agent名>__<run-name>__<timestamp>`;pseudo-ticket、不開 Jira。
-- (呼應 qm 的 cron scheduler / monitor-poller。)
+腳本清單與範例見 `config/scripts/README.md` + `config/scripts/example/scan.sh`。
 
 ## 6. assignee = 資源開關(使用者核心補充)
 

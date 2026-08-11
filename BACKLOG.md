@@ -259,12 +259,12 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 ## 主題 J — job 泛化 + description 契約 + label 規範(2026-08-11 討論中)
 
 > I3 深化成「job 泛化」:agent-job = **像人一樣建票 → 走 poller route/triage**(不 pin、
-> 可 A/B)。**J2 契約格式已定案(2026-08-11)→ J1 可開工**;J3(label 前綴)J1 後 refine、
-> J4(select 泛化)待概念討論。
+> 可 A/B)。**J1 + J2 已完成(2026-08-11,commit 747b526)**;剩 J3(label `arcp-` 前綴,
+> 可隨時做)、J4(select 泛化/遞歸,概念待討論)。
 
 | # | 項目 | 做法 / 決策 | 現況 |
 |---|---|---|---|
-| **J1** | **agent-job 泛化(原 I3)** | 加 `trigger_type: agent-job\|script-job`;`task_script`→統一 `script`(和 script-job 共用「有 log 的執行」:cwd/stdout.log/stderr.log/run.tgz/dashboard);腳本放 `config/scripts/{subfolder}/`、cwd 進 subfolder;agent-job 跑 script→stdout JSON 任務→**像人 create_ticket**(不建 session、不 pin)→走 route/triage;非 JSON→`trigger_error`。**移除** job 的 `profile`/`task`/`prompt`、`fire_agent_job` 預建 session、legacy `run_trigger`(鎖定機制本身 base 交接仍用)| 設計已定;**J2 已解,可開工** |
+| **J1** | **agent-job 泛化(原 I3)** | 加 `trigger_type: agent-job\|script-job`;`task_script`→統一 `script`(和 script-job 共用「有 log 的執行」:cwd/stdout.log/stderr.log/run.tgz/dashboard);腳本放 `config/scripts/{subfolder}/`、cwd 進 subfolder;agent-job 跑 script→stdout JSON 任務→**像人 create_ticket**(不建 session、不 pin)→走 route/triage;非 JSON→`trigger_error`。**移除** job 的 `profile`/`task`/`prompt`、`fire_agent_job` 預建 session、legacy `run_trigger`(鎖定機制本身 base 交接仍用)| ✅ **完成**(2026-08-11,`747b526`;test_triggers/test_jobs) |
 | **J2** | **description → session 的契約格式** | ✅ **定案(2026-08-11)**:**`key=value`**、放 description **最上面**、**人寫**(或 agent-job 腳本像人一樣寫)、**不放 ARCP section**(human/control/agent 那三段是機器寫的紀錄,與人寫的分開,保持簡單)。欄位(可擴充):`crid=WCNCR0123745`→session.clearquest_id、`prompt=…`→放進 TICKET(給 agent)、`email=…`→tag + 檢查一次性連結填的 email(此欄也可用一次性 ticket 連結改)。harness 只認**已知 key**(`crid`/`prompt`/`email`)→ 解析安全、不誤判散文 | ✅ 格式定;實作隨 J1 |
 | **J3** | **label 命名規範** | 所有 ARCP 用的 label 一律 `arcp-`/`arcp.` 前綴(避免撞別人 label);route/job/文件/範例統一改。J1 做完後再 refine | 待做(J1 後) |
 | **J4** | **select 泛化 / 遞歸** | select(A/B / triage)能不能「select 下去再 select」?把 select 視為「call 一個 script 決定最終鎖定哪個 profile」的泛化能力 | **待討論(概念)** |
