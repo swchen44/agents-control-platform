@@ -223,23 +223,29 @@ def load_profiles(path: str) -> dict[str, Profile]:
 
 
 def _parse_select(name: str, sel: dict | None) -> dict | None:
-    """驗 select 區塊:candidates(prefix 須=本 profile 名)、method、script。"""
+    """驗 select 區塊。J4:
+    - method=random → candidates 必填、prefix 須=本名(A/B 同族)。
+    - method=script → candidates **選填、不強制 prefix**(腳本可回**任何**已定義
+      profile;軸 B);script 命令必填。
+    """
     if not sel:
         return None
-    cands = list(sel.get("candidates") or [])
-    if not cands:
-        raise ConfigError(f"profile {name}: select 需要非空 candidates")
-    for c in cands:
-        if not c.startswith(name):
-            raise ConfigError(
-                f"profile {name}: select 候選 '{c}' 的 prefix 須為 '{name}'"
-                f"(A/B 同族好管理)")
     method = sel.get("method", "random")
     if method not in ("random", "script"):
         raise ConfigError(
             f"profile {name}: select.method 須為 random|script(拿到 {method!r})")
+    cands = list(sel.get("candidates") or [])
     script = sel.get("script")
-    if method == "script" and not script:
+    if method == "random":
+        if not cands:
+            raise ConfigError(
+                f"profile {name}: select.method=random 需要非空 candidates")
+        for c in cands:
+            if not c.startswith(name):
+                raise ConfigError(
+                    f"profile {name}: random 候選 '{c}' 的 prefix 須為 '{name}'"
+                    f"(A/B 同族好管理)")
+    elif not script:
         raise ConfigError(f"profile {name}: select.method=script 需要 script 命令")
     return {"candidates": cands, "method": method,
             "script": str(script) if script else None}

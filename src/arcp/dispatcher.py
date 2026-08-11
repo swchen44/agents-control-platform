@@ -305,7 +305,9 @@ class Dispatcher:
         # (A/B 測試 / 泛化 triage);選中的由下方 session 建立時 鎖定,resume 不重選。
         elif sess is None and getattr(profile, "select", None):
             from .selection import UNTRIAGEABLE, select_profile
-            chosen, meta = select_profile(ticket, profile, self.profiles)
+            chosen, meta = select_profile(
+                ticket, profile, self.profiles,
+                clearquest_id=parse_ticket_meta(ticket.description).get("crid"))
             if chosen == UNTRIAGEABLE:            # triage 判不出 → 中止,不跑 agent
                 return self._abort_untriageable(ticket, meta, events)
             if chosen != profile.name and chosen in self.profiles:
