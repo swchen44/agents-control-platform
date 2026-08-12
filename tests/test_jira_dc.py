@@ -142,5 +142,70 @@ t = d3._to_ticket({"id": "7", "key": "P-7", "fields": {
     "assignee": {"displayName": "Bob", "name": "bob"}}})
 check("_to_ticket dc:assignee_id=name", t.assignee_id == "bob")
 
+# ── L5:dc 純文字/wiki(comment/description/deliverables)──────────── #
+d3._request = _fake                    # 重掛 spy(前面測試已換過)
+_bodies.clear()
+d3.add_comment("P-1", "哈囉")
+check("add_comment dc:body 是純文字字串",
+      _bodies[-1] == {"body": "哈囉"})
+d3.set_description("P-1", "內容")
+check("set_description dc:字串(cloud 才 ADF)",
+      _bodies[-1] == {"fields": {"description": "內容"}})
+_cb = []
+c._request = lambda m, p, params=None, body=None: _cb.append(body) or {}
+c.add_comment("P-1", "hi")
+check("add_comment cloud:仍是 ADF dict(零變)",
+      isinstance(_cb[-1]["body"], dict) and _cb[-1]["body"]["type"] == "doc")
+
+import json as _json  # noqa: E402
+import tempfile as _tf  # noqa: E402
+
+from arcp.deliverables import build_comment_wiki, post_deliverables  # noqa: E402
+from arcp.output import load_output  # noqa: E402
+from arcp.store import Store, TicketSession  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
+
+_wsd = _tf.mkdtemp()
+_json.dump({"summary_md": "n", "code": [{"url": "http://g/+/1",
+                                         "note": "改了X"}],
+            "references": [{"label": "R", "path_or_url": "http://r"}]},
+           open(os.path.join(_wsd, "OUTPUT.json"), "w"))
+_out = load_output(_wsd)
+wiki = build_comment_wiki(outcome="SUCCESS", attempt=2, cost_usd=0.5,
+                          self_summary="完成A", output=_out,
+                          attach_names=[], mode="none", download_url=None,
+                          base_url=None, key="P-1")
+check("build_comment_wiki:h3/h4/連結/自報 wiki 語法",
+      wiki.startswith("h3. [agent] outcome=SUCCESS")
+      and "*自報:* 完成A" in wiki and "* [改了X|http://g/+/1]" in wiki
+      and "h4. 程式碼(Gerrit)" in wiki and "* [R|http://r]" in wiki)
+
+
+class _DCSrc:                                   # dc source:交付物走 wiki 路
+    flavor = "dc"
+
+    def __init__(self):
+        self.comments, self.adf = [], []
+
+    def add_comment(self, iid, text):
+        self.comments.append(text)
+
+    def add_comment_adf(self, iid, doc, detail=""):
+        self.adf.append(doc)
+
+
+_st = Store(_tf.mkdtemp())
+_sess = TicketSession(issue_id=1, key="P-1", profile="p", workspace=_wsd,
+                      session_id="s", attempts=1, outcome="SUCCESS",
+                      pending_reason=None, cost_usd=0.1)
+_tk = Ticket(id=1, key="P-1", summary="s", state="Done", assignee=None,
+             assignee_id=None, description="")
+_dc = _DCSrc()
+post_deliverables(_dc, _st, _tk, _sess, outcome="SUCCESS",
+                  self_summary="done")
+check("post_deliverables dc:走 add_comment(wiki),不走 ADF",
+      len(_dc.comments) == 1 and _dc.adf == []
+      and _dc.comments[0].startswith("h3. "))
+
 print(f"test-jira-dc: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

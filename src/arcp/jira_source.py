@@ -256,14 +256,20 @@ class JiraCloudSource:
                 created=c.get("created", "")))
         return out
 
+    def _rich(self, text: str):
+        """description/comment body 的 flavor 形式:cloud=ADF doc、
+        dc=純文字/wiki markup 字串(api/2 直接吃字串;主題 L5)。"""
+        return text_to_adf(text) if self.flavor == "cloud" else text
+
     def add_comment(self, id_or_key: str | int, text: str) -> None:
         self._request("POST", f"{self._api}/issue/{id_or_key}/comment",
-                      body={"body": text_to_adf(text)})
+                      body={"body": self._rich(text)})
         self._notify_write("comment", id_or_key, text)
 
     def add_comment_adf(self, id_or_key: str | int, adf_doc: dict,
                         detail: str = "") -> None:
-        """貼一則已組好的 ADF comment(交付物用結構化 ADF,見 arcp/adf.py)。"""
+        """貼一則已組好的 ADF comment(**cloud 專用**;dc 的結構化交付物
+        走 deliverables.build_comment_wiki + add_comment)。"""
         self._request("POST", f"{self._api}/issue/{id_or_key}/comment",
                       body={"body": adf_doc})
         self._notify_write("comment", id_or_key, detail or "(adf)")
@@ -311,7 +317,7 @@ class JiraCloudSource:
         fields: dict[str, Any] = {
             "project": {"key": project_key},
             "summary": summary,
-            "description": text_to_adf(description),
+            "description": self._rich(description),
             "issuetype": {"id": issue_type_id},
         }
         if labels:
@@ -353,7 +359,7 @@ class JiraCloudSource:
     def set_description(self, id_or_key: str | int, text: str) -> None:
         """Overwrite the issue description (W2.3 審批門寫分區段 plan)。"""
         self._request("PUT", f"{self._api}/issue/{id_or_key}",
-                      body={"fields": {"description": text_to_adf(text)}})
+                      body={"fields": {"description": self._rich(text)}})
         self._notify_write("description", id_or_key, "更新 description")
 
     def assign(self, id_or_key: str | int, account_id: str | None) -> None:

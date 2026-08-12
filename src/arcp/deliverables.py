@@ -95,6 +95,47 @@ def build_comment_adf(*, outcome: str, attempt: int, cost_usd: float,
     return adf.doc(*blocks)
 
 
+def build_comment_wiki(*, outcome: str, attempt: int, cost_usd: float,
+                       self_summary: str, output: Output | None,
+                       attach_names: list[str], mode: str,
+                       download_url: str | None, base_url: str | None,
+                       key: str) -> str:
+    """DC(api/2)版交付物 comment:wiki markup 字串(主題 L5)。
+    與 build_comment_adf 同參數同結構——h3./h4. 標題、[label|url] 連結、
+    * 清單;內容有變動時兩函式要一起改。"""
+    lines = [f"h3. [agent] outcome={outcome}"
+             f"(attempt {attempt},累計 ${cost_usd:.4f})"]
+    if self_summary.strip():
+        lines.append(f"*自報:* {self_summary.strip()}")
+    if output and output.code:
+        lines.append("h4. 程式碼(Gerrit)")
+        for c in output.code:
+            url = c.get("url") or ""
+            label = c.get("note") or c.get("ref") or url or "(change)"
+            lines.append(f"* [{label}|{url}]" if url else f"* {label}")
+    if mode == "attach" and attach_names:
+        lines.append("h4. 附件(已附到本票)")
+        lines.extend(f"* {n}" for n in attach_names)
+    elif mode == "link" and attach_names:
+        lines.append("h4. 附件(檔案較大,用下載連結)")
+        lines.extend(f"* {n}" for n in attach_names)
+        if download_url:
+            lines.append(f"[⬇ 下載附件(一次性連結)|{download_url}]")
+    if output and output.references:
+        lines.append("h4. 參考(指標,未上傳)")
+        for r in output.references:
+            tgt = r.get("path_or_url") or ""
+            lab = r.get("label") or tgt
+            note = f"（{r['note']}）" if r.get("note") else ""
+            lines.append(f"* [{lab}|{tgt}]{note}" if tgt.startswith("http")
+                         else f"* {lab}: {tgt}{note}")
+    if not (output and (output.summary_md or output.code or output.references)) \
+            and mode == "none":
+        lines.append("(agent 未產出 OUTPUT.json;僅上方自報可參考)")
+    lines.append("完整敘事與評分:稍後會發一次性表單連結給你(HIL(End))。")
+    return "\n".join(lines)
+
+
 def post_deliverables(source, store, ticket, sess, *, outcome: str,
                       self_summary: str, download_url: str | None = None,
                       base_url: str | None = None) -> list[dict]:
@@ -124,13 +165,16 @@ def post_deliverables(source, store, ticket, sess, *, outcome: str,
     # comment 的自報已足夠,不製造噪音(降級只 journal has_output=false)。
     if output is not None:
         try:
-            body = build_comment_adf(
+            kw = dict(
                 outcome=outcome, attempt=sess.attempts, cost_usd=sess.cost_usd,
                 self_summary=self_summary, output=output, attach_names=names,
                 mode=mode, download_url=download_url, base_url=base_url,
                 key=ticket.key)
-            source.add_comment_adf(ticket.id, body,
-                                   detail=f"deliverables:{outcome}")
+            if getattr(source, "flavor", "cloud") == "dc":   # 主題 L5:wiki
+                source.add_comment(ticket.id, build_comment_wiki(**kw))
+            else:
+                source.add_comment_adf(ticket.id, build_comment_adf(**kw),
+                                       detail=f"deliverables:{outcome}")
         except Exception as e:  # noqa: BLE001
             log.warning("貼交付物 comment 失敗 %s: %s", ticket.key, e)
 
