@@ -128,10 +128,13 @@ def main(argv: list[str] | None = None) -> int:
     # 不會產生孤兒 runtime。DB/events/workspaces 都在此(gitignore)。
     runtime = runtime_dir() or "./runtime"
     _wr = source_cfg.get("write_retry") or {}            # A3(N8)
+    _flavor = source_cfg.get("jira_flavor", "cloud")     # 主題 L:cloud|dc
     src = JiraCloudSource(
-        *jira_credentials(base_url_override=source_cfg.get("jira_base_url")),
+        *jira_credentials(base_url_override=source_cfg.get("jira_base_url"),
+                          flavor=_flavor),
         write_retry_max=int(_wr.get("max", 5)),
-        write_retry_base=float(_wr.get("base_sec", 1.0)))
+        write_retry_base=float(_wr.get("base_sec", 1.0)),
+        flavor=_flavor)
     profiles = load_profiles(cfg_path)
     store = Store(runtime)                   # 持久,絕不 wipe(lesson #9)
 

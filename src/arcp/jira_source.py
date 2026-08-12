@@ -1,13 +1,19 @@
-"""Jira Cloud REST v3 source adapter. stdlib only.
+"""Jira source adapter — Cloud(REST v3)+ Data Center(REST v2)。stdlib only.
 
-The ONLY file that knows Cloud specifics (v3 endpoints, ADF rich text,
-email+API-token basic auth). Moving to Jira Server/DC = replace this file;
-everything upstream consumes ticket.Ticket (v5 D6b).
+The ONLY file that knows Jira specifics; everything upstream consumes
+ticket.Ticket (v5 D6b). **Cloud vs DC 差異一覽 = 頂部 `_FLAVOR` 表**(主題 L):
+api 版本、user 識別欄位(accountId vs name)、@mention 語法、user-search 參數。
+邏輯性差異(search 端點/認證/ADF vs 純文字)在對應方法內 if flavor。
+設計正本:docs/design/jira-dc.md。
+
+認證:cloud = email+API token(Basic);dc = **PAT(Bearer,8.14+)**優先,
+或 username+password(Basic)——由「flavor=dc 且 user 為空」判定走 PAT
+(見 config.jira_credentials 的回傳約定)。
 
 Endpoint note: Cloud deprecated GET /rest/api/3/search in 2025; the current
 endpoint is /rest/api/3/search/jql (paged via nextPageToken). We call the new
-one and fall back to the legacy path on 404/410/410-gone semantics, so the
-same adapter also survives older deployments.
+one and fall back to the legacy path on 404/410 semantics. DC 一律走
+/rest/api/2/search(startAt/total 分頁;harness 每輪只取一頁,與 Cloud 對稱)。
 """
 
 from __future__ import annotations
@@ -38,6 +44,14 @@ def _ssl_context() -> ssl.SSLContext:
         return ssl.create_default_context()
 
 _FIELDS = "summary,status,assignee,labels,description,updated"
+
+# 主題 L:Cloud vs DC 差異表(一覽無遺;方法內讀表,邏輯性差異才 if flavor)
+_FLAVOR = {
+    "cloud": {"api": "3", "uid": "accountId",
+              "mention": "[~accountid:{}]", "usearch": "query"},
+    "dc":    {"api": "2", "uid": "name",
+              "mention": "[~{}]", "usearch": "username"},
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -83,15 +97,24 @@ def text_to_adf(text: str) -> dict:
 class JiraCloudSource:
     def __init__(self, base_url: str, email: str, api_token: str,
                  timeout: float = 20.0, write_retry_max: int = 5,
-                 write_retry_base: float = 1.0):
+                 write_retry_base: float = 1.0, flavor: str = "cloud"):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        if flavor not in _FLAVOR:
+            raise ValueError(f"unknown jira flavor {flavor!r}"
+                             f"(expected {'/'.join(_FLAVOR)})")
+        self.flavor = flavor
+        self.f = _FLAVOR[flavor]
+        self._api = "/rest/api/" + self.f["api"]
         # A3 (N8): only WRITES back off on rate-limit/5xx — reads are idempotent
         # and the poll loop retries them next cycle, so reads never back off.
         self._write_retry_max = max(0, write_retry_max)
         self._write_retry_base = write_retry_base
-        raw = f"{email}:{api_token}".encode()
-        self._auth = "Basic " + base64.b64encode(raw).decode()
+        if flavor == "dc" and not email:          # PAT(Personal Access Token)
+            self._auth = "Bearer " + api_token
+        else:                                     # cloud email:token / dc 帳密
+            raw = f"{email}:{api_token}".encode()
+            self._auth = "Basic " + base64.b64encode(raw).decode()
         self._ssl = _ssl_context()
         # W6.7:harness→Jira 寫入回呼(留言/assign/transition/description);
         # run_poller 接成 store.journal("jira_write",…),供事件時間軸顯示
@@ -159,14 +182,14 @@ class JiraCloudSource:
 
     # -- API --------------------------------------------------------------- #
     def myself(self) -> dict:
-        return self._request("GET", "/rest/api/3/myself")
+        return self._request("GET", self._api + "/myself")
 
     def find_account_id(self, email: str) -> str | None:
         """email → accountId(user-search API)。優先 emailAddress 精確比對;
         GDPR 隱藏 email 時若唯一命中則取之。解析不到 → None(呼叫端當
         填表錯誤/換 fallback)。"""
         users = self._request(
-            "GET", "/rest/api/3/user/search?query="
+            "GET", self._api + "/user/search?query="
                    + urllib.parse.quote(email))
         if not isinstance(users, list):
             return None
@@ -177,7 +200,10 @@ class JiraCloudSource:
 
     def search(self, jql: str, max_results: int = 50) -> list[Ticket]:
         params = {"jql": jql, "fields": _FIELDS, "maxResults": max_results}
-        try:
+        if self.flavor == "dc":            # DC:api/2 search(startAt/total 分頁)
+            data = self._request("GET", self._api + "/search", params)
+            return [self._to_ticket(i) for i in data.get("issues", [])]
+        try:                               # Cloud:新端點 → 404/410 退舊端點
             data = self._request("GET", "/rest/api/3/search/jql", params)
         except urllib.error.HTTPError as e:
             if e.code not in (404, 410):
@@ -187,7 +213,7 @@ class JiraCloudSource:
 
     def get_ticket(self, id_or_key: str | int,
                    with_comments: bool = True) -> Ticket:
-        issue = self._request("GET", f"/rest/api/3/issue/{id_or_key}",
+        issue = self._request("GET", f"{self._api}/issue/{id_or_key}",
                               {"fields": _FIELDS})
         t = self._to_ticket(issue)
         if with_comments:
@@ -196,7 +222,7 @@ class JiraCloudSource:
 
     def get_comments(self, id_or_key: str | int) -> list[Comment]:
         data = self._request(
-            "GET", f"/rest/api/3/issue/{id_or_key}/comment",
+            "GET", f"{self._api}/issue/{id_or_key}/comment",
             {"orderBy": "created", "maxResults": 100})
         out = []
         for c in data.get("comments", []):
@@ -210,14 +236,14 @@ class JiraCloudSource:
         return out
 
     def add_comment(self, id_or_key: str | int, text: str) -> None:
-        self._request("POST", f"/rest/api/3/issue/{id_or_key}/comment",
+        self._request("POST", f"{self._api}/issue/{id_or_key}/comment",
                       body={"body": text_to_adf(text)})
         self._notify_write("comment", id_or_key, text)
 
     def add_comment_adf(self, id_or_key: str | int, adf_doc: dict,
                         detail: str = "") -> None:
         """貼一則已組好的 ADF comment(交付物用結構化 ADF,見 arcp/adf.py)。"""
-        self._request("POST", f"/rest/api/3/issue/{id_or_key}/comment",
+        self._request("POST", f"{self._api}/issue/{id_or_key}/comment",
                       body={"body": adf_doc})
         self._notify_write("comment", id_or_key, detail or "(adf)")
 
@@ -239,7 +265,7 @@ class JiraCloudSource:
             + ("Content-Type: %s" % ctype).encode() + crlf + crlf
             + data + crlf
             + b"--" + boundary.encode() + b"--" + crlf)
-        url = self.base_url + f"/rest/api/3/issue/{id_or_key}/attachments"
+        url = self.base_url + f"{self._api}/issue/{id_or_key}/attachments"
         req = urllib.request.Request(url, data=body, method="POST", headers={
             "Authorization": self._auth,
             "Accept": "application/json",
@@ -269,7 +295,7 @@ class JiraCloudSource:
         }
         if labels:
             fields["labels"] = labels
-        issue = self._request("POST", "/rest/api/3/issue",
+        issue = self._request("POST", self._api + "/issue",
                               body={"fields": fields})
         return self.get_ticket(issue["id"], with_comments=False)
 
@@ -281,14 +307,14 @@ class JiraCloudSource:
         transition whose target statusCategory matches (new|indeterminate|done,
         locale-immune)."""
         data = self._request("GET",
-                             f"/rest/api/3/issue/{id_or_key}/transitions")
+                             f"{self._api}/issue/{id_or_key}/transitions")
         trs = data.get("transitions", [])
         if prefer_status:                        # 優先按狀態名(取消狀態,workflow 相關)
             for tr in trs:
                 if (tr["to"].get("name") or "").strip().lower() \
                         == prefer_status.strip().lower():
                     self._request("POST",
-                                 f"/rest/api/3/issue/{id_or_key}/transitions",
+                                 f"{self._api}/issue/{id_or_key}/transitions",
                                  body={"transition": {"id": tr["id"]}})
                     self._notify_write("transition", id_or_key, prefer_status)
                     return True
@@ -297,7 +323,7 @@ class JiraCloudSource:
         for tr in trs:
             if tr["to"]["statusCategory"]["key"] == to_category:
                 self._request("POST",
-                             f"/rest/api/3/issue/{id_or_key}/transitions",
+                             f"{self._api}/issue/{id_or_key}/transitions",
                              body={"transition": {"id": tr["id"]}})
                 self._notify_write("transition", id_or_key, to_category)
                 return True
@@ -305,20 +331,20 @@ class JiraCloudSource:
 
     def set_description(self, id_or_key: str | int, text: str) -> None:
         """Overwrite the issue description (W2.3 審批門寫分區段 plan)。"""
-        self._request("PUT", f"/rest/api/3/issue/{id_or_key}",
+        self._request("PUT", f"{self._api}/issue/{id_or_key}",
                       body={"fields": {"description": text_to_adf(text)}})
         self._notify_write("description", id_or_key, "更新 description")
 
     def assign(self, id_or_key: str | int, account_id: str | None) -> None:
         """Set assignee by accountId(None = 取消指派)。W2.3/W2.4 換手用。"""
-        self._request("PUT", f"/rest/api/3/issue/{id_or_key}/assignee",
+        self._request("PUT", f"{self._api}/issue/{id_or_key}/assignee",
                       body={"accountId": account_id})
         self._notify_write("assign", id_or_key, account_id or "(取消指派)")
 
     def add_watcher(self, id_or_key: str | int, account_id: str) -> None:
         """加 watcher(關注者)by accountId(K:開票時把 profile.approver 加關注)。
         Jira watcher API 特別:POST body 是**裸 accountId 字串**(非物件)。"""
-        self._request("POST", f"/rest/api/3/issue/{id_or_key}/watchers",
+        self._request("POST", f"{self._api}/issue/{id_or_key}/watchers",
                       body=account_id)
         self._notify_write("watcher", id_or_key, account_id)
 

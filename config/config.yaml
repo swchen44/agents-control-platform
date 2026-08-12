@@ -13,6 +13,10 @@ outer_loop:
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
     # jira_base_url: https://<你的>.atlassian.net  # 填了 dashboard/poller 都用它;
     #                    # 不填則用 ~/.env 的 JIRA_BASE_URL(此檔進版控,勿寫機密)
+    # jira_flavor: dc   # 主題 L:cloud(預設)| dc(Data Center/Server)。
+    #                   # dc 憑證:~/.env 填 JIRA_PAT(建議,8.14+ Bearer)或
+    #                   # JIRA_USERNAME+JIRA_PASSWORD;api/2、name 識別、[~username]
+    #                   # mention、wiki 純文字。詳 docs/design/jira-dc.md。
     write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
     # bot_account_id: '...'   # 可選(W12):機器人 accountId;不填→啟動 myself() 解析
     # W6.4:定時快照器已移除(耗資源)。transcript 改事件觸發+被動按鈕。

@@ -36,8 +36,10 @@ def main() -> int:
         else:                                 # agent-job:需 Jira source 建票
             from arcp.config import jira_credentials
             from arcp.jira_source import JiraCloudSource
+            _flavor = source_cfg.get("jira_flavor", "cloud")   # 主題 L
             source = JiraCloudSource(*jira_credentials(
-                base_url_override=source_cfg.get("jira_base_url")))
+                base_url_override=source_cfg.get("jira_base_url"),
+                flavor=_flavor), flavor=_flavor)
             project = source_cfg.get("project") or "SCRUM"
             evs = fire_agent_job(tr, source, store, root, project)
         for e in evs:
