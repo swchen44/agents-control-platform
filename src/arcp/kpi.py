@@ -34,18 +34,22 @@ def _median_p90(vals: list[float]) -> tuple[float | None, float | None]:
 
 
 def compute_kpi(journal: list[dict], sessions: list, now: float | None = None,
-                since: float = 0.0) -> dict:
+                since: float = 0.0, profile: str | None = None) -> dict:
     """→ 結構化 KPI dict(dashboard /data 與 /api/v1/kpi 共用)。
 
     journal=事件 list(dict);sessions=session dict 的 list;since>0 只計
-    「該票最後活動 >= since」的票(時間窗)。"""
+    「該票最後活動 >= since」的票(時間窗);profile=只計 session.profile
+    等於該名的票(C6 A/B 手選對照——注意:非隨機分流的 profile 對照,
+    差異可能來自任務不同質,僅供參考)。"""
     now = time.time() if now is None else now
+    sess_by = {s.get("issue_id"): s for s in sessions}
     by_iid: dict[int, list] = {}
     for e in journal:
         iid = e.get("issue_id")
         if isinstance(iid, int) and iid > 0:
+            if profile and (sess_by.get(iid) or {}).get("profile") != profile:
+                continue
             by_iid.setdefault(iid, []).append(e)
-    sess_by = {s.get("issue_id"): s for s in sessions}
 
     n_new = n_routed = 0          # Automation coverage(全事件粒度,不分票齡)
     closed_ids, resolved_ids, aborted, first_pass = [], [], [], []

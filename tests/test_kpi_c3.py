@@ -101,5 +101,20 @@ check("空資料不炸:比率 None、清單空",
       k3["north_star"]["first_pass_close_rate_strict"] is None
       and k3["efficiency"]["throughput_weekly"] == [0, 0, 0, 0])
 
+# C6 A/B:profile 過濾(手選對照)
+S2 = [dict(s, profile=("pa" if s["issue_id"] in (1, 4) else "pb"))
+      for s in S]
+ka = compute_kpi(J, S2, now=NOW, profile="pa")
+kb = compute_kpi(J, S2, now=NOW, profile="pb")
+check("profile 過濾:pa 只含票1/4(closed 1、first_pass 1)",
+      ka["north_star"]["closed"] == 1
+      and ka["north_star"]["first_pass"] == 1)
+check("profile 過濾:pb 含票2/3 closed(皆 rework → first_pass 0)",
+      kb["north_star"]["closed"] == 2
+      and kb["north_star"]["first_pass"] == 0)
+check("profile 過濾:未知名 → 全空不炸",
+      compute_kpi(J, S2, now=NOW,
+                  profile="nope")["north_star"]["closed"] == 0)
+
 print(f"test-kpi-c3: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

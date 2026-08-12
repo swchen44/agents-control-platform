@@ -116,7 +116,7 @@ pre-commit hook:`git config core.hooksPath .githooks`(ruff + 動 src/scripts 時
 - **主題 L — Jira Data Center 相容**(L1 flavor 抽象~L7;Cloud user search 三坑已記):
   內網生產必經,**需與使用者多討論後動工**。
 - **I1 close→CQ 回寫**:設計定案、config 擴充點已留,等使用者給 CQ base_url+欄位名。
-- C3 KPI 框架(first-pass close rate + Goodhart 制衡)、E4 A/B 報表。
+- (C3 KPI 框架與 A/B 對照已完成 2026-08-13;先前誤標的「E4 A/B 報表」實為此項——BACKLOG 的 E4 是 qm adapter spike,另案。)
   (C2 trace CI 與主題 H 文件自足**已完成**;D1 Docker 隔離**不做**——使用者
   決策 2026-08-12,隔離維持 seatbelt/--sandbox,provider 介面留著。)
 - 待複驗:e2e_commands C3/C5(真 Jira+真 agent 疑時序 flaky,下次整合測試專驗)。

@@ -352,6 +352,15 @@ try:
           "north_star" in kj and "efficiency" in kj)
     check("KPI:首頁容器+渲染 JS+制衡警語",
           "id='kpi3'" in idx and "renderKpi3" in idx and "調鬆 verify" in idx)
+    # C6:A/B 手選對照(?profile= 過濾 + 首頁對照區 + 非隨機警語)
+    kp = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/api/v1/kpi?profile=nonexistent",
+        timeout=5).read())
+    check("A/B:/api/v1/kpi?profile= 過濾(未知名→空not炸)",
+          kp["north_star"]["closed"] == 0)
+    check("A/B:首頁對照區容器+JS+非隨機分流警語",
+          "id='ab'" in idx and "renderAbBar" in idx
+          and "非隨機分流" in idx)
 
     # C5:粗看全域時間軸(/timeline)——色帶+事件點+側欄資料島+說明卡
     ov = urllib.request.urlopen(

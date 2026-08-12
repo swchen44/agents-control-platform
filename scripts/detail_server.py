@@ -1312,6 +1312,40 @@ function renderKpi3(){const K=D.kpi3;if(!K)return;
  ${kfmt(K.all.coverage.automation_coverage,'%')}(routed
  ${K.all.coverage.routed}/${K.all.coverage.new_issues})。
  一次到位 = 無 retry / 打回(continue)/ 換手。</div></div>`;}
+// ---- C6 A/B 對照(手選 profiles 比 KPI;非隨機分流僅供參考)----
+let AB_SEL=new Set(),AB_CACHE={};
+function renderAbBar(){const profs=[...new Set(D.rows.map(r=>r.profile).filter(Boolean))].sort();
+ if(profs.length<2){$('ab').innerHTML='';return;}
+ const boxes=profs.map(p=>`<label style='margin-right:10px;font-weight:400'>
+  <input type='checkbox' ${AB_SEL.has(p)?'checked':''} onchange='abToggle("${p}")'> ${p}</label>`).join('');
+ $('ab').innerHTML=`<h2>A/B 對照(選 2+ 個 profile 比 KPI)</h2>
+  <div class='card'><div>${boxes}</div><div id='abtbl' style='overflow-x:auto;margin-top:8px'></div>
+  <div class='sys' style='text-align:left'>⚠️ 手選 profile 的對照<b>非隨機分流</b>
+  ——差異可能來自任務不同質,僅供參考;樣本小(n&lt;10)差異無意義。同一
+  select 家族隨機分流的腿才是統計可比的真 A/B。</div></div>`;
+ renderAbTbl();}
+async function abToggle(p){AB_SEL.has(p)?AB_SEL.delete(p):AB_SEL.add(p);
+ if(!AB_CACHE[p]&&AB_SEL.has(p)){
+  try{AB_CACHE[p]=await (await fetch('/api/v1/kpi?profile='+encodeURIComponent(p))).json();}
+  catch(e){AB_CACHE[p]=null;}}
+ renderAbTbl();}
+function renderAbTbl(){const el=$('abtbl');if(!el)return;
+ const sel=[...AB_SEL];
+ if(sel.length<2){el.innerHTML="<span style='color:var(--muted)'>(勾選 2 個以上開始對照)</span>";return;}
+ const rows=[["First-pass(嚴格)",k=>kfmt(k.north_star.first_pass_close_rate_strict,'%')+` (${k.north_star.first_pass}/${k.north_star.closed})`],
+  ["First-pass(進行)",k=>kfmt(k.north_star.first_pass_close_rate_progress,'%')],
+  ["Cycle med/p90(分)",k=>kfmt(k.efficiency.cycle_time_min_med)+' / '+kfmt(k.efficiency.cycle_time_min_p90)],
+  ["Attempts/close",k=>kfmt(k.efficiency.attempts_per_close_med)],
+  ["$/close med",k=>k.efficiency.cost_per_close_med==null?'–':'$'+k.efficiency.cost_per_close_med],
+  ["打回率",k=>kfmt(k.guard.continue_rate,'%')],
+  ["人評 med(n)",k=>kfmt(k.guard.human_score_med)+` (n=${k.guard.human_score_n})`],
+  ["UNKNOWN 率",k=>kfmt(k.guard.unknown_rate,'%')],
+  ["放棄率",k=>kfmt(k.guard.abandonment_rate,'%')],
+  ["樣本(終態/closed)",k=>`${k.north_star.resolved} / ${k.north_star.closed}`]];
+ const head='<tr><td></td>'+sel.map(p=>`<td><b>${p}</b></td>`).join('')+'</tr>';
+ const body=rows.map(([l,f])=>'<tr><td><b>'+l+'</b></td>'+sel.map(p=>{
+   const k=AB_CACHE[p];return '<td>'+(k?f(k):'…')+'</td>';}).join('')+'</tr>').join('');
+ el.innerHTML=`<table><thead>${head}</thead><tbody>${body}</tbody></table>`;}
 // ---- 分桶(日/週) ----
 function bkey(ts,wk){const d=new Date(ts*1000);
   if(wk){const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);}
@@ -1511,7 +1545,7 @@ function renderTable(rows){
   $('pginfo').textContent=rows.length+' 筆 · 第 '+(S.page+1)+'/'+pages+' 頁';
   resizable($('tix'),'tix');          // W5.7 欄寬可拖曳
 }
-function render(){syncPalette();prep();const rows=filtered();renderStats(rows);renderKpi3();var _u=$('upd');if(_u)_u.textContent='更新於 '+_TM.format(new Date());
+function render(){syncPalette();prep();const rows=filtered();renderStats(rows);renderKpi3();renderAbBar();var _u=$('upd');if(_u)_u.textContent='更新於 '+_TM.format(new Date());
   renderTime(rows);renderMoney(rows);
   renderPState(rows);renderPCost(rows);renderPScore(rows);   // W7.4 per-profile
   renderTable(rows);markRx();save();}
@@ -1929,6 +1963,7 @@ def render_index(journal, sessions, watch=None) -> str:
             f"<div class='stats' id='stats'>"
             f"{overview_cards(sessions, journal)}</div>"
             f"<div id='kpi3'></div>"
+            f"<div id='ab'></div>"
             f"{charts}"
             f"<h2>Tickets</h2>{toolbar}"
             f"<div class='card' style='overflow-x:auto'>"
@@ -2958,10 +2993,14 @@ def openapi_spec() -> dict:
                 "tags": ["llm-api(唯讀)"],
                 "summary": "C3 KPI:北極星(First-pass close 雙報)+效率+"
                            "制衡(打回率/人評/UNKNOWN/放棄)+coverage",
-                "parameters": [{"name": "days", "in": "query",
-                                "required": False,
-                                "description": "時間窗天數(省略=全歷史)",
-                                "schema": {"type": "number"}}],
+                "parameters": [
+                    {"name": "days", "in": "query", "required": False,
+                     "description": "時間窗天數(省略=全歷史)",
+                     "schema": {"type": "number"}},
+                    {"name": "profile", "in": "query", "required": False,
+                     "description": "只計該 profile 的票(C6 A/B 對照;"
+                                    "非隨機分流僅供參考)",
+                     "schema": {"type": "string"}}],
                 "responses": {"200": {"description":
                                       "north_star/efficiency/guard/coverage",
                                       "content": {"application/json": {}}}}}},
@@ -4183,15 +4222,16 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/server/data":            # W6.1 Server 頁資料源
             self._send_json(build_server_data())
             return
-        if self.path.startswith("/api/v1/kpi"):   # C3:KPI(?days=N 時間窗)
+        if self.path.startswith("/api/v1/kpi"):   # C3:KPI(?days=N&profile=X)
             from urllib.parse import parse_qs, urlparse
 
             from arcp.kpi import compute_kpi
             qs = parse_qs(urlparse(self.path).query)
             days = qs.get("days", [None])[0]
             since = (time.time() - float(days) * 86400) if days else 0.0
-            self._send_json(compute_kpi(journal, list(sessions.values()),
-                                        since=since))
+            self._send_json(compute_kpi(
+                journal, list(sessions.values()), since=since,
+                profile=qs.get("profile", [None])[0]))   # C6:A/B 對照
             return
         if self.path.startswith("/api/v1/tickets"):  # W7.7 LLM 監控 API
             self._api_v1(journal, sessions)

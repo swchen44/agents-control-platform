@@ -49,8 +49,19 @@ Layer attribution / MTTD / Human touch time / Escape(reopen)率 /
 Ticket 複雜度分布——等有人工記錄流程再議。Trace completeness 由 C2
 `scripts/trace_lint.py` 另管(唯一 P1 硬目標 100%)。
 
+## A/B 對照(C6,2026-08-13;使用者定案=手選簡單版)
+
+Dashboard 首頁「A/B 對照」區:勾選 2+ 個 profile → 每欄一個 profile 的
+C3 全指標對照表(前端按需 `GET /api/v1/kpi?profile=X`)。
+
+**可比性警語(顯示在表下)**:手選 profile 的對照**非隨機分流**——差異可能
+來自任務不同質,僅供參考;樣本小(n<10)差異無意義。**同一 select 家族
+隨機分流的腿才是統計可比的真 A/B**(家族自動分組未做,使用者定案簡單版;
+要真 A/B:一個 main profile 配 `select: {method: random, candidates: [...]}`,
+分流資料在 journal `profile_selected`)。
+
 ## 介面
 
 - Dashboard 首頁「KPI · 北極星+制衡」表(三窗;/data 的 `kpi3`)。
-- `GET /api/v1/kpi[?days=N]`(OpenAPI 已列)——自動化/報表拉數。
+- `GET /api/v1/kpi[?days=N][&profile=X]`(OpenAPI 已列)——自動化/報表拉數。
 - 時間窗語意:該票**最後活動**落在窗內才計入(coverage 例外,全歷史)。
