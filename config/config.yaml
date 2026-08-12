@@ -95,6 +95,17 @@ outer_loop:
   #     cron: '0 3 * * 1-5'        # 平日 03:00;停機錯過補跑一次(回溯 2 天)
   #     timeout_sec: 600
 
+  # KP2 整測:單次 agent-job(手動 fire:`uv run python scripts/run_trigger.py
+  # kp2-tasks`)→ 開兩張票,第二筆 script 覆寫 labels 驗分流。要定期加 cron/every。
+  triggers:
+    - name: kp2-tasks
+      run_name: gen
+      trigger_type: agent-job
+      script: kp2/gen_tasks.sh
+      labels: ['arcp.write']       # 保底(第一筆用);第二筆覆寫 arcp.creview
+      count: 1                     # 單次:poller 首輪自動 fire 一次(或手動
+      #                            # run_trigger);重測把 runtime trigger_state 歸零
+
   # 外部變更政策(人的指令改走「指令台」表單/REST,不再有 @agent 留言白名單)
   external_change:
     cancel_states: ['完成', 'Done', 'Cancelled']  # 人 out-of-band 關票 = 撤銷
@@ -111,6 +122,18 @@ outer_loop:
         labels: ['arcp.agent']
       profile: default
       on_match: notify_only          # 灰度:只記 route_matched,不接管
+
+    - name: kp2-writer               # KP2 整測:寫短文(真 agent haiku)
+      when:
+        labels: ['arcp.write']
+      profile: kp2-writer
+      on_match: create_or_resume
+
+    - name: kp2-creview              # KP2 整測:C code review
+      when:
+        labels: ['arcp.creview']
+      profile: kp2-creview
+      on_match: create_or_resume
 
     - name: filechain-server        # B+.2:走 agent-server backend(GUI/detail 可見)
       when:
@@ -177,6 +200,50 @@ outer_loop:
 # agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
 inner_loop:
   profiles:
+    kp2-writer:                    # KP2 整測:寫短文小任務
+      goal: '依描述主題寫 150-300 字繁中短文到 ARTICLE.md(# 標題開頭)'
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+        common_skills: [kp2-writing]
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        timeout_sec: 300
+      verify:
+        - name: article
+          files:
+            ARTICLE.md: '#'
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+      human_minutes_est: 20
+
+    kp2-creview:                   # KP2 整測:C code review
+      goal: 'Review 描述中的 C code,發現寫進 REVIEW.md(Bugs/Security/Style 三節)'
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+        common_skills: [kp2-creview]
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        timeout_sec: 300
+      verify:
+        - name: review
+          files:
+            REVIEW.md: 'Review'
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+      human_minutes_est: 30
+
     filechain:
       workspace:
         template: empty
