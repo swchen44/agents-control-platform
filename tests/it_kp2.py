@@ -113,9 +113,10 @@ def t1(src):
         f"email: {EMAIL}\n\n主題:自動化測試的價值。",
         issue_type_id=TASK_TYPE, labels=["arcp.write"])
     print(f"    建票 {t.key}(id={t.id})")
-    check("T1: 接管+執行中 → Jira In Progress",
-          wait("In Progress", lambda: jira_state(src, t.id) == "In Progress",
-               timeout=180))
+    check("T1: 接管+執行中(In Progress;haiku 一輪內完成則直接 SUCCESS)",
+          wait("In Progress/SUCCESS",
+               lambda: jira_state(src, t.id) == "In Progress"
+               or arcp(t.id).get("outcome") == "SUCCESS", timeout=180))
     check("T1: agent SUCCESS(outcome)",
           wait("SUCCESS", lambda: arcp(t.id).get("outcome") == "SUCCESS",
                timeout=420))
@@ -144,21 +145,30 @@ def t1(src):
 def t2(src):
     print("== T2 agent-job 分流(script 覆寫 labels → 不同 route)==")
     lst = _get(f"{ARCP_API}/api/v1/tickets")["tickets"]
-    by_prof = {}
+    by_prof: dict = {}
     for x in lst:
         d = _get(f"{ARCP_API}/api/v1/tickets/{x['iid']}")
         if "[job]" in (d.get("summary") or ""):
-            by_prof[d.get("profile")] = d
+            by_prof.setdefault(d.get("profile"), []).append(d)
     check("T2: 兩張 job 票各命中 writer/creview",
           "kp2-writer" in by_prof and "kp2-creview" in by_prof,
           detail=str(list(by_prof)))
-    cre = by_prof.get("kp2-creview")
+    cres = by_prof.get("kp2-creview") or []
+    if not cres:
+        return None
+
+    def _any_success():        # 任一張達 SUCCESS(容忍歷史 FAILURE/被 cancel 的)
+        for c in cres:
+            d = arcp(c["iid"])
+            if d.get("outcome") == "SUCCESS":
+                return d
+        return None
+
+    cre = wait("creview SUCCESS", _any_success, timeout=420)
+    check("T2: creview 票 SUCCESS(任一張)", bool(cre))
     if not cre:
         return None
-    check("T2: creview 票 SUCCESS",
-          wait("creview SUCCESS", lambda: arcp(cre["iid"]).get(
-              "outcome") == "SUCCESS", timeout=420))
-    ws = arcp(cre["iid"]).get("workspace") or ""
+    ws = cre.get("workspace") or ""
     rev = os.path.join(ws, "REVIEW.md")
     check("T2: 產出 REVIEW.md(含 Review)",
           os.path.isfile(rev) and "Review" in open(rev, encoding="utf-8").read(),

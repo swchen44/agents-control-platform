@@ -343,7 +343,7 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 | N1 | **transition_to** | 精確按狀態名轉、不 fallback category(修 close 在多 done 狀態 workflow 挑錯 Cancelled 的致命 gap) | ✅ 本批 |
 | N2 | **輪同步** | dispatcher.handle 收尾按推導態同步(`_sync_key` 特判定案);目標=現況 skip;轉不到只 log;event `status_synced` | ✅ 本批 |
 | N3 | **close 兩步保險** | status_sync.closed 精確轉;不可達→先 hil_end(Resolve)再 closed;沒設=原 category 行為 | ✅ 本批 |
-| N4 | **KP2 實測** | poller 對 KP2 真跑全生命週期(In Progress/Pending/Resolve/Closed/Cancelled 各路徑)——**待使用者實測** | ⏳ |
+| N4 | **KP2 實測** | ✅ **2026-08-12 首輪全過**(`tests/it_kp2.py` REST T1–T4 + `tests/e2e_kp2_browser.md` B1–B4):T1 全生命週期(建票→In Progress→SUCCESS→Resolve→評分表單 close→**Closed**)、T2 agent-job label 分流、T3 cancel→Cancelled、T4 審批門→Pending。實測抓到並修掉 3 bug:issue_type_id 寫死(→config)、verify files 完全比對誤用(→existence-only)、**快 agent 一輪內完成漏 In Progress 中繼**(→_sync_status 補走中繼)。花費 ~$0.35(haiku 6 張票) | ✅ |
 
 ## AI 建議(供參考,你決定)
 

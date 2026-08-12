@@ -48,3 +48,16 @@
 ## 記錄
 
 執行日期/執行者/結果(逐項 ✅/❌ + 截圖路徑)附在 PR 或 BACKLOG 主題 N 註記。
+
+### 2026-08-12 首輪(agent browser,搭配 it_kp2.py 首跑)
+
+- B1 ✅:KP2-7 Closed(非 Cancelled——雙 done 回歸點過)、KP2-6 Cancelled、
+  KP2-3/4/5 Resolved、KP2-8 曾 Pending;KP2-1(無 label)不被接管留 To Do。
+- B2 ✅:description yaml/ARCP 區塊分段正常;outcome comment(SUCCESS/驗證
+  結果清單)與指令台連結 comment 渲染正常。@mention 通知未驗
+  (config 未設 mention_account_id,後續補)。
+- B3 ✅:評分表單駕駛艙(票/HIL(End)/grader 對照/花費/attempts/email 必填)
+  渲染正常;已提交表單顯示「✓ 已提交」+ 唯讀提交內容(一次性語意)。
+- B4 ✅:/timeline 每票一列、✔/✘ 終點與看板狀態一致。
+- 同輪 REST(it_kp2.py):T1–T4 全過(T1 首跑兩敗因=腳本舊斷言+測試選到
+  verify-bug 歷史票,修正後 T2 重跑 4/4;產品側三個 bug 見 KP2-B commit)。

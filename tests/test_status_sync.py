@@ -119,8 +119,31 @@ d._sync_status(_tk("In Progress"), [])
 check("sync:已在目標狀態 → 不轉", d.source.calls == [])
 d = _mk(_s(outcome="SUCCESS"))
 d._sync_status(_tk("In Progress"), [])          # Resolve 不在 reachable mock
-check("sync:轉不到(workflow 限制)→ 只 log 不炸",
-      d.source.calls == ["Resolve"])
+check("sync:轉不到 → 試 running 中繼後放棄、不炸",
+      d.source.calls == ["Resolve", "In Progress", "Resolve"])
+
+
+class _SrcLadder(_Src):
+    """模擬 KP2:Resolve 只能從 In Progress 進(To Do 直達會失敗)。"""
+
+    def transition_to(self, iid, name):
+        self.calls.append(name)
+        if name == "Resolve":
+            return self.calls[-2:-1] == ["In Progress"]
+        return name in ("In Progress", "Pending", "Cancelled")
+
+
+root = tempfile.mkdtemp()
+st = Store(os.path.join(root, "s"))
+st.upsert_session(_s(outcome="SUCCESS"))
+d = Dispatcher(_SrcLadder(), st, {}, root=root)
+d.status_sync = dict(SYNC)
+evs = []
+d._sync_status(_tk("To Do"), evs)               # 一輪內跑完:To Do→(中繼)→Resolve
+check("sync:快速完成漏中繼 → 補走 running 再到 hil_end",
+      d.source.calls == ["Resolve", "In Progress", "Resolve"]
+      and any(e["type"] == "status_synced" and e["to"] == "Resolve"
+              for e in evs))
 d = _mk(_s(outcome="ABORTED"))
 d._sync_status(_tk("Pending"), [])
 check("sync:aborted → Cancelled(任何狀態可進)",

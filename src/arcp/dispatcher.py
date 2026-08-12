@@ -409,7 +409,13 @@ class Dispatcher:
         if not target or (ticket.state or "").strip().lower() \
                 == target.strip().lower():
             return
-        if self.source.transition_to(ticket.id, target):
+        moved = self.source.transition_to(ticket.id, target)
+        if not moved and key == "hil_end" and cfg.get("running"):
+            # 中繼:agent 快到一輪內 To Do→終態,漏了 running 的 Jira 中繼
+            # (workflow 常要求 Resolve 只能從 In Progress 進)→ 補走一步再試
+            moved = (self.source.transition_to(ticket.id, cfg["running"])
+                     and self.source.transition_to(ticket.id, target))
+        if moved:
             events.append(self.store.journal(
                 "status_synced", ticket.id, ticket.key,
                 state=key, to=target))
