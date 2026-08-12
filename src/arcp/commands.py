@@ -98,7 +98,7 @@ COMMAND_INFO: dict[str, dict] = {
         "label": "改負責人(set_email)",
         "purpose": "更改本票負責人 email(門禁比對對象 + @mention 對象)",
         "when": "負責人交接、填錯 email、或要換人接手 HIL 表單",
-        "side_effect": "改 session.owner_email;敏感、需二次確認",
+        "side_effect": "改 session.owner_email_list;敏感、需二次確認",
         "effect": "@mention 新負責人並重貼待填表單;此後只有新 email"
                   "(或管理者/審批者)能操作本票"},
 }
@@ -171,10 +171,10 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
         new_email = normalize_email(args.get("email"))
         if not new_email or "@" not in new_email:
             return False, "請提供有效的 email(改負責人)。", []
-        old = sess.owner_email or "(無)"
+        old = sess.owner_email_list or "(無)"
         if new_email == normalize_email(old):
             return False, f"負責人已是 {new_email},無需更改。", []
-        sess.owner_email = new_email
+        sess.owner_email_list = new_email
         store.upsert_session(sess)
         try:                                        # re-tag:email → accountId
             acct = source.find_account_id(new_email)

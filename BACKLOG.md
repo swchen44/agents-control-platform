@@ -284,7 +284,32 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 | **K4** | **approver watcher** | 首建 session(鎖定 profile)把 `profile.approver` 加 Jira watcher(email 先轉 accountId);best-effort;`jira_source.add_watcher`;event `watcher_added` | ✅ `ce9f524` |
 | **K5** | **文件** | 設計文件 `identity-gate.md` + index + operator/user-guide + web `/concepts` 補門禁 | ✅ 完成 |
 
-**未做(可未來擴充)**:多負責人(目前單一 email);description email 改了自動同步(現定案=鎖定,只走 set_email)。
+**未做(可未來擴充)**:多負責人(**進行中,K6**);description email 改了自動同步(現定案=鎖定,只走 set_email)。
+
+## 主題 L — Jira Data Center 相容(2026-08-12 記錄,需多討論)
+
+> **背景**:現在走 **Jira Cloud**(`*.atlassian.net`、`JIRA_EMAIL`+`JIRA_API_TOKEN`、全 api/3、
+> **accountId**、ADF)。**內部生產是 Data Center**——DC **沒有 accountId**,識別碼是 `name`
+> (username)/`key`。目前整個 jira_source(18 處 api/3)+ @mention(3 處 `[~accountid:]`)全是
+> Cloud 假設,上 DC 會**全面失效**(且失敗很安靜:comment 建得出來、文字看得到,但**不觸發通知**)。
+
+| # | 項目 | Cloud 現況 → DC 目標 |
+|---|---|---|
+| L1 | **flavor 抽象** | config `jira.flavor: cloud\|dc`;jira_source 依 flavor 切端點/語法 |
+| L2 | **user search** | `/rest/api/3/user/search?query=email`(回 accountId)→ DC `/rest/api/2/user/search?username=email`(回 `name`;username 參數同時比對 username/顯示名/email) |
+| L3 | **@mention 語法** | Cloud ADF=mention node(`attrs.id`=accountId)/ Cloud wiki=`[~accountid:x]` / **DC=`[~username]`**。抽 `mention_tag(id)` helper,3 處(commands re-tag、hil、scoring)共用 |
+| L4 | **assign / add_watcher** | body accountId → DC 用 `name` |
+| L5 | **comment 格式** | api/3 ADF → DC 可能要 wiki markup(api/2) |
+| L6 | **email↔識別碼快取表**(該 AI 力薦) | 別在發通知關鍵路徑即時查(受隱私/權限/rate limit 三重影響);SQLite 建 `email↔識別碼↔displayName↔同步時間`,啟動/每日同步一次,失效再查,查不到退 fallback(reporter) |
+| L7 | **少反查** | 多數情況不需反查:mention 對象若來自 Jira 欄位(reporter/assignee/user picker),回傳物件本身帶識別碼,直接用;只有對象來自外部(AD/HR/設定檔)才需 email→識別碼 |
+
+**Cloud 三個坑(該 AI 提,值得先驗)**:①user search **沒權限不報錯、只回空陣列**——「查不到」與「沒權限」
+長一樣,要能區分(用已知帳號當 canary);目前 `find_account_id` 未區分(都回 None)。②用 email 搜 vs
+從回應讀 email 是兩回事——回應 `emailAddress` 受隱私控制常為空,但用完整 email 當 query 通常仍能嚴格匹配;
+**務必拿真帳號實測**。③個人 email 可能查不到(非受管帳號);公司站台通常受管,值得確認。
+
+**其他權威來源**:`/rest/api/3/user/search/query`(類 JQL)、Organizations REST `/v1/orgs/{orgId}/users/search`
+(org admin,最權威);連 admin 都拿不到完整 email → 管理主控台 CSV 匯出。
 
 ## AI 建議(供參考,你決定)
 

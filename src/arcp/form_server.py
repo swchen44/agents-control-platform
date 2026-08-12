@@ -251,7 +251,7 @@ def render_form_page(req, jira_up: bool = True, errors=None,
     if errors:
         err = ("<div class='err'>請修正:<ul>"
                + "".join(f"<li>{_esc(e)}</li>" for e in errors) + "</ul></div>")
-    # K:email 必填欄(供稽核 + 負責人門禁;票有 owner_email 才會比對)
+    # K:email 必填欄(供稽核 + 負責人門禁;票有 owner_email_list 才會比對)
     email_v = _esc(values.get("by", ""))
     email_field = ("<label>你是誰(email)*</label>"
                    f"<input type='email' name='by' value='{email_v}' "
@@ -558,8 +558,8 @@ class FormServer:
             return []
 
     def _gate(self, req, submitted: str) -> tuple[bool, str]:
-        """K:負責人 email 門禁。回 (放行?, 拒絕訊息)。此票 owner_email 為空 →
-        門禁未啟用(回 True);否則 submitted 須 == owner_email / ∈ admin_emails /
+        """K:負責人 email 門禁。回 (放行?, 拒絕訊息)。此票 owner_email_list 為空 →
+        門禁未啟用(回 True);否則 submitted 須 == owner_email_list / ∈ admin_emails /
         == 該票 profile.approver。"""
         from .identity import owner_gate
         sess = self.store.get_session(req.issue_id)

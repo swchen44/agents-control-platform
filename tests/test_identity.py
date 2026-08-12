@@ -10,7 +10,11 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from arcp.identity import normalize_email, owner_gate  # noqa: E402
+from arcp.identity import (  # noqa: E402
+    normalize_email,
+    normalize_email_list,
+    owner_gate,
+)
 
 ok = fail = 0
 
@@ -24,7 +28,7 @@ def check(name, cond):
 
 
 def _sess(email):
-    return SimpleNamespace(owner_email=email)
+    return SimpleNamespace(owner_email_list=email)
 
 
 def _prof(approver=None):
@@ -65,9 +69,22 @@ check("profile None + 非 owner/admin → 拒絕", owner_gate(
 check("admin_emails None 容錯 → 非 owner 拒絕", owner_gate(
     "x@x.com", _sess("boss@x.com"), _prof(), None)[0] is False)
 
-# ── normalize_email ─────────────────────────────────────────── #
+# ── K6:多負責人(逗號分隔)────────────────────────────────────── #
+MULTI = _sess("alice@x.com, Bob@X.com")
+check("多 owner:第一位 → 放行",
+      owner_gate("alice@x.com", MULTI, _prof(), ADMINS)[0] is True)
+check("多 owner:第二位(大小寫混)→ 放行",
+      owner_gate("bob@x.com", MULTI, _prof(), ADMINS)[0] is True)
+check("多 owner:陌生人 → 拒絕",
+      owner_gate("eve@x.com", MULTI, _prof(), ADMINS)[0] is False)
+
+# ── normalize_email / normalize_email_list ──────────────────── #
 check("normalize:None → ''", normalize_email(None) == "")
 check("normalize:strip+lower", normalize_email("  A@B.COM ") == "a@b.com")
+check("normalize_list:多值 strip+lower+去空",
+      normalize_email_list(" Alice@X.com, , bob@Y.tw ")
+      == "alice@x.com,bob@y.tw")
+check("normalize_list:None → ''", normalize_email_list(None) == "")
 
 print(f"test-identity: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

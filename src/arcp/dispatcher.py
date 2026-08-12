@@ -19,7 +19,7 @@ import uuid
 from .contract import agent_score, summarize
 from .deliverables import post_deliverables
 from .grader import AllOf, CommandGrader, FileChecklistGrader, JsonGrader
-from .identity import normalize_email
+from .identity import normalize_email_list
 from .inner_runner import run_attempt
 from .jira_source import JiraCloudSource
 from .logutil import get_logger
@@ -361,7 +361,7 @@ class Dispatcher:
                     workspace="(pending-approval)", session_id=None, attempts=0,
                     outcome=None, pending_reason=None, cost_usd=0.0,
                     clearquest_id=_meta.get("crid"),
-                    owner_email=normalize_email(_meta.get("email")))
+                    owner_email_list=normalize_email_list(_meta.get("email")))
                 events.extend(self._add_approver_watcher(ticket, profile))
             decision = self.approval.gate(ticket, profile, sess)
             self.store.upsert_session(sess)
@@ -389,7 +389,7 @@ class Dispatcher:
                 workspace=ws, session_id=None, attempts=0,
                 outcome=None, pending_reason=None, cost_usd=0.0,
                 clearquest_id=_meta.get("crid"),
-                owner_email=normalize_email(_meta.get("email")))
+                owner_email_list=normalize_email_list(_meta.get("email")))
             self.store.upsert_session(sess)
             events.append(self.store.journal(
                 "session_created", ticket.id, ticket.key,

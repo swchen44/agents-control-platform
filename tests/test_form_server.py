@@ -60,7 +60,7 @@ def test_owner_gate_wired():
         return TicketSession(
             issue_id=iid, key=key, profile="default", workspace="ws",
             session_id=None, attempts=0, outcome=None, pending_reason=None,
-            cost_usd=0.0, owner_email=owner)
+            cost_usd=0.0, owner_email_list=owner)
 
     req = build_request(10030, "SCRUM-30", "need_info", payload={"question": "q"})
     st = _store_with(req)

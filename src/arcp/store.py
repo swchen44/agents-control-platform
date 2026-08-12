@@ -58,7 +58,7 @@ class TicketSession:
     tokens: int = 0                   # budget:本票累計 token(input+output+cache)
     soft_tokens: int | None = None    # budget:本票可調 soft token(None=用 profile 預設)
     soft_usd: float | None = None     # budget:本票可調 soft usd(None=用 profile 預設)
-    owner_email: str | None = None    # K:負責人 email(首建自 description 契約;鎖定
+    owner_email_list: str | None = None    # K:負責人 email(首建自 description 契約;鎖定
     #                                   後只由指令台改)。有值→HIL/指令台提交比對門禁
 
 
@@ -99,7 +99,7 @@ class Store:
                 tokens         INTEGER NOT NULL DEFAULT 0,
                 soft_tokens    INTEGER,
                 soft_usd       REAL,
-                owner_email    TEXT,
+                owner_email_list    TEXT,
                 queued         INTEGER NOT NULL DEFAULT 0,
                 queued_at      REAL NOT NULL DEFAULT 0,
                 inactive       INTEGER NOT NULL DEFAULT 0,
@@ -165,7 +165,7 @@ class Store:
                           ("tokens", "INTEGER NOT NULL DEFAULT 0"),  # budget
                           ("soft_tokens", "INTEGER"),     # budget 可調 soft
                           ("soft_usd", "REAL"),           # budget 可調 soft
-                          ("owner_email", "TEXT")):       # K:負責人 email 門禁
+                          ("owner_email_list", "TEXT")):       # K:負責人 email 門禁
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -279,7 +279,7 @@ class Store:
                      " outcome, pending_reason, cost_usd, queued, queued_at,"
                      " inactive, approval_revisions, finished_at, evict_count,"
                      " clearquest_id, human_score, score_reminded_at, base_ref,"
-                     " agent_score, tokens, soft_tokens, soft_usd, owner_email")
+                     " agent_score, tokens, soft_tokens, soft_usd, owner_email_list")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -293,7 +293,7 @@ class Store:
             human_score=row[16], score_reminded_at=row[17] or 0.0,
             base_ref=row[18], agent_score=row[19],
             tokens=row[20] or 0, soft_tokens=row[21], soft_usd=row[22],
-            owner_email=row[23])
+            owner_email_list=row[23])
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -338,7 +338,7 @@ class Store:
                      queued, queued_at, inactive, approval_revisions,
                      finished_at, evict_count, clearquest_id,
                      human_score, score_reminded_at, base_ref, agent_score,
-                     tokens, soft_tokens, soft_usd, owner_email)
+                     tokens, soft_tokens, soft_usd, owner_email_list)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
@@ -357,14 +357,15 @@ class Store:
                     base_ref=excluded.base_ref,
                     agent_score=excluded.agent_score,
                     tokens=excluded.tokens, soft_tokens=excluded.soft_tokens,
-                    soft_usd=excluded.soft_usd, owner_email=excluded.owner_email
+                    soft_usd=excluded.soft_usd,
+                    owner_email_list=excluded.owner_email_list
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
                   s.approval_revisions, s.finished_at, s.evict_count,
                   s.clearquest_id, s.human_score, s.score_reminded_at,
                   s.base_ref, s.agent_score,
-                  s.tokens, s.soft_tokens, s.soft_usd, s.owner_email))
+                  s.tokens, s.soft_tokens, s.soft_usd, s.owner_email_list))
 
     # -- W3.4 trigger last_run 水位 ---------------------------------------- #
     def trigger_last_run(self, name: str) -> float:
