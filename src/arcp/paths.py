@@ -57,6 +57,31 @@ def job_scripts_dir() -> str | None:
     return _under_root("config", "scripts")
 
 
+def resolve_config_file(spec: str | None) -> str:
+    """CLI --config 解析(與 ARCP_CONFIG 同規則):含路徑分隔/絕對 → 原樣;
+    純檔名 → config/ 下;None → config_path()(env/預設)。"""
+    if not spec:
+        return config_path()
+    if os.path.isabs(spec) or os.sep in spec \
+            or (os.altsep and os.altsep in spec):
+        return spec
+    c = config_dir()
+    return os.path.join(c, spec) if c else spec
+
+
+def resolve_runtime(cli: str | None, cfg_runtime: str | None = None) -> str:
+    """runtime(DB/events/workspaces)位置:CLI --runtime > config
+    source.runtime_dir > repo/runtime。非絕對路徑相對 **repo root**(不綁
+    cwd)——測試/正式各指一個 runtime,DB 完全分離(開發手冊「重跑整測」)。"""
+    spec = cli or cfg_runtime
+    if not spec:
+        return runtime_dir() or "./runtime"
+    if os.path.isabs(spec):
+        return spec
+    root = os.path.dirname(_under_root("runtime") or os.path.abspath("runtime"))
+    return os.path.join(root, spec)
+
+
 def resolve_config_script(argv) -> tuple[list, str]:
     """config 裡引用的腳本(trigger.script / profile.select.script)統一解析:
     argv[0] = 相對 `config/scripts/` 的路徑,**必須放 subfolder**(如 cq/scan.sh,

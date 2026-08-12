@@ -108,6 +108,44 @@ uv run python scripts/smoke_jira.py                            # 唯讀
 uv run python scripts/smoke_jira.py --write --ticket SCRUM-XX  # 含寫入(改測試票再還原)
 ```
 
+## 重跑 integration / E2E(KP2,與正式**整組隔離**)
+
+integration/E2E 用**獨立的一組 config + runtime(DB)+ port**,跑幾次都
+**不會碰正式的 `config.yaml` / `runtime/`(線上 DB)**。隔離開關:
+
+| 資源 | 正式 | 整測 | 怎麼分 |
+|---|---|---|---|
+| 設定 | `config/config.yaml` | `config/config.test.yaml` | CLI `--config`(純檔名=config/ 下) |
+| DB/events/workspaces | `runtime/` | `runtime-test/`(gitignore) | test config 的 `source.runtime_dir`(或 CLI `--runtime` 覆寫) |
+| port(control/dashboard/form) | 8787/8788/8790 | 8797/8798/8799 | test config + `--port` |
+| Jira project | 正式 project | **KP2**(模擬內網 workflow) | test config 的 project/jql |
+| scripts / profiles / skills | `config/scripts|profiles|skills/` 共用(唯讀資產,分 subfolder 不打架) | 同左 | — |
+
+**步驟**(三個終端或背景):
+
+```bash
+# 1. 起整測 poller(KP2 + runtime-test + port 8797/8799)
+uv run python scripts/run_poller.py --config config.test.yaml -m 30
+# 2. 起整測 dashboard(8798)
+uv run python scripts/detail_server.py --config config.test.yaml \
+    --runtime runtime-test --port 8798 --host 127.0.0.1
+# 3. REST integration(T1 完成流 / T2 job 分流 / T3 cancel / T4 審批 Pending;
+#    T5 安全掃描需 scanner 已裝、T6 審批門放行全程 → 手動指定)
+uv run python tests/it_kp2.py            # 預設 T1–T4
+uv run python tests/it_kp2.py T5 T6      # 進階測項
+# 4. browser E2E(看畫面,REST 驗不到的):照 tests/e2e_kp2_browser.md 逐項
+```
+
+注意:
+- **會花錢**(真 agent,haiku 一輪 T1–T4 約 $0.1–0.2)與**真開 KP2 票**(標題帶
+  `[it]`/`[job]`,測後留在看板供對照,可批次 Cancel)。
+- agent-job(`kp2-tasks`,count=1)首輪自動 fire 一次;重測要歸零水位:
+  `sqlite3 runtime-test/harness.db "DELETE FROM trigger_state WHERE name='kp2-tasks'"`。
+- 正式與整測**可同時跑**(port/DB 全分離);唯一共用是 Jira 憑證(`~/.env`)
+  與唯讀資產(config/scripts 等)。
+- 隔離驗證法(改完相關程式碼後):記下 `stat -f %m runtime/harness.db`,跑完
+  整測再比對 mtime 不變 = 沒碰正式 DB。
+
 ## 加一個 backend
 
 1. 在 `inner_*_runner.py` 加執行單元,產出符合 `contract` 的 envelope。

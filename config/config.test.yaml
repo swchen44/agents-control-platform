@@ -1,0 +1,428 @@
+# 整測專用設定(config.test.yaml)——與正式 config.yaml **整組隔離**:
+#   uv run python scripts/run_poller.py --config config.test.yaml
+#   uv run python scripts/detail_server.py --config config.test.yaml \
+#       --runtime runtime-test --port 8798
+# runtime_dir=runtime-test(DB/events/workspaces 分開,不碰正式 DB)、
+# port 全部錯開;Jira 打 KP2 測試 project。詳 docs/developer-guide.md
+# 「重跑 integration / E2E」。
+# Outer-loop routing (v5 C1/D2): 只決定「歸哪個 profile / 何時接管 / 何時交還」。
+# 禁止出現 steps:/then: 之類的步驟序列 —— loader 會直接拒絕(C1 護欄)。
+version: 1
+
+outer_loop:
+  source:
+    # W8.6:此 Control Plane 實例名(多實例並存時用來分辨;顯示在 dashboard 標題
+    # 「ARCP Control Plane · <name>」與瀏覽器分頁)。多實例務必各取不同名 + 不同
+    # Jira project/jql + 不同 port(見 README「多實例部署」)。
+    name: it-test    # 整測實例(與正式 config.yaml 區分)
+    # 2026-08-12 起整合測試改用 KP2(Kanban-Project-2,模擬內網 workflow:
+    # To Do→In Progress→Resolve→Closed,Pending 等人、Cancelled 各處可進)。
+    # SCRUM 的 workflow 與未來內網差太多,不再使用。
+    project: KP2
+    runtime_dir: runtime-test   # 整測專用 DB/workspaces(與正式 runtime/ 完全分離)
+    issue_type_id: '10012'    # KP2(team-managed)的 Task type id;開票用
+    #                         # (agent-job / a2a 跨票)。SCRUM 是 10003。
+    poll_interval_sec: 30
+    jql: 'project = KP2 AND statusCategory != Done ORDER BY created ASC'
+    # jira_base_url: https://<你的>.atlassian.net  # 填了 dashboard/poller 都用它;
+    #                    # 不填則用 ~/.env 的 JIRA_BASE_URL(此檔進版控,勿寫機密)
+    # jira_flavor: dc   # 主題 L:cloud(預設)| dc(Data Center/Server)。
+    #                   # dc 憑證:~/.env 填 JIRA_PAT(建議,8.14+ Bearer)或
+    #                   # JIRA_USERNAME+JIRA_PASSWORD;api/2、name 識別、[~username]
+    #                   # mention、wiki 純文字。詳 docs/design/jira-dc.md。
+    # user_map:         # L6:email→識別碼手動映射(user-search 被權限擋的逃生路;
+    #   alice@corp.com: alice     # cloud 填 accountId、dc 填 username;可 hot reload)
+    # username_rule: local        # L6:查無時推導——local=email @ 前段;
+    #                             # 或含 {local} 模板(如 'corp-{local}')
+    # M3:TICKET.md 安全掃描(prompt injection 防線;選配、沒設=關)。spawn 前
+    # 掃 TICKET.md(涵蓋 description/agent-job prompt/人類指示);命中 >= fail_on
+    # 或掃描器執行失敗(fail-closed)→ 擋派工 + security_review 表單交人裁決
+    # (可修描述;繼續=人審放行之後不擋 / 中止=ABORTED reason=security)。
+    # 掃描器需另裝(建議 cisco skill-scanner:純靜態 pattern 引擎、不用 LLM;
+    # 內網 snapshot 請預先裝好)。詳 docs/design/security-scan.md。
+    security_scan:              # 2026-08-12 KP2 實測開啟(T5 端到端過)。裝法:
+      command: 'skill-scanner'  # uv tool install --from ~/git/skill-scanner
+      #                         # cisco-ai-skill-scanner(需在 PATH;內網預裝)
+      fail_on: high             # critical|high|medium|low(>= 此嚴重度才擋)
+      timeout_sec: 180
+    # N:內部態 → Jira 狀態同步(選配;沒設=不轉,現行為)。dispatcher 每輪
+    # 收尾按推導態精確轉(名稱比對,轉不到只 log);close 裁決走 closed
+    # (不可達→先 hil_end 再 closed 兩步)。queued/inactive 不動(定案)。
+    status_sync:
+      running: In Progress       # attempt 執行中
+      hil_middle: Pending        # 等人(審批/表單/安全審/UNKNOWN 交人查)
+      hil_end: Resolve           # SUCCESS/FAILURE 終態,等人評分/裁決
+      closed: Closed             # 評分裁決 close(人授權關單)
+      aborted: Cancelled         # 各種中止(cancel/安全審/untriageable/交接)
+    write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
+    # bot_account_id: '...'   # 可選(W12):機器人 accountId;不填→啟動 myself() 解析
+    # W6.4:定時快照器已移除(耗資源)。transcript 改事件觸發+被動按鈕。
+
+  # 併發/分層資源閘門(F1,v5 D10):怕系統不夠用,管制同時跑的 agent 數
+  concurrency:
+    max_running: 4                     # 全局:一輪最多幾張票並行
+    per_engine: {claude: 3, codex: 2}  # 各引擎進程上限(機器 CPU/memory)
+    per_profile: {}                    # 可選:個別 profile 上限
+
+  # W2.6 控制面(REST,只綁本機):GET /status /health;POST /pause /resume /reload
+  control:
+    host: 127.0.0.1
+    port: 8797   # 測試 port(正式 8787)
+
+  # W11 互動表單服務(一次性 token 連結;人面向寫入,與唯讀 dashboard / control 分離)
+  # 內網行動裝置要能連 → host 設 0.0.0.0 且 base_url 設成該主機可達 URL。
+  # mention_account_id = 需要人介入時 @mention 的 Counterpart 識別碼(選填;
+  #   cloud 填 accountId、dc(主題 L)填 username,語法自動切換)。
+  form:
+    host: 127.0.0.1
+    port: 8799   # 測試 port(正式 8790)
+    # base_url: 'http://<intranet-host>:8790'   # 選填;預設 http://host:port
+    mention_account_id: '712020:1b451b8e-dc83-4ff2-98c4-ccc708049016'  # swchen44(通知驗證)
+
+  # K:全站管理者 email(選填)。負責人 email 門禁的「豁免名單」——HIL 表單/指令台
+  # 提交的 email 若 ∈ 此清單即放行(不必是該票負責人 owner_email_list 名單內)。可 hot reload。
+  # 門禁僅在票有 owner_email_list(description 契約填了 email,可逗號多個)時啟用;
+  # 沒填的票不受限。
+  # admin_emails:
+  #   - ops@company.com
+  #   - lead@company.com
+
+  # 內部 job(J1 統一,不經 Jira 票驅動、由排程觸發;config 即授權)。每個 job 必填
+  # trigger_type + script(相對 config/scripts/<subfolder>/;執行 cwd 進 subfolder,
+  # log 存 runs/…/transcript/,dashboard 可看可下載)。scheduled 由 poller 檢 due;
+  # 省略 cron/every 且 count=1 = 首輪立刻一次或 `python3 run_trigger.py <name>` oneshot。
+  # triggers:
+  #   - name: scan-cq              # agent-job:script stdout 回 JSON 任務清單
+  #     run_name: scan-cq          # 必填,[a-z0-9-](防 path 注入)
+  #     trigger_type: agent-job
+  #     script: cq/scan.sh         # = config/scripts/cq/scan.sh;cwd = config/scripts/cq/
+  #     labels: ['arcp.cr']             # 開的票貼此 label → 命中 route → triage(不預鎖 profile)
+  #     count: 0                   # 0=無上限(需 cron);1=單次;N=N 次
+  #     cron: '*/10 * * * *'       # 每 10 分;* , - */N;cron 與 every 並存 cron 優先
+  #   - name: disk-clean           # script-job:純做事、不開票
+  #     run_name: disk-clean
+  #     trigger_type: script-job
+  #     script: maint/clean.sh     # cwd = config/scripts/maint/
+  #     cron: '0 3 * * 1-5'        # 平日 03:00;停機錯過補跑一次(回溯 2 天)
+  #     timeout_sec: 600
+
+  # KP2 整測:單次 agent-job(手動 fire:`uv run python scripts/run_trigger.py
+  # kp2-tasks`)→ 開兩張票,第二筆 script 覆寫 labels 驗分流。要定期加 cron/every。
+  triggers:
+    - name: kp2-tasks
+      run_name: gen
+      trigger_type: agent-job
+      script: kp2/gen_tasks.sh
+      labels: ['arcp.write']       # 保底(第一筆用);第二筆覆寫 arcp.creview
+      count: 1                     # 單次:poller 首輪自動 fire 一次(或手動
+      #                            # run_trigger);重測把 runtime trigger_state 歸零
+
+  # 外部變更政策(人的指令改走「指令台」表單/REST,不再有 @agent 留言白名單)
+  external_change:
+    cancel_states: ['完成', 'Done', 'Cancelled']  # 人 out-of-band 關票 = 撤銷
+
+  routes:
+    # 由上而下第一個 match 勝出;when 內欄位 AND、陣列值 OR
+    - name: hands-off
+      when:
+        labels: ['arcp.no-agent']
+      on_match: ignore
+
+    - name: agent-labeled
+      when:
+        labels: ['arcp.agent']
+      profile: default
+      on_match: notify_only          # 灰度:只記 route_matched,不接管
+
+    - name: kp2-writer               # KP2 整測:寫短文(真 agent haiku)
+      when:
+        labels: ['arcp.write']
+      profile: kp2-writer
+      on_match: create_or_resume
+
+    - name: kp2-creview              # KP2 整測:C code review
+      when:
+        labels: ['arcp.creview']
+      profile: kp2-creview
+      on_match: create_or_resume
+
+    - name: filechain-server        # B+.2:走 agent-server backend(GUI/detail 可見)
+      when:
+        labels: ['arcp.filechain-server']
+      profile: filechain-server
+      on_match: create_or_resume
+
+    - name: filechain-rawcli         # C.3:走 rawcli backend(RawCLIAgent,細粒度)
+      when:
+        labels: ['arcp.filechain-rawcli']
+      profile: filechain-rawcli
+      on_match: create_or_resume
+
+    - name: filechain-codex          # W3.1(D2):rawcli 第二引擎(codex exec)
+      when:
+        labels: ['arcp.filechain-codex']
+      profile: filechain-codex
+      on_match: create_or_resume
+
+    - name: filechain-demo          # Phase 2 M2:第一條會「動手」的 route
+      when:
+        labels: ['arcp.filechain']
+      profile: filechain
+      on_match: create_or_resume
+
+    - name: triage-keyword
+      when:
+        summary: '(?i)\b(triage|bug|fix|crash)\b'
+      profile: triage
+      on_match: notify_only
+      comments_lookback: 5
+
+    - name: fault-retry             # fault-injection:驗證 retry+evidence 迴路
+      when:
+        labels: ['arcp.faultretry']
+      profile: faultretry
+      on_match: create_or_resume
+
+    - name: fault-dead              # fault-injection:驗證 UNKNOWN 路徑
+      when:
+        labels: ['arcp.faultdead']
+      profile: faultdead
+      on_match: create_or_resume
+
+    - name: cmd-demo                # Phase 3:指令通道 E2E 用
+      when:
+        labels: ['arcp.cmddemo']
+      profile: faultdead            # 10s timeout → 快速進 pending:unknown
+      on_match: create_or_resume
+
+    - name: approval-demo           # W2a 真 Jira 實測:審批門 + human_email
+      when:
+        labels: ['arcp.approval-demo']
+      profile: approval-demo
+      on_match: create_or_resume
+
+    - name: handoff-demo            # W2.5 真 Jira 實測:G1 handoff kind=human
+      when:
+        labels: ['arcp.handoff-demo']
+      profile: handoff-demo
+      on_match: create_or_resume
+
+# Inner loop(v5 §4.2):profile 決定 workspace/skills/agent/verify/loop。
+# agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
+inner_loop:
+  profiles:
+    kp2-writer:                    # KP2 整測:寫短文小任務
+      goal: '依描述主題寫 150-300 字繁中短文到 ARTICLE.md(# 標題開頭)'
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+        common_skills: [kp2-writing]
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        timeout_sec: 300
+      verify:
+        - name: article
+          files:
+            ARTICLE.md: null       # existence-only(品質交人評分;files 值=完全比對,勿放子字串)
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+      human_minutes_est: 20
+
+    kp2-creview:                   # KP2 整測:C code review
+      goal: 'Review 描述中的 C code,發現寫進 REVIEW.md(Bugs/Security/Style 三節)'
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+        common_skills: [kp2-creview]
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        timeout_sec: 300
+      verify:
+        - name: review
+          files:
+            REVIEW.md: null        # existence-only(同上)
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+      human_minutes_est: 30
+
+    filechain:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:                        # ★ B→C 只換這塊
+        backend: openhands-acp
+        acp_server: claude-code
+        acp_model: haiku            # 使用者決策:A/B 同款 model
+        venv: examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+
+    # 同 filechain,但走 agent-server backend(B+.1)——conversation 存 server,
+    # GUI 看得到。envelope 契約與 in-process 版相同,dispatcher 不變。
+    filechain-server:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: openhands-server   # ← 唯一差別
+        acp_server: claude-code
+        acp_model: haiku
+        venv: examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+
+    # 同 filechain,但走 rawcli backend(C.3)——RawCLIAgent 直接 spawn claude -p,
+    # 細粒度事件 + 原生流全保真。envelope 契約相同,dispatcher/grader 零改動。
+    filechain-rawcli:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli             # ← 唯一差別
+        engine: claude              # claude | codex
+        model: haiku                # 測試省成本;model opus 已驗證可用(SCRUM-12
+                                    # SUCCESS $0.279 vs haiku $0.035,~8x)——
+                                    # 真實任務改這一行即可,rawcli/harness 零改動
+        os_sandbox: true            # 執行隔離:claude 用 macOS seatbelt 限制
+                                    # 檔案寫入只能到 workspace(codex 用內建
+                                    # --sandbox=workspace-write,見 sandbox:)
+        sandbox: workspace-write    # codex --sandbox: read-only|workspace-write
+        timeout_sec: 300
+      verify:                       # 確定性檢查,全過才 SUCCESS
+        - name: filechain
+          files:
+            step1.txt: '1'
+            step2.txt: '12'
+            step3.txt: '123'
+      human_minutes_est: 15         # W3.5 C3:人做同任務估時(分)→ KPI 節省人時
+      loop:
+        max_attempts: 2
+        on_unknown: pending         # 不可改 retry(v5 D3)
+
+    # fault-injection 專用:verify 要求 ticket 沒提的 extra.txt →
+    # attempt 1 必敗 → 失敗證據餵回 attempt 2(native resume)→ 補齊
+    faultretry:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: openhands-acp
+        acp_server: claude-code
+        acp_model: haiku
+        venv: examples/openhands-acp-poc/.venv
+        timeout_sec: 300
+      verify:
+        - name: chain-plus-extra
+          files:
+            step1.txt: '1'
+            extra.txt: null        # existence-only:missing-file feedback 不含
+                                   # expected content,agent 無從得知(lesson #10)
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # W3.1(D2):同 filechain-rawcli 但 engine=codex——驗雙引擎同 envelope
+    # 契約。model 不填=用 codex 帳號預設(claude 的 model 名不適用於 codex);
+    # 隔離用 codex 內建 --sandbox workspace-write(os_sandbox 對 codex 是 no-op)。
+    filechain-codex:
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: codex
+        sandbox: workspace-write
+        timeout_sec: 300
+      verify:
+        - name: filechain
+          files:
+            step1.txt: '1'
+            step2.txt: '12'
+            step3.txt: '123'
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # W2a 真 Jira 實測:審批門(貼 plan→人填表→放行→fork)+ human_email 解析。
+    # 任務極小(建 done.txt)、haiku 省成本;approver=人類帳號(email,啟動時
+    # user-search 解析成 accountId)。
+    approval-demo:
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        timeout_sec: 300
+      verify:
+        - name: done-file
+          files:
+            done.txt: null         # existence-only
+      approval:
+        required: true
+        approver: swchen44@gmail.com
+        max_revisions: 3
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # W2.5 真 Jira 實測:G1 handoff kind=human。agent 自報 handoff(G1 契約
+    # output_schema)→ dispatcher 轉人類:human_email→approver fallback 指派。
+    handoff-demo:
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        output_schema: true        # G1 契約:回報 {reason,status,next}
+        timeout_sec: 300
+      verify:
+        - name: never-reached      # handoff 在 grade 前返回,不會用到
+          files:
+            done.txt: null
+      approval:
+        required: false
+        approver: swchen44@gmail.com   # handoff kind=human 的 assignee fallback
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+
+    # fault-injection 專用:timeout 短於 ACP 啟動 → runner 死 → UNKNOWN
+    faultdead:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: openhands-acp
+        acp_server: claude-code
+        acp_model: haiku
+        venv: examples/openhands-acp-poc/.venv
+        timeout_sec: 10
+      verify:
+        - name: never
+          files:
+            never.txt: 'x'
+      loop:
+        max_attempts: 2
+        on_unknown: pending

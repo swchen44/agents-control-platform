@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """KP2 integration test — 真 Jira + 真 agent + 跑中的 poller(REST 主力)。
 
-**不是 CI 離線測試**(要真環境、花 token)。前置:
-  - poller 在跑(control 8787 + form 8790;config 指向 KP2、status_sync 開)
-  - detail_server 在跑(8788,/api/v1)
-  - ~/.env Jira 憑證
-用法:uv run python tests/it_kp2.py [T1 T2 T3 T4](不給=全跑)
+**不是 CI 離線測試**(要真環境、花 token)。前置(**整測專用實例**,與正式
+config.yaml / runtime/ 完全隔離,詳 docs/developer-guide.md「重跑整測」):
+  uv run python scripts/run_poller.py --config config.test.yaml -m 30
+  uv run python scripts/detail_server.py --config config.test.yaml \
+      --runtime runtime-test --port 8798
+  (config.test.yaml:KP2 + runtime_dir=runtime-test + 測試 port 8797/8799)
+用法:uv run python tests/it_kp2.py [T1 T2 … T6](不給=T1–T4)
 
 測項(對照 docs/design/lifecycle.md 六態 + 主題 N 狀態同步):
   T1 正常完成流:REST 建票(arcp.write+email 門禁)→ Jira **In Progress**
@@ -33,9 +35,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp.config import jira_credentials  # noqa: E402
 from arcp.jira_source import JiraCloudSource  # noqa: E402
 
-ARCP_API = "http://127.0.0.1:8788"
-CONTROL = "http://127.0.0.1:8787"
-FORM = "http://127.0.0.1:8790"
+ARCP_API = "http://127.0.0.1:8798"      # 測試實例 port(config.test.yaml)
+CONTROL = "http://127.0.0.1:8797"
+FORM = "http://127.0.0.1:8799"
 EMAIL = "swchen.tw@gmail.com"
 TASK_TYPE = "10012"                      # KP2(team-managed)Task type id
 
@@ -252,6 +254,47 @@ def t5(src):
                    timeout=120))
 
 
+# ── T6 審批門全程:awaiting → 填表放行 → agent 真跑 → SUCCESS ─────── #
+def t6(src):
+    print("== T6 審批門全程(填 agent_name + assignee 交回 → agent 執行)==")
+    t = src.create_ticket(
+        "KP2", "[it] T6 審批門全程(放行後真跑)",
+        "請在 workspace 建立 done.txt,內容寫 done。",
+        issue_type_id=TASK_TYPE, labels=["arcp.approval-demo"])
+    print(f"    建票 {t.key}(id={t.id})")
+    check("T6: 首輪 → pending:approval + assignee=審批者",
+          wait("pending approval", lambda: arcp(t.id).get(
+              "pending_reason") == "approval", timeout=180))
+    check("T6: Jira Pending(hil_middle 同步)",
+          wait("Pending", lambda: jira_state(src, t.id) == "Pending",
+               timeout=120))
+    # 模擬人放行:human 段填 agent_name + assignee 改回機器人
+    full = src.get_ticket(t.id, with_comments=False)
+    desc = full.description
+    if "agent_name:" not in desc:
+        check("T6: description 有 human 段 agent_name 欄", False, desc[:200])
+        return
+    src.set_description(t.id, desc.replace("agent_name:",
+                                           "agent_name: tester", 1))
+    bot = src.my_uid()
+    src.assign(t.id, bot)
+    print("    已填 agent_name=tester + assignee 交回機器人")
+    check("T6: 放行 → agent 真跑 → SUCCESS",
+          wait("SUCCESS", lambda: arcp(t.id).get("outcome") == "SUCCESS",
+               timeout=420))
+    ws = arcp(t.id).get("workspace") or ""
+    dn = os.path.join(ws, "done.txt")
+    check("T6: 產出 done.txt(verify 檔)", os.path.isfile(dn), detail=dn)
+    check("T6: 終態 → Jira Resolve",
+          wait("Resolve", lambda: jira_state(src, t.id) == "Resolve",
+               timeout=120))
+    r = _post_json(f"{CONTROL}/ticket/{t.id}/command",
+                   {"cmd": "cancel", "by": EMAIL})
+    check("T6: cancel 收尾 → Cancelled",
+          r.get("ok") and wait("Cancelled", lambda: jira_state(
+              src, t.id) == "Cancelled", timeout=120))
+
+
 def main():
     picks = set(a.upper() for a in sys.argv[1:]) \
         or {"T1", "T2", "T3", "T4"}         # T5 需手動加(要 security_scan 開)
@@ -270,6 +313,8 @@ def main():
         t4(src)
     if "T5" in picks:                   # 需 config security_scan 開啟
         t5(src)
+    if "T6" in picks:                   # 審批門全程(放行後真跑 agent)
+        t6(src)
     print(f"\nit-kp2: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok + fail})")
     return 1 if fail else 0
 

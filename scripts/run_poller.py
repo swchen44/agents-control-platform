@@ -28,7 +28,7 @@ from arcp.dispatcher import Dispatcher
 from arcp.form_server import FormServer
 from arcp.hil import apply_submission, provision_command_link
 from arcp.jira_source import JiraCloudSource
-from arcp.paths import config_path, runtime_dir
+from arcp.paths import resolve_config_file, resolve_runtime
 from arcp.poller import OuterLoop
 from arcp.profiles import load_profiles
 from arcp.routing import load_config, match
@@ -120,6 +120,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--log-level", default=None,
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                    help="日誌層級(等同設 ARCP_LOG_LEVEL;預設 INFO)")
+    p.add_argument("--config", default=None, metavar="FILE",
+                   help="設定檔(純檔名=config/ 下,如 config.test.yaml;"
+                        "預設 config/config.yaml)。測試/正式整組隔離用")
+    p.add_argument("--runtime", default=None, metavar="DIR",
+                   help="runtime 目錄(DB/events/workspaces;非絕對=repo "
+                        "root 相對)。覆寫 config source.runtime_dir;"
+                        "預設 repo/runtime")
     return p.parse_args(argv)
 
 
@@ -129,11 +136,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.log_level:                       # 在建 logger 前設好(logutil 讀此 env)
         os.environ["ARCP_LOG_LEVEL"] = args.log_level
 
-    cfg_path = config_path()                             # W12.4:repo-root 相對
+    # 測試/正式整組隔離:--config 換設定、runtime 由 --runtime > config
+    # source.runtime_dir > repo/runtime(DB/events/workspaces 完全分離)。
+    cfg_path = resolve_config_file(args.config)          # W12.4:repo-root 相對
     source_cfg, routes = load_config(cfg_path)
-    # runtime 錨定 repo/runtime(不綁 cwd)—— 從任何目錄啟動都沿用同一份持久 store,
-    # 不會產生孤兒 runtime。DB/events/workspaces 都在此(gitignore)。
-    runtime = runtime_dir() or "./runtime"
+    # runtime 錨定 repo root(不綁 cwd)—— 從任何目錄啟動都沿用同一份持久 store,
+    # 不會產生孤兒 runtime。
+    runtime = resolve_runtime(args.runtime, source_cfg.get("runtime_dir"))
     _wr = source_cfg.get("write_retry") or {}            # A3(N8)
     _flavor = source_cfg.get("jira_flavor", "cloud")     # 主題 L:cloud|dc
     src = JiraCloudSource(

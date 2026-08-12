@@ -4330,6 +4330,9 @@ def _parse_args(argv):
                    help="dashboard 埠(預設 8788)")
     p.add_argument("--host", default=None, metavar="HOST",
                    help="綁定 host(預設 0.0.0.0 內網開放;127.0.0.1 鎖本機)")
+    p.add_argument("--config", default=None, metavar="FILE",
+                   help="設定檔(純檔名=config/ 下,如 config.test.yaml)。"
+                        "與 poller 的 --config 配對(測試/正式整組隔離)")
     p.add_argument("--runtime", default=None, metavar="DIR",
                    help="runtime 目錄(harness.db/events/workspaces;預設 repo/runtime)")
     p.add_argument("--control-url", default=None, metavar="URL",
@@ -4344,6 +4347,12 @@ if __name__ == "__main__":
     _a = _parse_args(sys.argv[1:])
     if _a.log_level:
         os.environ["ARCP_LOG_LEVEL"] = _a.log_level
+    if _a.config:
+        try:
+            from arcp.paths import resolve_config_file as _rcf
+            _CONFIG_PATH = _rcf(_a.config)
+        except ImportError:
+            _CONFIG_PATH = _a.config
     if _a.runtime:
         ROOT = os.path.abspath(_a.runtime)
     PORT = _a.port or PORT
