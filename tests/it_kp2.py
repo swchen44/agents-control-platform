@@ -302,6 +302,93 @@ def t6(src):
               src, t.id) == "Cancelled", timeout=120))
 
 
+def _find_by(profile=None, outcome="SUCCESS"):
+    """掃全票找符合 profile+outcome 的最新一張(側欄 dict)。"""
+    best = None
+    for x in _get(f"{ARCP_API}/api/v1/tickets")["tickets"]:
+        d = _get(f"{ARCP_API}/api/v1/tickets/{x['iid']}")
+        if d.get("outcome") == outcome and \
+                (profile is None or d.get("profile") == profile):
+            best = d
+    return best
+
+
+# ── T7 同票換手(next):終態票換 profile 重跑 ─────────────────────── #
+def t7(src):
+    print("== T7 同票換手(next:writer→creview,同一張票)==")
+    d = _find_by(profile="kp2-writer")
+    if not d:
+        check("T7: (跳過:無 SUCCESS 的 writer 票,先跑 T1/T2)", False)
+        return
+    iid = d["iid"]
+    print(f"    對 {d['key']} 下 next → kp2-creview")
+    r = _post_json(f"{CONTROL}/ticket/{iid}/command",
+                   {"cmd": "next", "args": {"profile": "kp2-creview"},
+                    "by": EMAIL})
+    check("T7: REST next ok", r.get("ok") is True, detail=str(r))
+    check("T7: session 換 profile(kp2-creview)+ 重置重跑 → SUCCESS",
+          wait("handoff→SUCCESS", lambda: (lambda x: x.get(
+              "profile") == "kp2-creview" and x.get("outcome") == "SUCCESS")(
+              arcp(iid)), timeout=420))
+    ws = arcp(iid).get("workspace") or ""
+    check("T7: 新 profile 產出 REVIEW.md",
+          os.path.isfile(os.path.join(ws, "REVIEW.md")),
+          detail=os.path.join(ws, "REVIEW.md"))
+    check("T7: Jira 回 Resolve(換手重跑後終態)",
+          wait("Resolve", lambda: jira_state(src, iid) == "Resolve",
+               timeout=120))
+
+
+# ── T8 跨票換手(評分表單 handoff+base)+ 評分必填負向 ──────────── #
+def t8(src):
+    print("== T8 跨票換手(評分表單 close_decision=handoff/base)==")
+    d = _find_by(profile="kp2-creview")
+    if not d:
+        check("T8: (跳過:無 SUCCESS 的 creview 票)", False)
+        return
+    iid = d["iid"]
+    tok = form_token_from_comments(src, iid, must_contain="評分")
+    check("T8: 評分表單連結在", bool(tok))
+    if not tok:
+        return
+    code, body = _post(f"{FORM}/form/{tok}",       # 負向:缺評分必填 → 擋
+                       {"close_decision": "close", "by": EMAIL})
+    check("T8: 缺 human_score → 表單擋(必填,未 close)",
+          code == 200 and "必填" in body
+          and arcp(iid).get("outcome") == "SUCCESS")
+    code, _ = _post(f"{FORM}/form/{tok}", {
+        "human_score": "7", "close_decision": "handoff",
+        "handoff_kind": "base", "next_profile": "kp2-writer",
+        "handoff_prompt": "延續前票結論,寫一篇 150 字總結短文。",
+        "by": EMAIL})
+    check("T8: handoff 提交 200", code == 200)
+    check("T8: 原票 ABORTED(abort_reason=handoff)",
+          wait("handoff aborted", lambda: (lambda x: x.get(
+              "outcome") == "ABORTED" and x.get("abort_reason") == "handoff")(
+              arcp(iid)), timeout=90))
+    check("T8: 原票 Jira Cancelled",
+          wait("Cancelled", lambda: jira_state(src, iid) == "Cancelled",
+               timeout=120))
+
+    def _new_ticket():
+        for x in _get(f"{ARCP_API}/api/v1/tickets")["tickets"]:
+            nd = _get(f"{ARCP_API}/api/v1/tickets/{x['iid']}")
+            if f"base:{d['key']}" in (nd.get("summary") or ""):
+                return nd
+        return None
+
+    nd = wait("新票(base 子票)", _new_ticket, timeout=180)
+    check("T8: 系統另開新票(帶 base 脈絡)", bool(nd))
+    if nd:
+        check("T8: 新票由 kp2-writer 跑完 SUCCESS",
+              wait("child SUCCESS", lambda: arcp(nd["iid"]).get(
+                  "outcome") == "SUCCESS", timeout=420))
+        ws = arcp(nd["iid"]).get("workspace") or ""
+        base_dir = os.path.join(ws, f"BASE_{d['key']}")
+        check("T8: 新票 workspace 注入 BASE 脈絡目錄",
+              os.path.isdir(base_dir), detail=base_dir)
+
+
 def main():
     picks = set(a.upper() for a in sys.argv[1:]) \
         or {"T1", "T2", "T3", "T4"}         # T5 需手動加(要 security_scan 開)
@@ -320,8 +407,12 @@ def main():
         t4(src)
     if "T5" in picks:                   # 需 config security_scan 開啟
         t5(src)
-    if "T6" in picks:                   # 審批門全程(放行後真跑 agent)
+    if "T6" in picks:                   # 審批門全程(表單放行後真跑 agent)
         t6(src)
+    if "T7" in picks:                   # 同票換手(需先有 SUCCESS writer 票)
+        t7(src)
+    if "T8" in picks:                   # 跨票換手+評分負向(需 SUCCESS creview 票)
+        t8(src)
     print(f"\nit-kp2: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok + fail})")
     return 1 if fail else 0
 
