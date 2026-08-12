@@ -12,6 +12,7 @@ import time
 import yaml
 
 from .interaction import InteractionRequest, build_request, summarize
+from .jira_source import mention_tag_of
 from .logutil import get_logger
 from .sections import Section, parse, render
 from .store import TicketSession
@@ -67,7 +68,7 @@ def request_human(source, store, issue_id: int, key: str, schema_id: str, *,
     req = build_request(issue_id, key, schema_id, payload=payload,
                         ttl_sec=ttl_sec, now=now)
     store.upsert_interaction(req)
-    at = f"[~accountid:{mention}] " if mention else ""
+    at = (mention_tag_of(source, mention) + " ") if mention else ""
     link = form_link(base_url, req.token)
     source.add_comment(
         issue_id,

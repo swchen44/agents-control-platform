@@ -17,6 +17,7 @@ import time
 
 import yaml
 
+from .jira_source import mention_tag_of
 from .logutil import get_logger
 from .sections import Section, parse, render
 
@@ -199,7 +200,8 @@ class ScoreGate:
         r.reminders += 1
         r.reminded_at = now
         self.store.upsert_interaction(r)
-        at = f"[~accountid:{self.mention}] " if self.mention else ""
+        at = ((mention_tag_of(self.source, self.mention) + " ")
+              if self.mention else "")
         self.source.add_comment(
             ticket.id,
             f"[agent] {at}此票已 {session.outcome},尚待評分/裁決(第 "

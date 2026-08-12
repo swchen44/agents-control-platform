@@ -34,7 +34,8 @@ outer_loop:
 
   # W11 互動表單服務(一次性 token 連結;人面向寫入,與唯讀 dashboard / control 分離)
   # 內網行動裝置要能連 → host 設 0.0.0.0 且 base_url 設成該主機可達 URL。
-  # mention_account_id = 需要人介入時 @mention 的 Counterpart accountId(選填)。
+  # mention_account_id = 需要人介入時 @mention 的 Counterpart 識別碼(選填;
+  #   cloud 填 accountId、dc(主題 L)填 username,語法自動切換)。
   form:
     host: 127.0.0.1
     port: 8790

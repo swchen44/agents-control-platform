@@ -91,6 +91,16 @@ def text_to_adf(text: str) -> dict:
     }
 
 
+def mention_tag_of(source, uid: str) -> str:
+    """@mention 標記,flavor-aware:source.mention_tag 有則用(cloud=
+    [~accountid:x]、dc=[~username]);mock/舊 source 沒有 → cloud 語法
+    fallback。空 uid → ""。hil/scoring/commands 共用(主題 L3)。"""
+    if not uid:
+        return ""
+    fn = getattr(source, "mention_tag", None)
+    return fn(uid) if fn else f"[~accountid:{uid}]"
+
+
 # --------------------------------------------------------------------------- #
 # Adapter
 # --------------------------------------------------------------------------- #
@@ -184,19 +194,30 @@ class JiraCloudSource:
     def myself(self) -> dict:
         return self._request("GET", self._api + "/myself")
 
+    def my_uid(self) -> str:
+        """機器人自身識別碼(cloud=accountId、dc=name/username)。"""
+        return (self.myself() or {}).get(self.f["uid"], "") or ""
+
+    def mention_tag(self, uid: str) -> str:
+        """@mention 標記(cloud=[~accountid:x]、dc=[~username])。空 → ""。"""
+        return self.f["mention"].format(uid) if uid else ""
+
     def find_account_id(self, email: str) -> str | None:
-        """email → accountId(user-search API)。優先 emailAddress 精確比對;
-        GDPR 隱藏 email 時若唯一命中則取之。解析不到 → None(呼叫端當
-        填表錯誤/換 fallback)。"""
+        """email → **使用者識別碼**(cloud=accountId、dc=name/username)。
+        名稱維持歷史相容(K 期呼叫端/mock 都用此名);語意別名 find_user_id。
+        優先 emailAddress 精確比對;隱藏 email(GDPR/DC 隱私)時唯一命中則
+        取之。解析不到 → None(呼叫端當填表錯誤/換 fallback)。"""
         users = self._request(
-            "GET", self._api + "/user/search?query="
+            "GET", f"{self._api}/user/search?{self.f['usearch']}="
                    + urllib.parse.quote(email))
         if not isinstance(users, list):
             return None
         exact = [u for u in users
                  if (u.get("emailAddress") or "").lower() == email.lower()]
         pool = exact or (users if len(users) == 1 else [])
-        return pool[0].get("accountId") if pool else None
+        return pool[0].get(self.f["uid"]) if pool else None
+
+    find_user_id = find_account_id                # 語意別名(新 code 用這個)
 
     def search(self, jql: str, max_results: int = 50) -> list[Ticket]:
         params = {"jql": jql, "fields": _FIELDS, "maxResults": max_results}
@@ -230,7 +251,7 @@ class JiraCloudSource:
             out.append(Comment(
                 id=int(c["id"]),
                 author=author.get("displayName", "?"),
-                author_id=author.get("accountId", ""),
+                author_id=author.get(self.f["uid"], ""),
                 body=adf_to_text(c.get("body")).strip(),
                 created=c.get("created", "")))
         return out
@@ -336,14 +357,15 @@ class JiraCloudSource:
         self._notify_write("description", id_or_key, "更新 description")
 
     def assign(self, id_or_key: str | int, account_id: str | None) -> None:
-        """Set assignee by accountId(None = 取消指派)。W2.3/W2.4 換手用。"""
+        """Set assignee(cloud={"accountId"} / dc={"name"};None=取消指派)。"""
         self._request("PUT", f"{self._api}/issue/{id_or_key}/assignee",
-                      body={"accountId": account_id})
+                      body={self.f["uid"]: account_id})
         self._notify_write("assign", id_or_key, account_id or "(取消指派)")
 
     def add_watcher(self, id_or_key: str | int, account_id: str) -> None:
-        """加 watcher(關注者)by accountId(K:開票時把 profile.approver 加關注)。
-        Jira watcher API 特別:POST body 是**裸 accountId 字串**(非物件)。"""
+        """加 watcher(關注者)(K:開票時把 profile.approver 加關注)。
+        Jira watcher API 特別:POST body 是**裸識別碼字串**(非物件)——
+        cloud=accountId、dc=username,兩者同形。"""
         self._request("POST", f"{self._api}/issue/{id_or_key}/watchers",
                       body=account_id)
         self._notify_write("watcher", id_or_key, account_id)
@@ -358,7 +380,7 @@ class JiraCloudSource:
             summary=f.get("summary") or "",
             state=((f.get("status") or {}).get("name")) or "",
             assignee=assignee.get("displayName"),
-            assignee_id=assignee.get("accountId"),
+            assignee_id=assignee.get(self.f["uid"]),
             labels=list(f.get("labels") or []),
             description=adf_to_text(f.get("description")).strip(),
             updated=f.get("updated") or "",

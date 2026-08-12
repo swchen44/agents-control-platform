@@ -11,7 +11,11 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from arcp.config import jira_credentials  # noqa: E402
-from arcp.jira_source import _FLAVOR, JiraCloudSource  # noqa: E402
+from arcp.jira_source import (  # noqa: E402
+    _FLAVOR,
+    JiraCloudSource,
+    mention_tag_of,
+)
 
 ok = fail = 0
 
@@ -95,6 +99,48 @@ calls = _spy(c)
 c.search("project = X")
 check("search cloud:打 /rest/api/3/search/jql(現行為)",
       calls == ["/rest/api/3/search/jql"])
+
+# ── L2–L4:mention / user-search / assign / my_uid / _to_ticket ────── #
+check("mention_tag:dc=[~username] / cloud=[~accountid:] / 空→''",
+      d1.mention_tag("bob") == "[~bob]"
+      and c.mention_tag("x1") == "[~accountid:x1]"
+      and c.mention_tag("") == "")
+
+
+class _NoTag:                                    # mock/舊 source(無 helper)
+    pass
+
+
+check("mention_tag_of:source 有→flavor 語法;無→cloud fallback;空→''",
+      mention_tag_of(d1, "bob") == "[~bob]"
+      and mention_tag_of(_NoTag(), "x1") == "[~accountid:x1]"
+      and mention_tag_of(_NoTag(), "") == "")
+
+d3 = JiraCloudSource("https://jira.corp", "", "pat", flavor="dc")
+_paths, _bodies = [], []
+
+
+def _fake(method, path, params=None, body=None):
+    _paths.append(path); _bodies.append(body)
+    if "/user/search" in path:
+        return [{"name": "bob", "emailAddress": "bob@corp.com"}]
+    if path.endswith("/myself"):
+        return {"name": "bot1", "accountId": "should-not-use"}
+    return {}
+
+
+d3._request = _fake
+check("find_account_id dc:username= 參數 + 回 name",
+      d3.find_account_id("bob@corp.com") == "bob"
+      and "username=bob%40corp.com" in _paths[0])
+check("find_user_id 別名同一函式",
+      d3.find_user_id("bob@corp.com") == "bob")
+d3.assign("P-1", "bob")
+check("assign dc:body 用 name 欄位", _bodies[-1] == {"name": "bob"})
+check("my_uid dc:讀 name 非 accountId", d3.my_uid() == "bot1")
+t = d3._to_ticket({"id": "7", "key": "P-7", "fields": {
+    "assignee": {"displayName": "Bob", "name": "bob"}}})
+check("_to_ticket dc:assignee_id=name", t.assignee_id == "bob")
 
 print(f"test-jira-dc: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

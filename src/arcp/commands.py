@@ -186,7 +186,8 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
             except Exception:  # noqa: BLE001 — 查不到帳號不擋改(退純文字 email)
                 acct = None
             (accts if acct else missing).append(acct or e)
-        at = "".join(f"[~accountid:{a}] " for a in accts)
+        from .jira_source import mention_tag_of
+        at = "".join(mention_tag_of(source, a) + " " for a in accts)
         shown = new_list or "(已清空,門禁解除)"
         tail = f"(Jira 查無 {'、'.join(missing)},以 email 文字標示)" if missing else ""
         _ipd = f" ip={ip}" if ip else ""
