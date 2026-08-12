@@ -74,7 +74,10 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # runtime 資料預設
 
 - **Dashboard** — KPI(進行中/排隊/HIL(Middle)/HIL(End)/成功/失敗/失敗率)、時間圖、
   各 profile 圖、票表(狀態徽章、完成度分數、cost)。
-- **ticket 頁** — 四層 trace(L0/L1/L2/L3)、Conversation、事件時間軸、transcript 下載。
+- **Timeline(粗看)** — 全域跨票時間軸:每票一列狀態色帶(藍=執行、黃=等人、
+  紫=排隊)+ 關鍵事件;點列開摘要側欄、進單票細看。頁上有「怎麼看這張圖」說明卡。
+- **ticket 頁(細看)** — Session 駕駛艙(DB 全欄位 + TICKET.md)、四層 trace
+  (L0/L1/L2/L3)、Conversation、事件時間軸(含狀態色帶 + 說明卡)、transcript 下載。
 - **Introduction** — HIL 狀態機、模組架構圖 + 職責表、概念說明(皆可拖曳/縮放)。
 - **Server / Control / Agent Detail / DB Browser** — 系統資訊 / 控制 / 設定 / 唯讀 DB。
 - **效能監控(在 Server 頁)** — 8 個紅黃綠燈(失敗率/排隊/最舊等待/evict/花費速率/錯誤/系統資源/journal 大小)+ 各 profile 效能表 + bottleneck 說明。

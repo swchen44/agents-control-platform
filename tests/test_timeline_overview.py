@@ -110,6 +110,35 @@ check("overview:since 窗過濾(票1 最後活動 200 < 500 → 排除;票2 留)
 d3 = ds.overview_data(journal, sessions, watch, q="alpha", now=NOW)
 check("overview:q 過濾 profile", {g["id"] for g in d3["groups"]} == {1})
 
+# ── C5b 細看:駕駛艙卡 + 抽屜色帶 + 抽屜說明卡 ─────────────────────── #
+ws = os.path.join(tmp, "ws1")
+os.makedirs(ws, exist_ok=True)
+open(os.path.join(ws, "TICKET.md"), "w").write("# 任務\n修好那個 bug")
+s1 = dict(sessions[1]); s1["workspace"] = ws
+ck = ds._session_cockpit_card(1, s1, [e for e in journal
+                                      if e["issue_id"] == 1])
+check("駕駛艙:全欄位含 owner/soft 上限/評分",
+      "負責人 email(門禁)" in ck and "a@x.com,b@y.tw" in ck
+      and "soft USD 上限" in ck and "人類評分" in ck
+      and "workspace 路徑" in ck)
+check("駕駛艙:執行/等人時間 + 生命期", "執行時間" in ck and "等人時間" in ck
+      and "生命期" in ck)
+check("駕駛艙:TICKET.md 內容(摺疊)",
+      "TICKET.md" in ck and "修好那個 bug" in ck)
+ck2 = ds._session_cockpit_card(2, sessions[2], [])
+check("駕駛艙:無 TICKET.md → 註明", "尚未佈建或已回收" in ck2)
+
+mg = ds.merged_timeline_data([e for e in journal if e["issue_id"] == 1],
+                             1, sessions[1])
+check("細看抽屜:疊全高狀態色帶(ov- 同粗看顏色)",
+      any(str(i["id"]).startswith("ovbg-")
+          and i.get("type") == "background"
+          and str(i["className"]).startswith("ov-") for i in mg["items"]))
+sec = ds.render_timeline_section([e for e in journal if e["issue_id"] == 1],
+                                 1, sessions[1])
+check("細看抽屜:說明卡(圖例/操作/判讀)",
+      "怎麼看這張圖" in sec and "背景色帶" in sec and "判讀" in sec)
+
 # ── render_timeline_page smoke(說明卡 + 工具列)──────────────────── #
 html_out = ds.render_timeline_page(journal, sessions, watch, win="all", q="")
 check("page:含說明卡(怎麼看+圖例+判讀)",

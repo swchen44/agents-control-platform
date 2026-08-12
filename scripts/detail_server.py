@@ -545,6 +545,9 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   margin:0 4px 0 10px;vertical-align:baseline}
 .howto kbd{border:1px solid var(--line-2);border-radius:4px;padding:0 4px;
   font-family:var(--font-mono);font-size:11px}
+.ckpre{max-height:420px;overflow:auto;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:8px;padding:10px;
+  font-size:12px;white-space:pre-wrap}
 @media (max-width:840px){#ovwrap{flex-direction:column}#ovside{width:100%;
   position:static}}
 /* W8.2 狀態機 SVG(用 CSS 上色,隨明暗主題;--nc=節點色) */
@@ -2391,12 +2394,13 @@ def l3_timeline_data(iid: int) -> dict:
     return {"groups": groups, "items": items}
 
 
-def merged_timeline_data(evs: list[dict], iid: int) -> dict:
+def merged_timeline_data(evs: list[dict], iid: int, sess=None) -> dict:
     """W9.3:L3 對話 + Jira 生命週期合成**單一** vis-timeline 的 groups/items。
 
     共用一條時間軸 → 拖曳/縮放兩區一起動;左側仍以兩層 nested groups 分類:
     類別列『💬 對話(L3)』(各 attempt aN 為子列)+『📅 生命週期』(外部輸入/
-    Jira 寫入/決策/執行 四子列)。item id 生命週期加 lf- 前綴,與 L3 的 aN-i 不撞。"""
+    Jira 寫入/決策/執行 四子列)。item id 生命週期加 lf- 前綴,與 L3 的 aN-i 不撞。
+    C5b:再疊全高狀態色帶背景(lane_segments,同粗看頁顏色語言)。"""
     l3 = l3_timeline_data(iid)
     life = timeline_data(evs)
     groups: list[dict] = []
@@ -2419,22 +2423,44 @@ def merged_timeline_data(evs: list[dict], iid: int) -> dict:
         it = dict(it)
         it["id"] = f"lf-{it['id']}"
         items.append(it)
+    sd = sess or {}
+    for i2, (a, b, state) in enumerate(lane_segments(
+            evs, time.time(), sd.get("outcome"),
+            float(sd.get("finished_at") or 0))):
+        items.append({"id": f"ovbg-{i2}", "start": int(a * 1000),
+                      "end": int(b * 1000), "type": "background",
+                      "className": f"ov-{state}"})   # 全高色帶(同粗看顏色)
     return {"groups": groups, "items": items}
 
 
-def render_timeline_section(evs: list[dict], iid: int) -> str:
+def render_timeline_section(evs: list[dict], iid: int, sess=None) -> str:
     """W6.7/W9.2/W9.3:單一事件時間軸(L3 對話 + Jira 生命週期合一,共用時間軸),
     收在**右下浮動鈕**切換的抽屜裡。**刻意放 <main> 之外**——ticket 頁每 5s 整段換
-    main.innerHTML,widget 在裡面會被反覆摧毀;放外面只初始化一次,刷新只抽資料島更新。"""
-    data = json.dumps(merged_timeline_data(evs, iid), ensure_ascii=False)
+    main.innerHTML,widget 在裡面會被反覆摧毀;放外面只初始化一次,刷新只抽資料島更新。
+    C5b:狀態色帶背景 + 完整「怎麼看」說明卡(圖例/操作/判讀,同粗看頁顏色語言)。"""
+    data = json.dumps(merged_timeline_data(evs, iid, sess), ensure_ascii=False)
     return (
         "<button type='button' id='tlfab' aria-expanded='false' "
         "aria-controls='tlwrap'>🕑 時間軸</button>"
         "<section id='tlwrap' aria-hidden='true'>"
         "<h2 style='margin:4px 0 6px'>🕑 事件時間軸(L3 對話 + Jira 生命週期)</h2>"
-        "<p class='sys' style='margin:0 0 6px;text-align:left'>單一時間軸:上半"
-        "『對話(L3)』(🧑=user/harness prompt、🤖=agent 回覆)、下半『生命週期』"
-        "(留言/派工/結案…);左側分類、拖曳平移、Ctrl+滾輪縮放,兩區一起動。</p>"
+        "<details class='howto' style='margin:0 0 6px'>"
+        "<summary>📖 怎麼看這張圖(圖例・操作・判讀)</summary>"
+        "<p style='margin:4px 0'><b>這是什麼</b>:這張票自己的時間軸(細看)。"
+        "上半『💬 對話(L3)』每個 attempt(a1/a2…)一列:🧑=harness 餵給 agent "
+        "的 prompt、🤖=agent 回覆;下半『📅 生命週期』分四列:外部輸入(人/Jira "
+        "來的)、Jira 寫入(harness 寫出去的)、決策、執行。</p>"
+        "<p style='margin:4px 0'><b>背景色帶</b>(與全域 Timeline 頁同一套顏色):"
+        "<span class='lg' style='background:var(--s-running)'></span>執行中 "
+        "<span class='lg' style='background:var(--s-pending)'></span>等人 "
+        "<span class='lg' style='background:var(--s-queued)'></span>排隊 "
+        "<span class='lg' style='background:var(--s-inactive)'></span>間歇。</p>"
+        "<p style='margin:4px 0'><b>操作</b>:拖曳=平移、<kbd>Ctrl</kbd>+滾輪="
+        "縮放、滑鼠停留=事件全文;兩區共用同一條時間軸、一起動。</p>"
+        "<p style='margin:4px 0 2px'><b>判讀</b>:黃色(等人)區間裡沒有對話="
+        "agent 停著等表單,去催;藍色區間對話密集但生命週期沒進展=同一個 "
+        "attempt 長跑中;對話一列結束又開新列=重試或換手,看生命週期列的"
+        "事件找原因。</p></details>"
         "<div id='evtl'></div>"
         f"<script id='tl-data' type='application/json'>{data}</script>"
         "</section>"
@@ -2589,6 +2615,88 @@ def _ticket_meta_card(iid, s, evs) -> str:
             f"{_usage_bar(used_tok, hard_tok, False)}</span></div></div>")
 
 
+# ── C5b 細看:Session 駕駛艙(DB 全欄位 + TICKET.md)──────────────────── #
+_CK_LABELS = [   # 顯示順序 + 中文標籤;schema 新欄位落在表尾 fallback,不漏列
+    ("key", "Jira key"), ("issue_id", "內部 issue id"),
+    ("profile", "agent profile"), ("outcome", "outcome(終態)"),
+    ("pending_reason", "等待原因"),
+    ("owner_email_list", "負責人 email(門禁)"),
+    ("session_id", "engine session id"), ("attempts", "attempts(本輪)"),
+    ("approval_revisions", "審批退回次數"), ("cost_usd", "花費 USD"),
+    ("tokens", "tokens(累計)"), ("soft_usd", "soft USD 上限(本票)"),
+    ("soft_tokens", "soft tokens 上限(本票)"),
+    ("human_score", "人類評分(0-10)"), ("agent_score", "agent 自評(0-10)"),
+    ("clearquest_id", "ClearQuest CR"), ("base_ref", "base 母票"),
+    ("queued", "排隊中"), ("queued_at", "排隊時間"),
+    ("inactive", "交人類(讓出額度)"), ("evict_count", "強制驅逐次數"),
+    ("score_reminded_at", "上次催評分"), ("finished_at", "結束時間"),
+    ("workspace", "workspace 路徑"),
+]
+
+
+def _ticket_md(ws: str) -> str:
+    """workspace/TICKET.md(agent 開工讀的任務簡報);哨值/缺檔回空。"""
+    p = os.path.join(ws or "", "TICKET.md")
+    if not (ws and not ws.startswith("(") and os.path.isfile(p)):
+        return ""
+    try:
+        txt = open(p, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return ""
+    return txt[:60000] + ("\n…(截斷)" if len(txt) > 60000 else "")
+
+
+def _dur_h(secs: int) -> str:
+    return (f"{secs // 3600}h {secs % 3600 // 60}m" if secs >= 3600
+            else f"{secs // 60}m {secs % 60}s")
+
+
+def _session_cockpit_card(iid, s, evs) -> str:
+    """C5b:Session 駕駛艙卡——DB session 全欄位清楚列出 + 處理時間
+    (run/wait 段加總,同粗看色帶語意)+ TICKET.md 內容(摺疊)。"""
+    if not s:
+        return ""
+    now = time.time()
+    segs = lane_segments(evs, now, s.get("outcome"),
+                         float(s.get("finished_at") or 0))
+    run_s = int(sum(b - a for a, b, st2 in segs if st2 == "run"))
+    wait_s = int(sum(b - a for a, b, st2 in segs if st2 == "wait"))
+    tss = [float(e.get("ts") or 0) for e in evs]
+
+    def _fmt(k, v):
+        if v is None or v == "":
+            return "—"
+        if k in ("queued_at", "finished_at", "score_reminded_at"):
+            return fmt_ts(v)
+        if k in ("queued", "inactive"):
+            return "✓" if v else "—"
+        if k == "cost_usd":
+            return f"${float(v):.4f}"
+        return str(v)
+
+    rows, shown = "", set()
+    for k, lab in _CK_LABELS:
+        shown.add(k)
+        rows += f"<tr><td>{lab}</td><td>{esc(_fmt(k, s.get(k)))}</td></tr>"
+    for k in sorted(set(s) - shown):        # 新欄位不漏列(越清楚越好)
+        rows += f"<tr><td>{esc(k)}</td><td>{esc(_fmt(k, s.get(k)))}</td></tr>"
+    tmd = _ticket_md(s.get("workspace") or "")
+    md_html = ((f"<details><summary>📄 TICKET.md(agent 開工讀的任務簡報,"
+                f"{len(tmd)} 字,點開看)</summary>"
+                f"<pre class='ckpre'>{esc(tmd)}</pre></details>") if tmd
+               else "<div class='sys'>(TICKET.md 不存在:尚未佈建或已回收)"
+                    "</div>")
+    return ("<div class='card'><h2>Session 駕駛艙(DB 全欄位)</h2>"
+            "<div class='row'>"
+            f"<span class='kv'><b>執行時間</b> {_dur_h(run_s)}(agent 實跑)"
+            "</span>"
+            f"<span class='kv'><b>等人時間</b> {_dur_h(wait_s)}</span>"
+            f"<span class='kv'><b>生命期</b> {fmt_ts(min(tss) if tss else 0)}"
+            f" ~ {fmt_ts(max(tss) if tss else 0)}</span></div>"
+            f"<div style='overflow-x:auto'><table class='ovkv'><tbody>{rows}"
+            "</tbody></table></div>" + md_html + "</div>")
+
+
 def render_ticket(iid, journal, sessions) -> str:
     s = sessions.get(iid, {})
     key = s.get("key") or f"#{iid}"
@@ -2692,6 +2800,7 @@ def render_ticket(iid, journal, sessions) -> str:
                if s and not s.get("outcome")
                and not str(s.get("workspace", "")).startswith("(") else "")
             + f"</div></div>"
+            f"{_session_cockpit_card(iid, s, evs)}"
             f"{_ticket_meta_card(iid, s, evs)}"
             f"{render_transcript_card(iid, s)}"
             f"{render_approval(s, evs)}"
@@ -2703,7 +2812,7 @@ def render_ticket(iid, journal, sessions) -> str:
             f"<div class='pane' id='pane-trace'>{trace_view}</div>"
             f"{tabs_js}</main>"
             # W6.7:時間軸刻意在 </main> 之外(5s 刷新只換 main,widget 存活)
-            f"{render_timeline_section(evs, iid)}")
+            f"{render_timeline_section(evs, iid, s)}")
 
 
 # ── W6.5:REST API 文件(vendored Swagger UI,離線可用)────────────────────── #
