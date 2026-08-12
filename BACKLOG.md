@@ -174,7 +174,7 @@ workspace(instance)、命名 resume-safe、起點審批門(description YAML 參�
 
 | # | 項目 | 做法 | effort | 價值 |
 |---|---|---|---|---|
-| D1 | **Docker workspace 隔離** | 切 openhands-server backend(它有 docker)or 自建 rawcli docker 包裹 | 中-高 | 比 seatbelt 強(獨立核心/網路);跑破壞性測試/改公司 repo 才需要 |
+| D1 | **Docker workspace 隔離** | ~~切 openhands-server backend or 自建 rawcli docker 包裹~~ **不做(使用者決策 2026-08-12)**;隔離維持 seatbelt(claude)/--sandbox(codex),isolation provider 介面留著,未來要再開只需實作 provider | — | — |
 | D2 | **codex --sandbox 端到端**(quota 後) | codex profile 驗 read-only 擋寫;已有 sandbox 欄位 | 低 | 補完 codex 側隔離(claude seatbelt 已驗) |
 
 ## 主題 E — 對照/研究補完

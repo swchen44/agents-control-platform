@@ -184,7 +184,7 @@ outer_loop:
     - name: cmd-demo                # Phase 3:指令通道 E2E 用
       when:
         labels: ['arcp.cmddemo']
-      profile: faultdead            # 10s timeout → 快速進 pending:unknown
+      profile: cmddemo              # 確定性 FAILURE(verify 必敗;見 profile)
       on_match: create_or_resume
 
     - name: approval-demo           # W2a 真 Jira 實測:審批門 + human_email
@@ -397,6 +397,29 @@ inner_loop:
         approver: swchen44@gmail.com   # handoff kind=human 的 assignee fallback
       loop:
         max_attempts: 2
+        on_unknown: pending
+
+    # 指令通道 e2e 專用(e2e_commands):rawcli 一輪完成但 verify 必敗
+    # (要求 ticket 沒提的 __never__.txt)→ **確定性 FAILURE**(hil_end,
+    # 可下 retry/cancel)。2026-08-12 取代舊 faultdead 路——ACP 啟動快慢
+    # 不定(暖機 10s 內跑完)造成 e2e flaky,timeout 調短也擋不住
+    cmddemo:
+      workspace:
+        template: empty
+        folder: 'tickets/{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        timeout_sec: 120
+      verify:
+        - name: never
+          cmd: ['false']     # 永遠 rc=1:確定性 FAILURE。files 類不行——驗收
+          #                  # 會渲染進 TICKET.md,agent 看了照建檔就過了(實測)
+      loop:
+        max_attempts: 1
         on_unknown: pending
 
     # fault-injection 專用:timeout 短於 ACP 啟動 → runner 死 → UNKNOWN

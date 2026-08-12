@@ -208,7 +208,12 @@ class OuterLoop:
         或自解除 pending:external),**不占額度**(W8)——否則 SUCCESS-未轉狀態的票仍在
         JQL 結果裡會白占額度、擠掉要跑的。回傳本輪 selected [(ticket, profile)]。"""
         profiles = self.dispatcher.profiles
-        active = self.store.active_sessions()           # W8:只含 active
+        # W8:只含 active。排除「本輪候選」——retry/重置後的票同時是 active
+        # 又是候選,算進 in-flight 會被自己擠去 QUEUED(e2e_commands 複驗抓到:
+        # 額度緊時 retry 票平白延一輪;poll 同步模型下候選不是正在跑)。
+        cand_ids = {t.id for t, _ in to_dispatch}
+        active = [s for s in self.store.active_sessions()
+                  if s.issue_id not in cand_ids]
         inf_eng = Counter(engine_of(profiles[s.profile]) for s in active
                           if s.profile in profiles)
         inf_prof = Counter(s.profile for s in active)

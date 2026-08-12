@@ -4,12 +4,16 @@
 人的指令改走「指令台」表單 → apply_command(取代舊 @agent comment 通道)。本測試直接
 呼 apply_command 驗證效果 + poller 重派:
 
-  C1 cmddemo 票 → dispatch → UNKNOWN → pending:unknown
-  C2 retry → pending 解除、下輪重派(再一次 attempt)
-  C3 cancel → ABORTED
-  C4 再 poll → 不再派工
+  C1 cmddemo 票 → dispatch → 確定性 FAILURE(verify 必敗;hil_end 可下指令)
+  C2 retry → attempts 歸零、下輪重派(journal 計 2 次 attempt)
+  C3 cancel → ABORTED(abort_reason=cancel)
+  C4 再 poll → 終態不再派工
 
-Usage: python3 e2e_commands.py  (live;兩次 10s-timeout attempt,近零成本)
+2026-08-12 改版:舊路(faultdead 10s timeout→UNKNOWN)因 ACP 啟動快慢不定
+而 flaky(暖機 haiku 10s 內跑完變 SUCCESS)——改 cmddemo profile(rawcli+
+verify 必敗)確定性 FAILURE。測後自動把測試票轉 done(不留殘票)。
+
+Usage: python3 e2e_commands.py  (live;兩次 haiku attempt,~$0.06)
 """
 
 from __future__ import annotations
@@ -45,7 +49,10 @@ def main() -> int:
     profiles = load_profiles(config_path())
     shutil.rmtree("./runtime_cmd", ignore_errors=True)
     store = Store("./runtime_cmd")
-    jql = "project = SCRUM AND labels = cmddemo AND statusCategory != Done"
+    # J3:label 已全面 arcp. 前綴(2026-08-12 複驗抓到此 jql 漏改 → 票撈不到全鏈 FAIL)
+    # created >= -5m:只撈本輪新票(歷史殘票會被重派、污染計數+多花錢)
+    jql = ('project = SCRUM AND labels = arcp.cmddemo'
+           ' AND statusCategory != Done AND created >= "-5m"')
     loop = OuterLoop(
         src, store, routes, jql,
         dispatcher=Dispatcher(src, store, profiles, root="./runtime_cmd"),
@@ -60,8 +67,10 @@ def main() -> int:
 
     loop.poll_once()
     s = store.get_session(t.id)
-    c1 = s and s.outcome == "UNKNOWN" and s.pending_reason == "unknown"
-    print(f"C1 dispatch→UNKNOWN pending: {'PASS' if c1 else 'FAIL'}")
+    # cmddemo profile:verify 必敗 → 確定性 FAILURE(hil_end,可下 retry/cancel)。
+    # 舊路(faultdead timeout→UNKNOWN)因 ACP 啟動快慢不定而 flaky,已棄。
+    c1 = s and s.outcome == "FAILURE"
+    print(f"C1 dispatch→FAILURE(hil_end,可下指令): {'PASS' if c1 else 'FAIL'}")
 
     ok_r, msg_r, _ = apply_command(src, store, profiles, t.id, "retry", by=by)
     loop.poll_once()
@@ -79,6 +88,10 @@ def main() -> int:
     c4 = attempts_in_journal(journal, t.id) == 2
     print(f"C4 ABORTED 後不再派工: {'PASS' if c4 else 'FAIL'}")
 
+    try:                                # 收尾:測試票轉 done(不留 open 殘票)
+        src.transition(t.id, "done")
+    except Exception as e:              # noqa: BLE001
+        print(f"(收尾 transition 失敗,請手關 {t.key}:{e})")
     store.close()
     ok = all([c1, c2, c3, c4])
     print("e2e-commands:", "PASS" if ok else "FAIL")

@@ -101,5 +101,31 @@ check("active_sessions 只含 active(排除 pending/inactive/queued/終態)",
 check("active_sessions 欄位往返正確(queued/inactive bool)",
       active[0].queued is False and active[0].inactive is False)
 
+# -- _gate 回歸:retry 票(active 且同時是候選)不被自己擠去 QUEUED ------- #
+# e2e_commands 複驗抓到(2026-08-12):active_sessions 含剛 retry 的票,又是
+# 本輪候選 → in_flight 雙重計數 → max_running 緊時被自己 queue 一輪。
+from arcp.poller import OuterLoop  # noqa: E402
+from arcp.profiles import Profile  # noqa: E402
+from arcp.ticket import Ticket  # noqa: E402
+
+_prof = Profile(name="p", workspace_template="empty",
+                workspace_folder="t/{issue_id}", skills=[],
+                agent={"backend": "rawcli", "engine": "claude"}, verify=[],
+                max_attempts=1, on_unknown="pending")
+st2 = Store(os.path.join(tempfile.mkdtemp(), "s"))
+st2.upsert_session(_sess(9))                     # 剛 retry:active、未派
+lp = OuterLoop(None, st2, [], "",
+               dispatcher=type("D", (), {"profiles": {"p": _prof}})(),
+               external=None)
+lp.concurrency = {"max_running": 1, "per_engine": {}, "per_profile": {}}
+t9 = Ticket(id=9, key="K-9", summary="s", state="To Do", assignee=None,
+            assignee_id=None, description="")
+_evs: list = []
+sel = lp._gate([(t9, "p")], _evs)
+check("_gate:retry 票不被自己的 active 擠去 queue(max_running=1)",
+      [t.id for t, _ in sel] == [9]
+      and not any(e["type"] == "queued" for e in _evs))
+st2.close()
+
 print("test-gate:", "PASS" if ok else "FAIL")
 sys.exit(0 if ok else 1)

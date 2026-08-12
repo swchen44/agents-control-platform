@@ -109,6 +109,20 @@
     watchdog 機制用假進程單元測(`test_stall.py`,免 token、確定),不依賴 agent
     行為;resume 續跑由 C.4 已證。分層驗證勝過脆弱的 live 端到端。
 
+17. **e2e 別依賴「agent 做不到/來不及」;驗收會告訴 agent 怎麼過**
+    症狀(2026-08-12 e2e_commands 複驗):① faultdead 靠「timeout 10s 短於
+    ACP 啟動」製造 UNKNOWN——機器暖了 haiku 10s 內跑完變 SUCCESS(timeout
+    調 2s 仍 completed);② 改「verify 要求 ticket 沒提的 __never__.txt」
+    製造 FAILURE——**驗收標準會渲染進 TICKET.md**,agent 讀了照建檔就過了。
+    根因:兩者都把「確定性失敗」寄託在 agent 的能力/資訊侷限上,而 agent
+    會變快、驗收本來就對 agent 透明(這是 W15 的刻意設計)。
+    對策:要確定性失敗就用 **agent 無法影響的證據**——verify `cmd: ['false']`
+    (永遠 rc=1);同理,任何「等 agent 跑到一半去下指令」的時序測試都 flaky,
+    改為對「已達的穩定態」(FAILURE/hil_end)下指令。呼應 #16 的結論:
+    分層驗證勝過脆弱的 live 端到端。
+    另:同輪抓到 J3 label 改名漏掃**測試檔內的 jql 字串**(`labels = cmddemo`)
+    ——label 遷移要連 jql/查詢字串一起 grep,不只 label 值。
+
 ## Session 作業教訓(跨專案通用)
 
 6. **背景工作的 cwd 會漂移**:background shell 從「當下」的工作目錄啟動,
