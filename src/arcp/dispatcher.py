@@ -76,6 +76,8 @@ class Dispatcher:
         self.form_base_url = form_base_url      # budget soft 破→發增額表單連結
         self.mention = mention
         self.admin_emails: list[str] = []       # K:全站管理者 email(門禁豁免;可 reload)
+        self.user_map: dict = {}                # L6:email→識別碼手動映射(可 reload)
+        self.username_rule: str = ""            # L6:查無時推導(local/{local} 模板)
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
                             events: list[dict]) -> list[dict]:
@@ -107,7 +109,9 @@ class Dispatcher:
         if not approver:
             return []
         try:
-            acct = (self.source.find_account_id(approver)
+            from .identity import resolve_user_id
+            acct = (resolve_user_id(approver, self.source, self.store,
+                                    self.user_map, self.username_rule)
                     if "@" in str(approver) else approver)
             if not acct:
                 return []

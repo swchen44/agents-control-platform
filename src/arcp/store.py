@@ -141,6 +141,13 @@ class Store:
             )""")
         self._db.execute("CREATE INDEX IF NOT EXISTS ix_interactions_issue "
                          "ON interactions(issue_id)")
+        # 主題 L6:email→Jira 識別碼快取(user-search 命中寫回;亦可預 seed)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS user_dir (
+                email      TEXT PRIMARY KEY,
+                uid        TEXT NOT NULL,
+                updated_at REAL NOT NULL DEFAULT 0
+            )""")
         self._migrate()
         self._db.commit()
 
@@ -221,6 +228,23 @@ class Store:
             """, (w.issue_id, w.key, w.last_comment_id, w.last_state,
                   w.last_assignee_id, w.route_name, time.time(),
                   w.last_assignee, w.summary, w.description[:2000]))
+
+    def get_user_uid(self, email: str) -> str | None:
+        """L6:快取查 email→識別碼(cloud=accountId、dc=name);無 → None。"""
+        with self._lock:
+            r = self._db.execute("SELECT uid FROM user_dir WHERE email=?",
+                                 (email,)).fetchone()
+        return r[0] if r else None
+
+    def put_user_uid(self, email: str, uid: str) -> None:
+        """L6:寫入/更新 email→識別碼快取(user-search 命中時寫回)。"""
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO user_dir(email, uid, updated_at) VALUES(?,?,?)"
+                " ON CONFLICT(email) DO UPDATE SET uid=excluded.uid,"
+                " updated_at=excluded.updated_at",
+                (email, uid, time.time()))
+            self._db.commit()
 
     def journal(self, event_type: str, issue_id: int, key: str,
                 **fields) -> dict:

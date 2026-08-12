@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import os
 
-from .identity import normalize_email_list
+from .identity import normalize_email_list, resolve_user_id
 from .jira_source import JiraCloudSource
 from .lifecycle_state import canonical_state
 from .logutil import get_logger
@@ -124,7 +124,8 @@ def available_commands(sess) -> list[str]:
 def apply_command(source, store, profiles, issue_id: int, cmd: str,
                   args: dict | None = None, by: str = "", *,
                   base_url: str = "", mention: str = "",
-                  ip: str = "") -> tuple[bool, str, list]:
+                  ip: str = "", user_map: dict | None = None,
+                  username_rule: str = "") -> tuple[bool, str, list]:
     """執行一個指令(人的表單 console 與自動化 REST API 共用的唯一核心)。
 
     回 (ok, 人看的結果訊息, events)。by=提交者身分(email,稽核)、ip=來源 IP(稽核)。
@@ -179,12 +180,9 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
             return False, f"負責人已是 {new_list or '(無)'},無需更改。", []
         sess.owner_email_list = new_list
         store.upsert_session(sess)
-        accts, missing = [], []                     # re-tag:每個 email → accountId
+        accts, missing = [], []             # re-tag:每個 email → 識別碼(L6 查序)
         for e in emails:
-            try:
-                acct = source.find_account_id(e)
-            except Exception:  # noqa: BLE001 — 查不到帳號不擋改(退純文字 email)
-                acct = None
+            acct = resolve_user_id(e, source, store, user_map, username_rule)
             (accts if acct else missing).append(acct or e)
         from .jira_source import mention_tag_of
         at = "".join(mention_tag_of(source, a) + " " for a in accts)

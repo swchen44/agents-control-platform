@@ -31,6 +31,51 @@ def owner_emails(session) -> set:
                         for x in (raw or "").split(",")) if e}
 
 
+def resolve_user_id(email, source=None, store=None, user_map=None,
+                    username_rule: str = "") -> str | None:
+    """email → Jira 使用者識別碼(cloud=accountId、dc=name/username)。
+
+    查序(主題 L6/L7):① config `source.user_map` 手動映射(user-search
+    被權限擋的逃生路)② store user_dir 快取 ③ source.find_user_id /
+    find_account_id(命中寫回快取)④ `username_rule` 推導('local'=email
+    @ 前段;或含 {local} 的模板如 'corp-{local}')。全 miss → None。
+    供 mention/watcher 解析;**approval 驗證仍走 source 直查**(推導值
+    不能當「合法帳號」證據)。"""
+    e = normalize_email(email)
+    if not e:
+        return None
+    m = {normalize_email(k): v for k, v in (user_map or {}).items()}
+    if m.get(e):
+        return m[e]
+    if store is not None:
+        try:
+            uid = store.get_user_uid(e)
+            if uid:
+                return uid
+        except Exception:      # noqa: BLE001 — 快取壞不擋解析
+            pass
+    find = (getattr(source, "find_user_id", None)
+            or getattr(source, "find_account_id", None))
+    if find:
+        try:
+            uid = find(e)
+        except Exception:      # noqa: BLE001 — 查詢失敗走 fallback
+            uid = None
+        if uid:
+            if store is not None:
+                try:
+                    store.put_user_uid(e, uid)
+                except Exception:  # noqa: BLE001
+                    pass
+            return uid
+    local = e.split("@")[0]
+    if username_rule == "local":
+        return local
+    if "{local}" in (username_rule or ""):
+        return username_rule.replace("{local}", local)
+    return None
+
+
 def owner_gate(submitted, session, profile,
                admin_emails) -> tuple[bool, str]:
     """身分門禁。回 (放行?, 給人看的拒絕訊息)。

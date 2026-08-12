@@ -81,6 +81,8 @@ def make_reload(loop, disp, ext, config_path: str = "config.yaml"):
         disp.profiles = new_profiles
         disp.global_budget = s_cfg.get("budget") or {}  # budget:全站上限可 reload
         disp.admin_emails = s_cfg.get("admin_emails") or []  # K:管理者可 reload
+        disp.user_map = s_cfg.get("user_map") or {}          # L6:可 reload
+        disp.username_rule = s_cfg.get("username_rule") or ""
         ext.profiles = new_profiles                    # W4.5:離手定格查表同步
         new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
         if new_cancel:
@@ -159,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
                       cancel_status=source_cfg.get("cancel_status", ""),  # triage 失敗
                       global_budget=source_cfg.get("budget") or {})  # 全站月度上限
     disp.admin_emails = source_cfg.get("admin_emails") or []  # K:管理者 email 門禁豁免
+    disp.user_map = source_cfg.get("user_map") or {}          # L6:email→識別碼映射
+    disp.username_rule = source_cfg.get("username_rule") or ""  # L6:推導規則
     # budget soft 破→發增額表單需 form base_url/mention(下方 fcfg 定義後補設)
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
@@ -204,7 +208,9 @@ def main(argv: list[str] | None = None) -> int:
     # 故 hold 能正確 killpg 跑中的 agent)。取代舊 @agent comment 通道。
     def _command_fn(issue_id, cmd, args, by, ip=""):
         return apply_command(src, store, profiles, issue_id, cmd, args or {},
-                             by, base_url=form_base, mention=mention, ip=ip)
+                             by, base_url=form_base, mention=mention, ip=ip,
+                             user_map=disp.user_map,           # L6:reload 跟隨
+                             username_rule=disp.username_rule)
 
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,

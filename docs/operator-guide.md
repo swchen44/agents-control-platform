@@ -244,6 +244,16 @@ soft 上限、評分、workspace 路徑、驅逐次數…新欄位也不漏)+ **
 `source.name`、**Jira project/jql(絕不重疊,否則互搶票)**、control port、dashboard port +
 指向。細節見 [README「多實例部署」](../README.md)。
 
+## 6.5 Jira Data Center 部署(主題 L)
+
+內網 DC(非 Cloud)只要 `config.yaml` 設 `source.jira_flavor: dc`,`~/.env` 憑證改
+**`JIRA_PAT`**(建議,8.14+)或 `JIRA_USERNAME`+`JIRA_PASSWORD`——端點(api/2)、
+使用者識別(username)、`[~username]` mention、wiki 純文字全自動切換;Cloud 部署
+**什麼都不用動**(預設 cloud)。user search 被權限擋時用 `source.user_map`
+手動映射或 `username_rule` 推導。**內網第一次上線照
+[DC 首驗 checklist](dc-first-run-checklist.md) 逐項勾**(最關鍵:@mention 要真的
+觸發通知);設計正本 [design/jira-dc.md](design/jira-dc.md)。
+
 ## 7. 異常處置
 
 | 症狀 | 處置 |

@@ -289,12 +289,15 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 
 **未做(可未來擴充)**:description email 改了自動同步(現定案=鎖定,只走 set_email)。
 
-## 主題 L — Jira Data Center 相容(2026-08-12 記錄,需多討論)
+## 主題 L — Jira Data Center 相容(2026-08-12 定案 + 實作,**L1–L7 全完成**)
 
-> **背景**:現在走 **Jira Cloud**(`*.atlassian.net`、`JIRA_EMAIL`+`JIRA_API_TOKEN`、全 api/3、
-> **accountId**、ADF)。**內部生產是 Data Center**——DC **沒有 accountId**,識別碼是 `name`
-> (username)/`key`。目前整個 jira_source(18 處 api/3)+ @mention(3 處 `[~accountid:]`)全是
-> Cloud 假設,上 DC 會**全面失效**(且失敗很安靜:comment 建得出來、文字看得到,但**不觸發通知**)。
+> **背景**:開發走 **Jira Cloud**;**內部生產是 Data Center**(≥8.14,PAT 可用)——DC 沒有
+> accountId,識別碼是 `name`(username)。**已實作**:config `source.jira_flavor: dc` 一鍵切換,
+> Cloud 預設零變。設計正本 [docs/design/jira-dc.md](docs/design/jira-dc.md)、內網首次上線照
+> [docs/dc-first-run-checklist.md](docs/dc-first-run-checklist.md) 逐項勾。
+> 定案(2026-08-12):抽象=**差異表+少數 if**;認證=**PAT 優先+basic fallback**;驗證=
+> **mock 單元測入 CI+內網首驗 checklist**;範圍=全做 L1–L7+auth。
+> commit:L1 `2695a94`、L2–L4 `9ad37f7`、L5 `105948c`、L6/L7+文件=本批。
 
 | # | 項目 | Cloud 現況 → DC 目標 |
 |---|---|---|

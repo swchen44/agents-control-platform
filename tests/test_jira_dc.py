@@ -207,5 +207,41 @@ check("post_deliverables dc:走 add_comment(wiki),不走 ADF",
       len(_dc.comments) == 1 and _dc.adf == []
       and _dc.comments[0].startswith("h3. "))
 
+# ── L6/L7:resolve_user_id 查序(map → 快取 → search 寫回 → rule)──── #
+from arcp.identity import resolve_user_id  # noqa: E402
+
+_st2 = Store(_tf.mkdtemp())
+
+
+class _Search:
+    def __init__(self, ret):
+        self.ret, self.calls = ret, 0
+
+    def find_user_id(self, email):
+        self.calls += 1
+        return self.ret
+
+
+check("resolve:user_map 最優先(不打 search)",
+      resolve_user_id("A@corp.com", _Search("wrong"), _st2,
+                      {"a@corp.com": "map-uid"}) == "map-uid")
+s1 = _Search("hit-1")
+check("resolve:search 命中 → 回傳 + 寫回快取",
+      resolve_user_id("b@corp.com", s1, _st2) == "hit-1"
+      and _st2.get_user_uid("b@corp.com") == "hit-1")
+s2 = _Search("no-call")
+check("resolve:第二次走快取(search 不再打)",
+      resolve_user_id("b@corp.com", s2, _st2) == "hit-1" and s2.calls == 0)
+check("resolve:全 miss + rule=local → email 前段",
+      resolve_user_id("carol@corp.com", _Search(None), _st2,
+                      username_rule="local") == "carol")
+check("resolve:{local} 模板", resolve_user_id(
+    "dave@corp.com", _Search(None), _st2,
+    username_rule="ad-{local}") == "ad-dave")
+check("resolve:全 miss 無 rule → None",
+      resolve_user_id("eve@corp.com", _Search(None), _st2) is None)
+check("resolve:空 email → None", resolve_user_id("", _Search("x")) is None)
+_st2.close()
+
 print(f"test-jira-dc: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)
