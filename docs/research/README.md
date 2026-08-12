@@ -35,6 +35,7 @@
 - [2026-08-abc-roadmap-analysis.md](2026-08-abc-roadmap-analysis.md) — A/B/C 三路線策略與可行性
 - [2026-08-openhands-acp-claude-code-lifetime.md](2026-08-openhands-acp-claude-code-lifetime.md) — OpenHands × ACP × Claude Code 生命週期讀碼研究
 - [2026-08-qm-comparison.md](2026-08-qm-comparison.md) — 對 qm 平台的行號級對照
+- [2026-08-headless-scheduling-subagents.md](2026-08-headless-scheduling-subagents.md) — headless CLI × 排程/subagent 風險(三實驗實證:排程靜默失效/背景工作被殺/subagent 會等;含建議修正)
 
 > 想看「怎麼除錯」而非「怎麼設計」→ 見 [troubleshooting](../troubleshooting.md) 與
 > [observability](../design/observability.md);想看子系統機制 → 見 [docs/design/](../index.md)。
