@@ -235,7 +235,16 @@ def build_data(journal, sessions, watch) -> dict:
                            or first_ts.get(iid) or 0,
         })
     rate = os.environ.get("ARCP_HOURLY_RATE")
+    from arcp.kpi import compute_kpi  # C3:KPI 框架
+    now = time.time()
+    sess_list = list(sessions.values())
+    kpi3 = {"all": compute_kpi(journal, sess_list, now=now),
+            "d7": compute_kpi(journal, sess_list, now=now,
+                              since=now - 7 * 86400),
+            "d30": compute_kpi(journal, sess_list, now=now,
+                               since=now - 30 * 86400)}
     return {"rows": rows,
+            "kpi3": kpi3,
             "rate_default": float(rate) if rate else None}
 
 
@@ -1273,6 +1282,36 @@ function renderStats(rows){
   $('stats').innerHTML=t.map(([n,l])=>
     `<div class='stat'><div class='n'>${n}</div><div class='l'>${l}</div></div>`).join('');
 }
+// ---- C3 KPI(北極星+制衡;v5 §10:只建基線、效率配制衡)----
+function kfmt(v,suf){return v==null?'–':v+(suf||'');}
+function renderKpi3(){const K=D.kpi3;if(!K)return;
+ const tr=[['d7','7 天'],['d30','30 天'],['all','全歷史']].map(([k,l])=>{
+   const n=K[k].north_star,e=K[k].efficiency,g=K[k].guard;
+   return `<tr><td><b>${l}</b></td>`+
+     `<td><b>${kfmt(n.first_pass_close_rate_strict,'%')}</b> (${n.first_pass}/${n.closed})</td>`+
+     `<td>${kfmt(n.first_pass_close_rate_progress,'%')} (/${n.resolved})</td>`+
+     `<td>${kfmt(e.cycle_time_min_med,'m')} / ${kfmt(e.cycle_time_min_p90,'m')}</td>`+
+     `<td>${kfmt(e.attempts_per_close_med)}</td>`+
+     `<td>${e.cost_per_close_med==null?'–':'$'+e.cost_per_close_med}</td>`+
+     `<td>${kfmt(g.continue_rate,'%')}</td>`+
+     `<td>${kfmt(g.human_score_med)} (n=${g.human_score_n})</td>`+
+     `<td>${kfmt(g.unknown_rate,'%')}</td>`+
+     `<td>${kfmt(g.abandonment_rate,'%')}</td></tr>`;}).join('');
+ const ab=Object.entries(K.all.guard.abort_reasons||{})
+   .map(([k,v])=>k+'×'+v).join(' · ')||'–';
+ $('kpi3').innerHTML=`<h2>KPI · 北極星+制衡(C3;P1 只建基線不設目標)</h2>
+ <div class='card' style='overflow-x:auto'><table><thead><tr>
+ <td><b>窗</b></td><td><b>First-pass close(嚴格)</b></td>
+ <td><b>進行版(÷終態)</b></td><td><b>Cycle med/p90</b></td>
+ <td><b>Attempts</b></td><td><b>$/close</b></td><td><b>打回率</b></td>
+ <td><b>人評 med</b></td><td><b>UNKNOWN</b></td><td><b>放棄率</b></td>
+ </tr></thead><tbody>${tr}</tbody></table>
+ <div class='sys' style='text-align:left'>⚖️ 制衡(v5 §10.5):First-pass 升但
+ 人評/打回率變差 = 在「調鬆 verify」作弊;UNKNOWN 率勿單看(壓低它最快的
+ 方法是誤判成 FAILURE)。中止原因:${ab}。automation coverage
+ ${kfmt(K.all.coverage.automation_coverage,'%')}(routed
+ ${K.all.coverage.routed}/${K.all.coverage.new_issues})。
+ 一次到位 = 無 retry / 打回(continue)/ 換手。</div></div>`;}
 // ---- 分桶(日/週) ----
 function bkey(ts,wk){const d=new Date(ts*1000);
   if(wk){const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);}
@@ -1472,7 +1511,7 @@ function renderTable(rows){
   $('pginfo').textContent=rows.length+' 筆 · 第 '+(S.page+1)+'/'+pages+' 頁';
   resizable($('tix'),'tix');          // W5.7 欄寬可拖曳
 }
-function render(){syncPalette();prep();const rows=filtered();renderStats(rows);var _u=$('upd');if(_u)_u.textContent='更新於 '+_TM.format(new Date());
+function render(){syncPalette();prep();const rows=filtered();renderStats(rows);renderKpi3();var _u=$('upd');if(_u)_u.textContent='更新於 '+_TM.format(new Date());
   renderTime(rows);renderMoney(rows);
   renderPState(rows);renderPCost(rows);renderPScore(rows);   // W7.4 per-profile
   renderTable(rows);markRx();save();}
@@ -1889,6 +1928,7 @@ def render_index(journal, sessions, watch=None) -> str:
             f"{filterbar}"
             f"<div class='stats' id='stats'>"
             f"{overview_cards(sessions, journal)}</div>"
+            f"<div id='kpi3'></div>"
             f"{charts}"
             f"<h2>Tickets</h2>{toolbar}"
             f"<div class='card' style='overflow-x:auto'>"
@@ -2913,6 +2953,17 @@ def openapi_spec() -> dict:
             "/openapi.json": {"get": {
                 "tags": ["artifacts"], "summary": "本 OpenAPI 規格(JSON)",
                 "responses": {"200": {"description": "spec",
+                                      "content": {"application/json": {}}}}}},
+            "/api/v1/kpi": {"get": {
+                "tags": ["llm-api(唯讀)"],
+                "summary": "C3 KPI:北極星(First-pass close 雙報)+效率+"
+                           "制衡(打回率/人評/UNKNOWN/放棄)+coverage",
+                "parameters": [{"name": "days", "in": "query",
+                                "required": False,
+                                "description": "時間窗天數(省略=全歷史)",
+                                "schema": {"type": "number"}}],
+                "responses": {"200": {"description":
+                                      "north_star/efficiency/guard/coverage",
                                       "content": {"application/json": {}}}}}},
             "/api/v1/tickets": {"get": {
                 "tags": ["llm-api(唯讀)"],
@@ -4131,6 +4182,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/server/data":            # W6.1 Server 頁資料源
             self._send_json(build_server_data())
+            return
+        if self.path.startswith("/api/v1/kpi"):   # C3:KPI(?days=N 時間窗)
+            from urllib.parse import parse_qs, urlparse
+
+            from arcp.kpi import compute_kpi
+            qs = parse_qs(urlparse(self.path).query)
+            days = qs.get("days", [None])[0]
+            since = (time.time() - float(days) * 86400) if days else 0.0
+            self._send_json(compute_kpi(journal, list(sessions.values()),
+                                        since=since))
             return
         if self.path.startswith("/api/v1/tickets"):  # W7.7 LLM 監控 API
             self._api_v1(journal, sessions)

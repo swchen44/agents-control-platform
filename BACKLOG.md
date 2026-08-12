@@ -166,7 +166,7 @@ workspace(instance)、命名 resume-safe、起點審批門(description YAML 參�
 |---|---|---|---|---|
 | C1 | **grader 擴展:build/test/lint/schema**(現只有 files/command) | 加 verify step 類型;profile 宣告;複用 AllOf | 低-中 | 真實任務(改 repo)要跑測試驗證,不只查檔案 |
 | C2 | **L0-L3 trace completeness CI**(v5 唯一 P1 硬 KPI) | 每個結束的 attempt 四層檔齊全,缺任一層告警 | 低-中 | v5 說唯一該 P1 就設 100% 硬目標;稽核基礎 |
-| C3 | **KPI 框架**(first-pass Close rate + Goodhart 防護,v5 §10) | 從 journal 算北極星指標;效率指標配制衡指標 | 中 | v5 §10 整套;衡量「好不好」而非只「跑不跑」 |
+| C3 | **KPI 框架**(first-pass Close rate + Goodhart 防護,v5 §10) | ✅ **完成(2026-08-13)**:`kpi.py` 純函式——北極星雙報(嚴格=÷closed 決策用/進行=÷終態趨勢;一次到位=無 retry/打回/換手)+效率(cycle/attempts/$ per close med+p90/週吞吐)+**制衡**(打回率/人評/UNKNOWN/放棄+abort 原因)+coverage;Dashboard 首頁三窗 KPI 表+作弊警語+`GET /api/v1/kpi?days=N`;只建基線不設目標(v5 原則);正本 docs/design/kpi.md | ✅ |
 | C4 | **聚合 dashboard**(cost/state/失敗率) | detail page 加彙總頁 or Grafana;讀 journal/store | 中 | v3 生產就緒清單缺的「監控」 |
 | C5 | **時間軸視覺化:粗看+細看**(使用者 2026-08-12:「分出粗看和細看」「網頁旁必須寫說明,解釋代表的事情和如何觀看」) | **粗看**=`/timeline` 全域跨票:每票一列狀態色帶(沿用六態色票)+關鍵事件點+✔✘ 終點;時間窗 24h/7d/30d/all+關鍵字過濾;點列開側欄摘要(狀態/負責人/用量/執行時間/可操作表單連結)→「完整詳情」進細看。**細看**=單票頁新增 Session 駕駛艙卡(DB 全欄位+執行/等人時間+TICKET.md 摺疊)+事件時間軸抽屜疊同色系色帶。**兩頁都有「怎麼看這張圖」說明卡**(圖例・操作・判讀範例,可摺疊記憶) | 中 | ✅ **完成(2026-08-12,`c8c928d`+後續)** |
 

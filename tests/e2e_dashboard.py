@@ -339,6 +339,20 @@ try:
     except urllib.error.HTTPError as e:
         check("tfile:traversal 擋掉", e.code == 404)
 
+    # C3:KPI 框架(/data.kpi3 三窗 + /api/v1/kpi + 首頁容器/渲染 JS)
+    kd = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/data", timeout=5).read())
+    check("KPI:/data 帶 kpi3 三窗(north_star/guard 結構齊)",
+          all(k in (kd.get("kpi3") or {}) for k in ("all", "d7", "d30"))
+          and "first_pass_close_rate_strict" in kd["kpi3"]["all"]["north_star"]
+          and "abort_reasons" in kd["kpi3"]["all"]["guard"])
+    kj = json.loads(urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/api/v1/kpi?days=30", timeout=5).read())
+    check("KPI:/api/v1/kpi?days=30 可用",
+          "north_star" in kj and "efficiency" in kj)
+    check("KPI:首頁容器+渲染 JS+制衡警語",
+          "id='kpi3'" in idx and "renderKpi3" in idx and "調鬆 verify" in idx)
+
     # C5:粗看全域時間軸(/timeline)——色帶+事件點+側欄資料島+說明卡
     ov = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/timeline?win=all", timeout=5).read().decode()
