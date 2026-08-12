@@ -70,16 +70,18 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
 - **自動化 / 程式**走 REST:`POST :8787/ticket/<id>/command`,body `{cmd,args,by}`
   (`args.profile` 供 next、`args.email` 供 set_email),回 `{ok,message}`。與指令台同一套
   核心、在 poller 行程(hold 能正確 killpg)。
-- **`set_email`(改負責人)**:改該票 `owner_email`(email 身分門禁的比對對象)。改後
-  re-tag 新負責人 + 重貼待填表單。**門禁閉環**:只有現負責人 / 管理者 / 審批者能下此指令。
-  見 [身分門禁設計](design/identity-gate.md)。
+- **`set_email`(改負責人名單)**:**整組取代**該票 `owner_email_list`(逗號分隔多個;
+  **留空=清空、解除門禁**)。表單會**預填目前 owners** 供參考;改後 re-tag 每位新負責人 +
+  重貼待填表單。**門禁閉環**:只有現負責人 / 管理者 / 審批者能下此指令。現值也可由
+  `GET :8788/api/v1/tickets/{ref}` 的 `owner_email_list` 讀。見 [身分門禁設計](design/identity-gate.md)。
 - **已移除**舊的 `@agent` 留言指令通道與 `commands.allowed_commenters` 白名單(未 release,
   不相容)。REST 端點沿用 control API 的信任模型(綁 127.0.0.1;要開放見 §8 安全)。
 
 ### 2.2 負責人 email 身分門禁(選填)
 
-票的 `description` 頂端 yaml 填了 `email`,該票就**上鎖**:HIL 表單 / 指令台提交的 email 必須
-== 負責人 / ∈ 全站 `admin_emails` / == 該票 profile `approver` 才放行(沒填 email 的票不受限)。
+票的 `description` 頂端 yaml 填了 `email`(**可逗號分隔多個**,存 `owner_email_list`),
+該票就**上鎖**:HIL 表單 / 指令台提交的 email 必須 ∈ 負責人名單 / ∈ 全站 `admin_emails` /
+== 該票 profile `approver` 才放行(沒填 email 的票不受限)。
 全站管理者豁免名單設在 config(可 hot reload):
 
 ```yaml

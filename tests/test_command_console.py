@@ -58,6 +58,15 @@ check("GET:附全指令說明表(用途/時機/副作用/效果)",
       "指令說明(全部)" in html and "副作用" in html)
 check("GET:破壞性確認框", "confirm" in html and "破壞性" in html)
 check("GET:next profile 下拉(候選 alt)", "alt" in html)
+check("GET:owner 空 → 標示門禁未啟用", "門禁未啟用" in html)
+
+# K6b:set_email 欄預填目前 owners(人改時可先看現值)
+st_o = Store(tempfile.mkdtemp())
+st_o.upsert_session(_sess(owner_email_list="a@x.com,b@y.tw"))
+tok_o = st_o.get_or_create_command_token(1, "P-1")
+_, html_o = _server(st_o, [])._command_view(tok_o)
+check("GET:顯示目前負責人 + 預填現值",
+      "目前負責人" in html_o and "value='a@x.com,b@y.tw'" in html_o)
 
 
 # ── POST:缺 email → 錯誤重顯;有效 run → 呼叫 command_fn ─────────────────── #

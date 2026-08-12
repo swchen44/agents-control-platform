@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import os
 
-from .identity import normalize_email
+from .identity import normalize_email_list
 from .jira_source import JiraCloudSource
 from .lifecycle_state import canonical_state
 from .logutil import get_logger
@@ -96,10 +96,11 @@ COMMAND_INFO: dict[str, dict] = {
         "effect": "下輪由新 profile 接手同一張票(目標若需放行則重走審批門)"},
     "set_email": {
         "label": "改負責人(set_email)",
-        "purpose": "更改本票負責人 email(門禁比對對象 + @mention 對象)",
-        "when": "負責人交接、填錯 email、或要換人接手 HIL 表單",
-        "side_effect": "改 session.owner_email_list;敏感、需二次確認",
-        "effect": "@mention 新負責人並重貼待填表單;此後只有新 email"
+        "purpose": "整組更改本票負責人 email(逗號分隔多個;門禁比對 + @mention 對象)",
+        "when": "負責人交接、填錯 email、加/減共同負責人、或換人接手 HIL 表單",
+        "side_effect": "整組取代 session.owner_email_list(留空=清空、門禁解除);"
+                       "敏感、需二次確認",
+        "effect": "@mention 每位新負責人並重貼待填表單;此後只有名單內 email"
                   "(或管理者/審批者)能操作本票"},
 }
 # 破壞性指令:console 要二次確認(set_email 改負責人也算敏感)
@@ -168,37 +169,43 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
 
     if cmd == "set_email":
         from .hil import form_link  # lazy:避免 import 期耦合
-        new_email = normalize_email(args.get("email"))
-        if not new_email or "@" not in new_email:
-            return False, "請提供有效的 email(改負責人)。", []
+        new_list = normalize_email_list(args.get("email"))   # K6:整組取代
+        emails = [e for e in new_list.split(",") if e]
+        bad = [e for e in emails if "@" not in e]
+        if bad:
+            return False, f"無效 email:{'、'.join(bad)}(逗號分隔多個)。", []
         old = sess.owner_email_list or "(無)"
-        if new_email == normalize_email(old):
-            return False, f"負責人已是 {new_email},無需更改。", []
-        sess.owner_email_list = new_email
+        if new_list == normalize_email_list(sess.owner_email_list):
+            return False, f"負責人已是 {new_list or '(無)'},無需更改。", []
+        sess.owner_email_list = new_list
         store.upsert_session(sess)
-        try:                                        # re-tag:email → accountId
-            acct = source.find_account_id(new_email)
-        except Exception:      # noqa: BLE001 — 查不到帳號不擋改(退純文字 email)
-            acct = None
-        at = f"[~accountid:{acct}] " if acct else ""
+        accts, missing = [], []                     # re-tag:每個 email → accountId
+        for e in emails:
+            try:
+                acct = source.find_account_id(e)
+            except Exception:  # noqa: BLE001 — 查不到帳號不擋改(退純文字 email)
+                acct = None
+            (accts if acct else missing).append(acct or e)
+        at = "".join(f"[~accountid:{a}] " for a in accts)
+        shown = new_list or "(已清空,門禁解除)"
+        tail = f"(Jira 查無 {'、'.join(missing)},以 email 文字標示)" if missing else ""
         _ipd = f" ip={ip}" if ip else ""
         opens = [r for r in store.open_interactions_for_ticket(issue_id)
                  if getattr(r, "kind", "hil") != "command"]   # 待填 HIL 表單
         if opens:                                   # 重發:@mention 新人 + 貼連結
             links = "、".join(form_link(base_url, r.token) for r in opens)
-            source.add_comment(issue_id, f"{at}[agent] 本票負責人已改為 {new_email}"
-                               f"(by {by or '—'}{_ipd})。你有待填表單:{links}")
+            source.add_comment(issue_id, f"{at}[agent] 本票負責人已改為 {shown}"
+                               f"(by {by or '—'}{_ipd}){tail}。"
+                               f"你有待填表單:{links}")
         else:                                       # 純 re-tag 通知
-            tail = "" if acct else f"(Jira 查無 {new_email},以 email 文字標示)"
-            source.add_comment(issue_id, f"{at}[agent] 本票負責人已改為 {new_email}"
+            source.add_comment(issue_id, f"{at}[agent] 本票負責人已改為 {shown}"
                                f"(by {by or '—'}{_ipd}){tail}")
-        log.info("%s set_email %s→%s by %s", key, old, new_email, by)
-        return (True, f"已將負責人改為 {new_email}"
-                + ("" if acct else "(Jira 查無此帳號,已用 email 文字標示)")
+        log.info("%s set_email %s→%s by %s", key, old, new_list, by)
+        return (True, f"已將負責人改為 {shown}" + tail
                 + (f";已重貼 {len(opens)} 張待填表單" if opens else "") + "。",
                 [store.journal("owner_changed", issue_id, key, old=old,
-                               new=new_email, author=by, ip=ip,
-                               retagged=bool(acct), reissued=len(opens))])
+                               new=new_list, author=by, ip=ip,
+                               retagged=len(accts), reissued=len(opens))])
 
     if cmd == "hold":
         _write_evict(sess)                         # 立即 killpg(不耗 attempt)

@@ -2516,7 +2516,8 @@ def openapi_spec() -> dict:
                                       "content": {"application/json": {}}}}}},
             "/api/v1/tickets/{ref}": {"get": {
                 "tags": ["llm-api(唯讀)"],
-                "summary": "單票完整狀態 JSON(含時間軸摘要 + 可取 log 清單)",
+                "summary": "單票完整狀態 JSON(含時間軸摘要 + 可取 log 清單"
+                           " + owner_email_list 負責人名單)",
                 "description": "ref = Jira key(SCRUM-42)/ 內部 id / ClearQuest CR id。",
                 "parameters": [{"name": "ref", "in": "path", "required": True,
                                 "schema": {"type": "string"}}],
@@ -3344,10 +3345,11 @@ def render_concepts_page() -> str:
         "<li><b>budget(額度護欄)</b>:每票 / 每月每 agent / 全站 × token/usd 共 <b>6 層"
         "上限</b>,每輪派工前 precheck。per-ticket <b>soft</b> 破 → 使用者<b>自助增額"
         "表單</b>(≤hard);<b>hard / 月 / 全站</b> 破 → 只管理者能改(hot reload)。</li>"
-        "<li><b>身分門禁(選填)</b>:票的 description 填了 <code>email</code> 就<b>上鎖</b>"
-        "——HIL 表單 / 指令台提交的 email 要 == 負責人 / ∈ 全站 <code>admin_emails</code> / "
-        "== 該 profile 審批者才放行(沒填的票不受限)。全程留 email + 來源 IP 稽核。"
-        "改負責人走指令台 <code>set_email</code>(re-tag 新人 + 重貼待填表單);開票時把 "
+        "<li><b>身分門禁(選填)</b>:票的 description 填了 <code>email</code>(可逗號"
+        "多個,存負責人名單)就<b>上鎖</b>——HIL 表單 / 指令台提交的 email 要 ∈ 負責人"
+        "名單 / ∈ 全站 <code>admin_emails</code> / == 該 profile 審批者才放行(沒填的票"
+        "不受限)。全程留 email + 來源 IP 稽核。改負責人走指令台 <code>set_email</code>"
+        "(<b>整組取代</b>,表單預填現值;re-tag 每位新人 + 重貼待填表單);開票時把 "
         "profile 審批者加為 Jira watcher。</li>"
         "</ul></div>"
         "<h2>Jira ticket 狀態機(harness 內部 · HIL 模型 6 態 + 概念終點)</h2>"
@@ -3527,6 +3529,7 @@ def api_ticket_status(iid: int, journal: list, sessions: dict,
         "score": score,
         "completion_pct": (score * 10 if score is not None else None),
         "session_id": s.get("session_id"),
+        "owner_email_list": s.get("owner_email_list") or "",  # K6:負責人名單
         "inactive": bool(s.get("inactive")), "queued": bool(s.get("queued")),
         "evict_count": s.get("evict_count") or 0,
         "assignee": w.get("last_assignee") or "",

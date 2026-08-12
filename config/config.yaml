@@ -38,8 +38,9 @@ outer_loop:
     # mention_account_id: '...'                  # 選填
 
   # K:全站管理者 email(選填)。負責人 email 門禁的「豁免名單」——HIL 表單/指令台
-  # 提交的 email 若 ∈ 此清單即放行(不必等於該票負責人 owner_email)。可 hot reload。
-  # 門禁僅在票有 owner_email(description 契約填了 email)時啟用;沒填的票不受限。
+  # 提交的 email 若 ∈ 此清單即放行(不必是該票負責人 owner_email_list 名單內)。可 hot reload。
+  # 門禁僅在票有 owner_email_list(description 契約填了 email,可逗號多個)時啟用;
+  # 沒填的票不受限。
   # admin_emails:
   #   - ops@company.com
   #   - lead@company.com

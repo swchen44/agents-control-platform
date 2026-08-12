@@ -173,6 +173,33 @@ apply_command(src, st, PROFILES, 1, "set_email",
 check("set_email:查得到帳號 → @mention accountId",
       any("[~accountid:acc-123]" in c for _, c in src.comments))
 
+# ── K6b:多 email 整組取代 / 清空 / 部份無效 ──────────────────────────── #
+st = Store(tempfile.mkdtemp()); src = _SrcAcct()
+st.upsert_session(_sess(owner_email_list="old@x.com"))
+o, msg, evs = apply_command(src, st, PROFILES, 1, "set_email",
+                            {"email": " A@X.com, b@Y.tw "}, by="admin@x.com")
+check("set_email:多 email 整組取代(逐一正規化)",
+      o and st.get_session(1).owner_email_list == "a@x.com,b@y.tw")
+check("set_email:多 email → 每位都 @mention",
+      any(c.count("[~accountid:acc-123]") == 2 for _, c in src.comments))
+check("set_email:journal 帶 retagged 人數",
+      any(e["type"] == "owner_changed" and e["retagged"] == 2 for e in evs))
+
+st = Store(tempfile.mkdtemp()); src = FakeSource()
+st.upsert_session(_sess(owner_email_list="old@x.com"))
+o, msg, evs = apply_command(src, st, PROFILES, 1, "set_email",
+                            {"email": ""}, by="admin@x.com")
+check("set_email:留空 → 清空 owners(門禁解除)",
+      o and (st.get_session(1).owner_email_list or "") == ""
+      and any(e["type"] == "owner_changed" and e["new"] == "" for e in evs))
+
+st = Store(tempfile.mkdtemp()); src = FakeSource()
+st.upsert_session(_sess(owner_email_list="old@x.com"))
+o, _, evs = apply_command(src, st, PROFILES, 1, "set_email",
+                          {"email": "good@x.com, notanemail"}, by="admin@x.com")
+check("set_email:名單含無效項 → 全拒不改", (not o) and evs == []
+      and st.get_session(1).owner_email_list == "old@x.com")
+
 
 # ── command token 生命週期(綁票、可重複用、close 失效)─────────────────── #
 st = Store(tempfile.mkdtemp())

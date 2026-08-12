@@ -272,19 +272,21 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 
 ## 主題 K — 負責人 email 身分門禁(2026-08-12 逐題定案 + 實作,全完成)
 
-> description 契約的 email 首建存進 `session.owner_email` 當負責人;HIL 表單/指令台提交
-> 必填 email 且比對(選填門禁:有 owner 才擋)。設計正本:`docs/design/identity-gate.md`。
-> K1–K4 全數完成(2026-08-12):K1 `98a991c`、K2 `ef98c8f`、K3 `94c5c7a`、K4 `ce9f524`。
+> description 契約的 email(可逗號多個)首建存進 `session.owner_email_list` 當負責人名單;
+> HIL 表單/指令台提交必填 email 且比對(選填門禁:有 owner 才擋)。設計正本:
+> `docs/design/identity-gate.md`。K1–K6 全數完成(2026-08-12):K1 `98a991c`、K2 `ef98c8f`、
+> K3 `94c5c7a`、K4+K5 `aa0d16a`、K6 `0eea4ec`+後續。
 
 | # | 項目 | 做法 / 決策 | 現況 |
 |---|---|---|---|
 | **K1** | **門禁核心** | 選填(owner 空→放行)+ HIL/指令台都比對 + 管理者豁免(owner / config `admin_emails` / profile.approver)+ 正規化(strip+lower)。`identity.owner_gate`;`TicketSession.owner_email`(+migration);dispatcher 首建存入;`admin_emails` 載入+reload;form_server HIL email 欄 + 兩表單 `_gate` | ✅ `98a991c` |
 | **K2** | **稽核 IP** | 兩種提交都存 email + 來源 IP + 資料。`interactions.submitted_ip`;`apply_command` journal 帶 `ip`;control_api REST 取 client_address | ✅ `ef98c8f` |
 | **K3** | **set_email 改負責人** | 指令台指令改 `owner_email`;re-tag 新人(find_account_id→@mention,查不到退 email)+ 重貼待填表單;門禁閉環(現負責人/管理者/審批者才能下);破壞性二次確認;event `owner_changed` | ✅ `94c5c7a` |
-| **K4** | **approver watcher** | 首建 session(鎖定 profile)把 `profile.approver` 加 Jira watcher(email 先轉 accountId);best-effort;`jira_source.add_watcher`;event `watcher_added` | ✅ `ce9f524` |
-| **K5** | **文件** | 設計文件 `identity-gate.md` + index + operator/user-guide + web `/concepts` 補門禁 | ✅ 完成 |
+| **K4** | **approver watcher** | 首建 session(鎖定 profile)把 `profile.approver` 加 Jira watcher(email 先轉 accountId);best-effort;`jira_source.add_watcher`;event `watcher_added` | ✅ `aa0d16a` |
+| **K5** | **文件** | 設計文件 `identity-gate.md` + index + operator/user-guide + web `/concepts` 補門禁 | ✅ `aa0d16a` |
+| **K6** | **多負責人** | 欄位改名 `owner_email_list`(逗號分隔多值,清楚知道有多個);`owner_gate` 改 `∈ owners`;set_email **整組取代**(逐一驗格式;**留空=清空、解除門禁**)+ re-tag 每位新 owner;指令台**預填現值**+顯示「目前負責人」(人改時可參考);REST `GET /api/v1/tickets/{ref}` 回 `owner_email_list` | ✅ `0eea4ec`+後續(2026-08-12) |
 
-**未做(可未來擴充)**:多負責人(**進行中,K6**);description email 改了自動同步(現定案=鎖定,只走 set_email)。
+**未做(可未來擴充)**:description email 改了自動同步(現定案=鎖定,只走 set_email)。
 
 ## 主題 L — Jira Data Center 相容(2026-08-12 記錄,需多討論)
 

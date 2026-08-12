@@ -346,12 +346,19 @@ def render_command_console(req, sess, profiles, jira_up: bool = True,
         prof_sel = ("<label>換手(next)目標 profile</label>"
                     f"<select name='profile'><option value=''>—</option>"
                     f"{po}</select>")
-    email_sel = ""                                # K:set_email 的新負責人 email
+    email_sel = ""                          # K6:set_email 新負責人名單(逗號多值)
     if "set_email" in avail:
-        email_sel = ("<label>改負責人(set_email)→ 新 email</label>"
-                     f"<input type='email' name='email' "
-                     f"value='{_esc(values.get('email', ''))}' "
-                     "placeholder='new-owner@company.com'>")
+        cur = (getattr(sess, "owner_email_list", "") or "") if sess else ""
+        preset = values.get("email", cur)         # 預填現值,人改時可參考
+        email_sel = (
+            "<label>改負責人(set_email)→ 新 email 名單</label>"
+            f"<div class='hint'>目前負責人:"
+            f"{_esc(cur or '(未設定,門禁未啟用)')}</div>"
+            f"<input type='email' multiple name='email' "
+            f"value='{_esc(preset)}' "
+            "placeholder='a@company.com, b@company.com'>"
+            "<div class='hint'>整組取代:逗號分隔多個;"
+            "留空=清空(解除門禁)。</div>")
     confirm = ""
     if any(c in DESTRUCTIVE for c in avail):
         confirm = ("<label style='font-weight:400;margin-top:10px'>"
@@ -559,7 +566,7 @@ class FormServer:
 
     def _gate(self, req, submitted: str) -> tuple[bool, str]:
         """K:負責人 email 門禁。回 (放行?, 拒絕訊息)。此票 owner_email_list 為空 →
-        門禁未啟用(回 True);否則 submitted 須 == owner_email_list / ∈ admin_emails /
+        門禁未啟用(回 True);否則 submitted 須 ∈ owners(名單任一)/ ∈ admin_emails /
         == 該票 profile.approver。"""
         from .identity import owner_gate
         sess = self.store.get_session(req.issue_id)

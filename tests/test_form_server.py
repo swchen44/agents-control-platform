@@ -52,8 +52,8 @@ def test_process_valid_persists_and_calls_hook():
 
 
 def test_owner_gate_wired():
-    """K:FormServer._gate 從 store 取該票 owner_email 做門禁(選填);
-    admin_emails_fn 豁免;無 owner_email 的票放行。"""
+    """K:FormServer._gate 從 store 取該票 owner_email_list 做門禁(選填);
+    admin_emails_fn 豁免;無 owner 的票放行。"""
     from arcp.store import TicketSession
 
     def _sess(iid, key, owner):
@@ -70,7 +70,7 @@ def test_owner_gate_wired():
     assert form._gate(req, "  BOSS@X.com ")[0] is True   # 正規化
     assert form._gate(req, "admin@x.com")[0] is True     # 管理者豁免
     assert form._gate(req, "stranger@x.com")[0] is False  # 非授權擋下
-    # 無 owner_email 的票 → 門禁未啟用(放行)
+    # 無 owner 的票 → 門禁未啟用(放行)
     req2 = build_request(10031, "SCRUM-31", "need_info",
                          payload={"question": "q"})
     st.upsert_interaction(req2)
