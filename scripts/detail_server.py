@@ -514,6 +514,39 @@ table.resiz td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #tlwrap.on{display:block}
 #tlwrap #evtl{background:var(--bg);border:1px solid var(--line);
   border-radius:8px}
+/* C5 粗看:全域時間軸(/timeline)——色帶沿用六態色票 + 側欄 + 說明卡 */
+.vis-item.vis-background.ov-run{background:var(--s-running);opacity:.30}
+.vis-item.vis-background.ov-wait{background:var(--s-pending);opacity:.40}
+.vis-item.vis-background.ov-queue{background:var(--s-queued);opacity:.30}
+.vis-item.vis-background.ov-idle{background:var(--s-inactive);opacity:.14}
+.vis-item.ov-ev{background:transparent;border:none;font-size:13px;color:var(--ink)}
+.vis-item.ov-end-ok{background:transparent;border:none;font-weight:700;
+  font-size:15px;color:var(--s-success)}
+.vis-item.ov-end-bad{background:transparent;border:none;font-weight:700;
+  font-size:15px;color:var(--s-failure)}
+.ovp{color:var(--muted);font-size:11px;font-weight:400}
+#ovtl{padding:6px}
+#ovwrap{display:flex;gap:14px;align-items:flex-start}
+#ovwrap>#ovtl{flex:1;min-width:0}
+#ovside{width:310px;flex:none;display:none;position:sticky;top:10px;
+  overflow-wrap:anywhere}
+#ovside.on{display:block}
+#ovside .mono{font-family:var(--font-mono);font-size:11px}
+.ovkv{width:100%;border-collapse:collapse}
+.ovkv td{padding:3px 6px 3px 0;vertical-align:top;border-bottom:1px solid var(--line)}
+.ovkv td:first-child{color:var(--muted);white-space:nowrap;width:72px}
+.ovgo{font-weight:600}
+.ovbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ovwin a{display:inline-block;padding:3px 10px;border:1px solid var(--line-2);
+  border-radius:14px;margin-right:4px;font-size:12.5px}
+.ovwin a.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.howto summary{cursor:pointer;font-weight:600;color:var(--accent-ink)}
+.howto .lg{display:inline-block;width:14px;height:10px;border-radius:2px;
+  margin:0 4px 0 10px;vertical-align:baseline}
+.howto kbd{border:1px solid var(--line-2);border-radius:4px;padding:0 4px;
+  font-family:var(--font-mono);font-size:11px}
+@media (max-width:840px){#ovwrap{flex-direction:column}#ovside{width:100%;
+  position:static}}
 /* W8.2 狀態機 SVG(用 CSS 上色,隨明暗主題;--nc=節點色) */
 #smsvg .sm-box{fill:var(--panel);stroke:var(--nc,var(--line-2));stroke-width:1.6}
 #smsvg .sm-lbl{fill:var(--nc,var(--ink));font-weight:600}
@@ -1606,6 +1639,7 @@ def _nav(active: str) -> str:
         return (f"<a class='{'on' if key == active else ''}' "
                 f"href='{href}'>{label}</a>")
     tabs = (tab("dash", "/", "Dashboard") + tab("db", "/db", "DB Browser")
+            + tab("timeline", "/timeline", "Timeline")
             + tab("control", "/control", "Control")
             + tab("agent", "/agent", "Agent Detail")
             + tab("server", "/server", "Server")
@@ -2024,6 +2058,281 @@ _TL_MAP = {
 }
 _TL_JIRA = {"comment": "💬 留言 Jira", "assign": "👤 改 assignee",
             "transition": "📋 transition", "description": "📝 改 description"}
+
+
+# ── C5 粗看:全域跨票時間軸(/timeline)──────────────────────────────── #
+# 色帶沿用全站六態色票(--s-*):run=執行中(藍)、wait=等人(黃)、
+# queue=排隊(紫)、idle=間歇(灰)。事件點只留關鍵少數,細節進單票細看頁。
+_OV_WAIT = {"pending", "inactive_set", "external_pending"}
+_OV_IDLE = {"session_created", "attempt_finished", "handoff", "adopted",
+            "inactive_cleared", "external_cleared"}
+_OV_EVPTS = {   # 粗看疊加的關鍵事件點(type → (圖示, 中文說明))
+    "session_created": ("🎬", "session 建立(開始接管)"),
+    "pending": ("⏸", "等待人類(HIL 表單發出)"),
+    "handoff": ("🔀", "換手(換 profile 接手)"),
+    "dispatch_error": ("💥", "派工錯誤"),
+    "owner_changed": ("👥", "改負責人"),
+}
+
+
+def lane_segments(evs: list[dict], now: float, outcome=None,
+                  finished_at: float = 0.0) -> list[tuple]:
+    """單票 journal 事件 → 狀態區段 [(start, end, state)];state ∈
+    run/wait/queue/idle。resolved/external_abort 關段(retry 後再開新段);
+    活著的最後一段延伸到 now、已終態(outcome+finished_at)截到 finished_at。
+    純函式(可測)。"""
+    segs: list[tuple] = []
+    cur, start = None, 0.0
+
+    def _close(ts):
+        nonlocal cur, start
+        if cur is not None and ts > start:
+            segs.append((start, ts, cur))
+        cur = None
+
+    for e in sorted(evs, key=lambda x: float(x.get("ts") or 0)):
+        ts, et = float(e.get("ts") or 0), e.get("type")
+        if et == "attempt_started":
+            nxt = "run"
+        elif et in _OV_WAIT or (et == "approval"
+                                and e.get("decision") != "proceed"):
+            nxt = "wait"
+        elif et == "queued":
+            nxt = "queue"
+        elif et in _OV_IDLE or (et == "approval"):
+            nxt = "idle"
+        elif et in ("resolved", "external_abort"):
+            _close(ts)
+            continue
+        else:
+            continue
+        if cur is None:
+            cur, start = nxt, ts
+        elif nxt != cur:
+            _close(ts)
+            cur, start = nxt, ts
+    if cur is not None:
+        end = (float(finished_at) if outcome and (finished_at or 0) > start
+               else now)
+        _close(end)
+    return segs
+
+
+def _form_base() -> str:
+    """表單服務 base URL(config form.base_url / host:port);壞 config 回空。"""
+    try:
+        from arcp.routing import load_config
+        f = (load_config(_CONFIG_PATH)[0].get("form") or {})
+        return (f.get("base_url")
+                or f"http://{f.get('host', '127.0.0.1')}:{f.get('port', 8790)}")
+    except Exception:      # noqa: BLE001
+        return ""
+
+
+def overview_data(journal: list, sessions: dict, watch: dict,
+                  since: float = 0.0, q: str = "", mode: str = "match",
+                  now: float | None = None) -> dict:
+    """C5 粗看資料:窗內有活動的票 → vis-timeline groups(每票一列,新活動在上)
+    + items(background 色帶 + 關鍵事件點 + ✔/✘ 終點)+ tickets(側欄摘要:
+    owner/用量/處理時間/workspace/可操作連結)。"""
+    now = time.time() if now is None else now
+    match_fn, _err = text_matcher(q, mode)
+    by_iid: dict[int, list] = {}
+    for e in journal:
+        if e.get("issue_id") is not None:
+            by_iid.setdefault(e["issue_id"], []).append(e)
+    form_base = _form_base()
+    groups, items, tickets = [], [], {}
+    for iid, evs in by_iid.items():
+        last_ts = max(float(e.get("ts") or 0) for e in evs)
+        if since and last_ts < since:
+            continue                                 # 窗內無活動
+        s = sessions.get(iid, {}) or {}
+        w = watch.get(iid, {}) or {}
+        key = s.get("key") or w.get("key") or f"#{iid}"
+        if match_fn is not None and not match_fn(
+                f"{key} {w.get('summary') or ''} {s.get('profile') or ''}"):
+            continue
+        segs = lane_segments(evs, now, s.get("outcome"),
+                             float(s.get("finished_at") or 0))
+        first_ts = min(float(e.get("ts") or 0) for e in evs)
+        st = canonical_state(s or None)
+        groups.append({"id": iid, "order": -last_ts,
+                       "content": f"<b>{esc(key)}</b> "
+                                  f"<span class='ovp'>{esc(s.get('profile') or '')}</span>"})
+        for i, (a, b, state) in enumerate(segs):
+            items.append({"id": f"bg{iid}-{i}", "group": iid,
+                          "start": int(a * 1000), "end": int(b * 1000),
+                          "type": "background", "className": f"ov-{state}"})
+        for j, e in enumerate(evs):
+            et = e.get("type")
+            if et not in _OV_EVPTS:
+                continue
+            icon, lab = _OV_EVPTS[et]
+            extra = {k: v for k, v in e.items()
+                     if k not in ("ts", "type", "issue_id", "key")}
+            items.append({"id": f"ep{iid}-{j}", "group": iid,
+                          "start": int(float(e.get("ts") or 0) * 1000),
+                          "content": icon, "className": "ov-ev",
+                          "title": f"{lab} · "
+                                   f"{json.dumps(extra, ensure_ascii=False)}"[:300]})
+        if s.get("outcome"):                          # ✔/✘ 終點
+            ok2 = s["outcome"] == "SUCCESS"
+            fts = float(s.get("finished_at") or 0) or last_ts
+            items.append({"id": f"end{iid}", "group": iid,
+                          "start": int(fts * 1000),
+                          "content": "✔" if ok2 else "✘",
+                          "className": "ov-end-" + ("ok" if ok2 else "bad"),
+                          "title": f"結束:{s['outcome']}"})
+        links = []
+        for r in read_interactions(iid):
+            if r.get("status") != "pending":
+                continue                              # 側欄只列此刻可操作的
+            kind, sid = r.get("kind") or "hil", r.get("schema_id") or ""
+            lab = (_IX_SCHEMA_LABEL.get(sid) or _IX_SCHEMA_LABEL.get(kind)
+                   or sid or kind)
+            links.append({"label": lab,
+                          "url": f"{form_base}/form/{r.get('token')}"})
+        run_secs = sum(b - a for a, b, state in segs if state == "run")
+        tickets[str(iid)] = {
+            "iid": iid, "key": key, "state": st,
+            "summary": w.get("summary") or "",
+            "profile": s.get("profile") or "",
+            "owner_email_list": s.get("owner_email_list") or "",
+            "cost_usd": s.get("cost_usd") or 0,
+            "tokens": s.get("tokens") or 0,
+            "attempts": s.get("attempts") or 0,
+            "outcome": s.get("outcome"),
+            "pending_reason": s.get("pending_reason"),
+            "score": s.get("human_score"),
+            "workspace": s.get("workspace") or "",
+            "run_secs": int(run_secs),
+            "first_ts": first_ts, "last_ts": last_ts,
+            "links": links,
+        }
+    win_start = since if since else min(
+        (t["first_ts"] for t in tickets.values()), default=now - 86400)
+    return {"groups": groups, "items": items, "tickets": tickets,
+            "win_start": int(win_start * 1000), "win_end": int(now * 1000)}
+
+
+_OV_HOWTO = """
+<details class='card howto' id='ovhow'>
+<summary>📖 怎麼看這張圖(圖例・操作・判讀)</summary>
+<div class='row' style='margin-top:8px'><b>這頁是什麼</b></div>
+<p style='margin:4px 0'>每張被 ARCP 接管的票一列,橫軸是時間。色帶=該時段這張票
+處於什麼狀態;疊在上面的小圖示=關鍵事件。這頁是「粗看」——看並行度和卡點;
+單票細節(每次 attempt、對話、log)請點進該票的細看頁。</p>
+<div class='row'><b>圖例</b></div>
+<p style='margin:4px 0'>
+<span class='lg' style='background:var(--s-running)'></span>執行中(agent 在跑)
+<span class='lg' style='background:var(--s-pending)'></span>等人(HIL 表單/審批待填)
+<span class='lg' style='background:var(--s-queued)'></span>排隊(等資源)
+<span class='lg' style='background:var(--s-inactive)'></span>間歇(attempt 之間)<br>
+🎬 開始接管 · ⏸ 發出表單等人 · 🔀 換手 · 💥 派工錯誤 · 👥 改負責人 ·
+<b style='color:var(--s-success)'>✔</b> 成功結束 ·
+<b style='color:var(--s-failure)'>✘</b> 失敗/撤銷</p>
+<div class='row'><b>操作</b></div>
+<p style='margin:4px 0'>拖曳=平移時間、<kbd>Ctrl</kbd>+滾輪=縮放、
+<b>點任一列=右側開該票摘要</b>(狀態/負責人/用量/可操作連結),
+摘要底部「完整詳情」進單票細看頁。上方按鈕切時間窗、輸入關鍵字過濾票。</p>
+<div class='row'><b>判讀範例</b></div>
+<ul style='margin:4px 0 2px 18px;padding:0'>
+<li><b>一列黃段很長</b>=卡在等人:點開側欄看是哪張表單沒填,連結可直接開。</li>
+<li><b>一列藍/灰反覆交替</b>=反覆重試:進細看頁看每次 attempt 為何失敗。</li>
+<li><b>多列同時藍</b>=並行度高:系統正忙,搭配 Dashboard 的 budget 卡看花費。</li>
+</ul></details>"""
+
+
+def render_timeline_page(journal, sessions, watch, win: str = "7",
+                         q: str = "") -> str:
+    """C5 粗看頁:全域跨票時間軸(色帶+關鍵事件點)+ 點列側欄摘要 + 說明卡。
+    win ∈ 1/7/30/all(天);q=關鍵字過濾(key/summary/profile)。"""
+    now = time.time()
+    days = {"1": 1, "7": 7, "30": 30}.get(win)
+    since = now - days * 86400 if days else 0.0
+    data = overview_data(journal, sessions, watch, since=since, q=q, now=now)
+    n = len(data["groups"])
+    wins = "".join(
+        f"<a class='{'on' if win == k else ''}' "
+        f"href='/timeline?win={k}&q={html.escape(q, quote=True)}'>{lab}</a>"
+        for k, lab in (("1", "24 小時"), ("7", "7 天"),
+                       ("30", "30 天"), ("all", "全部")))
+    toolbar = (
+        f"<div class='card ovbar'><span class='ovwin'>{wins}</span>"
+        f"<form method='GET' action='/timeline' style='display:inline'>"
+        f"<input type='hidden' name='win' value='{esc(win)}'>"
+        f"<input type='search' name='q' value='{html.escape(q, quote=True)}' "
+        f"placeholder='過濾:key / 摘要 / profile' style='max-width:230px'>"
+        f"<button type='submit'>過濾</button></form>"
+        f"<span class='sys' style='margin-left:auto'>{n} 張票 · "
+        f"點任一列看摘要</span></div>")
+    empty = ("" if n else "<div class='card'><p>此時間窗內沒有活動的票。"
+                          "換個時間窗或清掉過濾條件試試。</p></div>")
+    dj = json.dumps(data, ensure_ascii=False)
+    return (
+        _nav("timeline")
+        + "<header><h1>全域時間軸(粗看)</h1>"
+          "<p class='sys' style='text-align:left'>每票一列:色帶=狀態、圖示="
+          "關鍵事件;點列開摘要、進細看。</p></header>"
+        + "<main id='main'>" + _OV_HOWTO + toolbar + empty
+        + "<div id='ovwrap'><div id='ovtl' class='card'></div>"
+          "<aside id='ovside' class='card'></aside></div>"
+        + f"<script id='ov-data' type='application/json'>{dj}</script>"
+        + "<link rel='stylesheet' href='/tvendor/vis-timeline.min.css'>"
+          "<script src='/tvendor/vis-timeline.min.js'></script>"
+        + """<script>(function(){
+function esc(x){return (''+(x==null?'':x)).replace(/&/g,'&amp;')
+ .replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function dur(s){if(!s)return '0m';var h=Math.floor(s/3600),
+ m=Math.round(s%3600/60);return (h?h+'h ':'')+m+'m';}
+function fts(t){return t?new Date(t*1000).toLocaleString():'-';}
+var d;try{d=JSON.parse(document.getElementById('ov-data').textContent)}
+ catch(e){return}
+var el=document.getElementById('ovtl');if(!el||!window.vis)return;
+var tl=new vis.Timeline(el,new vis.DataSet(d.items),
+ new vis.DataSet(d.groups),{stack:false,orientation:'top',zoomKey:'ctrlKey',
+ maxHeight:600,tooltip:{followMouse:true},
+ groupOrder:function(a,b){return a.order-b.order;},
+ start:new Date(d.win_start),end:new Date(d.win_end)});
+var side=document.getElementById('ovside');
+var SL={running:'執行中',queued:'排隊',hil_middle:'等人(中場)',
+ hil_end:'等人(收尾)',success:'成功',failure:'失敗',aborted:'已撤銷',
+ todo:'未接管',inactive:'交人類'};
+function openSide(iid){var t=d.tickets[String(iid)];if(!t)return;
+ var links=(t.links||[]).map(function(l){return '<a href="'+esc(l.url)
+  +'" rel="noopener" target="_blank">'+esc(l.label)+' ↗</a>';}).join(' · ');
+ side.innerHTML='<h3 style="margin:0 0 6px"><a href="/ticket/'+t.iid+'">'
+  +esc(t.key)+'</a> <span class="ovp">'+esc(SL[t.state]||t.state)+'</span></h3>'
+  +(t.summary?'<p style="margin:0 0 6px">'+esc(t.summary)+'</p>':'')
+  +'<table class="ovkv"><tbody>'
+  +'<tr><td>profile</td><td>'+esc(t.profile||'—')+'</td></tr>'
+  +'<tr><td>負責人</td><td>'+esc(t.owner_email_list||'(未設定,門禁未啟用)')
+  +'</td></tr>'
+  +'<tr><td>用量</td><td>$'+(+t.cost_usd).toFixed(4)+' · '
+  +(+t.tokens).toLocaleString()+' tok</td></tr>'
+  +'<tr><td>attempts</td><td>'+t.attempts
+  +(t.score!=null?' · 評分 '+t.score:'')+'</td></tr>'
+  +'<tr><td>執行時間</td><td>'+dur(t.run_secs)+'(色帶藍段加總)</td></tr>'
+  +'<tr><td>生命期</td><td>'+fts(t.first_ts)+' ~ '+fts(t.last_ts)+'</td></tr>'
+  +(t.outcome?'<tr><td>outcome</td><td>'+esc(t.outcome)+'</td></tr>':'')
+  +(t.pending_reason?'<tr><td>等待原因</td><td>'+esc(t.pending_reason)
+   +'</td></tr>':'')
+  +'<tr><td>workspace</td><td class="mono">'+esc(t.workspace||'—')
+  +'</td></tr></tbody></table>'
+  +(links?'<div style="margin-top:6px"><b>可操作連結</b> '+links
+   +'<div class="sys" style="text-align:left">⚠️ capability 連結,有連結即可'
+   +'操作,勿外流。</div></div>':'')
+  +'<p style="margin:10px 0 0"><a class="ovgo" href="/ticket/'+t.iid
+  +'">完整詳情(細看頁)→</a></p>';
+ side.classList.add('on');}
+tl.on('click',function(p){if(p.group!=null)openSide(p.group);});
+var hw=document.getElementById('ovhow');
+try{if(localStorage.getItem('arcp-ovhow')!=='0')hw.open=true;
+ hw.addEventListener('toggle',function(){
+  localStorage.setItem('arcp-ovhow',hw.open?'1':'0');});}catch(e){}
+})();</script>"""
+        + "</main>")
 
 
 def timeline_data(evs: list[dict]) -> dict:
@@ -3759,6 +4068,25 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(db_table(
                 name, int((q.get("limit") or ["100"])[0]),
                 int((q.get("offset") or ["0"])[0])))
+            return
+        if self.path.startswith("/timeline"):      # C5 粗看:全域跨票時間軸
+            from urllib.parse import parse_qs, urlparse
+            u = urlparse(self.path)
+            qs = parse_qs(u.query)
+            body = render_timeline_page(
+                journal, sessions, read_watch(),
+                win=(qs.get("win") or ["7"])[0],
+                q=(qs.get("q") or [""])[0])
+            page = (f"<!doctype html><html><head><meta charset='utf-8'>"
+                    f"<meta name='viewport' content='width=device-width,"
+                    f"initial-scale=1'>"
+                    f"<title>ARCP Timeline{_TITLE_TAIL}</title>"
+                    f"<style>{CSS}</style></head><body>{body}</body></html>")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", _CSP_MAIN)
+            self.end_headers()
+            self.wfile.write(page.encode())
             return
         if self.path in ("/db", "/control", "/server", "/agent",
                          "/concepts"):  # 獨立頁

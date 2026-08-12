@@ -339,6 +339,23 @@ try:
     except urllib.error.HTTPError as e:
         check("tfile:traversal 擋掉", e.code == 404)
 
+    # C5:粗看全域時間軸(/timeline)——色帶+事件點+側欄資料島+說明卡
+    ov = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/timeline?win=all", timeout=5).read().decode()
+    check("粗看頁:導覽 tab + 說明卡 + 工具列",
+          "href='/timeline'" in ov and "怎麼看這張圖" in ov
+          and "判讀範例" in ov and "24 小時" in ov)
+    mo = _re2.search(
+        r"<script id='ov-data' type='application/json'>(.*?)</script>",
+        ov, _re2.S)
+    check("粗看頁:資料島可解析", bool(mo))
+    ovd = (json.loads(mo.group(1)) if mo
+           else {"groups": [], "items": [], "tickets": {}})
+    check("粗看頁:每票一列 + 背景色帶 + 側欄票資料(workspace 欄)",
+          len(ovd["groups"]) >= 3
+          and any(i.get("type") == "background" for i in ovd["items"])
+          and all("workspace" in t for t in ovd["tickets"].values()))
+
     # W6.1:Server 頁 + 系統資料源 + 金鑰不外洩
     spage = urllib.request.urlopen(
         f"http://127.0.0.1:{port}/server", timeout=5).read().decode()
