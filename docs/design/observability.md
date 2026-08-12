@@ -58,7 +58,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 <!-- BEGIN gen_event_dict -->
 | 事件 | 欄位(kwargs) | 產生點 |
 |---|---|---|
-| `aborted` | `detail`, `reason` | `src/arcp/dispatcher.py` |
+| `aborted` | `author`, `detail`, `reason`, `state`, `to_key` | `src/arcp/commands.py`, `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
 | `adopted` | — | `scripts/run_poller.py` |
 | `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py` |
 | `assignee_alert` | `assignee` | `src/arcp/commands.py` |

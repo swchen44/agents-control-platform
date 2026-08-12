@@ -162,7 +162,10 @@ def _do_handoff(source, store, sess: TicketSession, req: InteractionRequest,
         cost_usd=0.0, base_ref=str(req.issue_id)))
     sess.outcome = "ABORTED"                            # 本票交接出去=終態(非 FAILURE)
     sess.pending_reason = None
+    sess.abort_reason = "handoff"                       # M2:中止理由泛化
     store.upsert_session(sess)
+    store.journal("aborted", req.issue_id, req.key,
+                  reason="handoff", to_key=new_t.key)
     source.add_comment(req.issue_id, (
         f"[agent] 跨票換手(cross-ticket,base={req.key}):已建立新票 {new_t.key} "
         f"交由 «{target}» 接手;本票結束(ABORTED,非失敗)。兩票可於 dashboard 對照。"))

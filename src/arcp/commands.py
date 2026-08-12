@@ -229,12 +229,16 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
         sess.pending_reason = "human-decision"
     elif cmd == "cancel":
         sess.outcome, sess.pending_reason = "ABORTED", None
+        sess.abort_reason = "cancel"               # M2:中止理由泛化
     store.upsert_session(sess)
     _audit()
     log.info("%s 指令 %s by %s", key, cmd, by)
-    return (True, f"已執行:{cmd}。",
-            [store.journal("command_accepted", issue_id, key,
-                           command=cmd, author=by, ip=ip)])
+    evs = [store.journal("command_accepted", issue_id, key,
+                         command=cmd, author=by, ip=ip)]
+    if cmd == "cancel":
+        evs.append(store.journal("aborted", issue_id, key,
+                                 reason="cancel", author=by))
+    return True, f"已執行:{cmd}。", evs
 
 
 class ExternalChangePolicy:
@@ -254,9 +258,12 @@ class ExternalChangePolicy:
         if (new_state in self.cancel_states and sess
                 and sess.outcome not in ("SUCCESS", "ABORTED")):
             sess.outcome, sess.pending_reason = "ABORTED", None
+            sess.abort_reason = "external"         # M2:看板直接關票
             self.store.upsert_session(sess)
             return [self.store.journal("external_abort", t.id, t.key,
-                                       state=new_state)]
+                                       state=new_state),
+                    self.store.journal("aborted", t.id, t.key,
+                                       reason="external", state=new_state)]
         return []
 
     def on_assignee_changed(self, t: Ticket) -> list[dict]:

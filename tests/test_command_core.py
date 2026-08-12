@@ -91,8 +91,12 @@ apply_command(src, st, PROFILES, 1, "retry", by="a@x.tw")
 check("retry:attempts 歸零", st.get_session(1).attempts == 0)
 
 st, src = _fresh()
-o, _, _ = apply_command(src, st, PROFILES, 1, "cancel", by="a@x.tw")
-check("cancel:outcome=ABORTED", o and st.get_session(1).outcome == "ABORTED")
+o, _, evs = apply_command(src, st, PROFILES, 1, "cancel", by="a@x.tw")
+check("cancel:outcome=ABORTED + abort_reason=cancel(M2)",
+      o and st.get_session(1).outcome == "ABORTED"
+      and st.get_session(1).abort_reason == "cancel"
+      and any(e["type"] == "aborted" and e["reason"] == "cancel"
+              for e in evs))
 
 # running 狀態才可 stop/hold/next
 st = Store(tempfile.mkdtemp()); src = FakeSource()

@@ -58,6 +58,8 @@ class TicketSession:
     tokens: int = 0                   # budget:本票累計 token(input+output+cache)
     soft_tokens: int | None = None    # budget:本票可調 soft token(None=用 profile 預設)
     soft_usd: float | None = None     # budget:本票可調 soft usd(None=用 profile 預設)
+    abort_reason: str | None = None   # M2:ABORTED 理由(cancel/external/
+    #                                    untriageable/handoff/security;泛化統一)
     owner_email_list: str | None = None    # K:負責人 email(首建自 description 契約;鎖定
     #                                   後只由指令台改)。有值→HIL/指令台提交比對門禁
 
@@ -100,6 +102,7 @@ class Store:
                 soft_tokens    INTEGER,
                 soft_usd       REAL,
                 owner_email_list    TEXT,
+                abort_reason        TEXT,
                 queued         INTEGER NOT NULL DEFAULT 0,
                 queued_at      REAL NOT NULL DEFAULT 0,
                 inactive       INTEGER NOT NULL DEFAULT 0,
@@ -172,7 +175,8 @@ class Store:
                           ("tokens", "INTEGER NOT NULL DEFAULT 0"),  # budget
                           ("soft_tokens", "INTEGER"),     # budget 可調 soft
                           ("soft_usd", "REAL"),           # budget 可調 soft
-                          ("owner_email_list", "TEXT")):       # K:負責人 email 門禁
+                          ("owner_email_list", "TEXT"),        # K:負責人 email 門禁
+                          ("abort_reason", "TEXT")):           # M2:中止理由泛化
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -303,7 +307,8 @@ class Store:
                      " outcome, pending_reason, cost_usd, queued, queued_at,"
                      " inactive, approval_revisions, finished_at, evict_count,"
                      " clearquest_id, human_score, score_reminded_at, base_ref,"
-                     " agent_score, tokens, soft_tokens, soft_usd, owner_email_list")
+                     " agent_score, tokens, soft_tokens, soft_usd,"
+                     " owner_email_list, abort_reason")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -317,7 +322,7 @@ class Store:
             human_score=row[16], score_reminded_at=row[17] or 0.0,
             base_ref=row[18], agent_score=row[19],
             tokens=row[20] or 0, soft_tokens=row[21], soft_usd=row[22],
-            owner_email_list=row[23])
+            owner_email_list=row[23], abort_reason=row[24])
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -362,8 +367,9 @@ class Store:
                      queued, queued_at, inactive, approval_revisions,
                      finished_at, evict_count, clearquest_id,
                      human_score, score_reminded_at, base_ref, agent_score,
-                     tokens, soft_tokens, soft_usd, owner_email_list)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     tokens, soft_tokens, soft_usd, owner_email_list,
+                     abort_reason)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
@@ -382,14 +388,16 @@ class Store:
                     agent_score=excluded.agent_score,
                     tokens=excluded.tokens, soft_tokens=excluded.soft_tokens,
                     soft_usd=excluded.soft_usd,
-                    owner_email_list=excluded.owner_email_list
+                    owner_email_list=excluded.owner_email_list,
+                    abort_reason=excluded.abort_reason
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
                   s.approval_revisions, s.finished_at, s.evict_count,
                   s.clearquest_id, s.human_score, s.score_reminded_at,
                   s.base_ref, s.agent_score,
-                  s.tokens, s.soft_tokens, s.soft_usd, s.owner_email_list))
+                  s.tokens, s.soft_tokens, s.soft_usd, s.owner_email_list,
+                  s.abort_reason))
 
     # -- W3.4 trigger last_run 水位 ---------------------------------------- #
     def trigger_last_run(self, name: str) -> float:

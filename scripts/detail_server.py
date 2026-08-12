@@ -2619,6 +2619,7 @@ def _ticket_meta_card(iid, s, evs) -> str:
 _CK_LABELS = [   # 顯示順序 + 中文標籤;schema 新欄位落在表尾 fallback,不漏列
     ("key", "Jira key"), ("issue_id", "內部 issue id"),
     ("profile", "agent profile"), ("outcome", "outcome(終態)"),
+    ("abort_reason", "中止理由(cancel/external/untriageable/handoff/security)"),
     ("pending_reason", "等待原因"),
     ("owner_email_list", "負責人 email(門禁)"),
     ("session_id", "engine session id"), ("attempts", "attempts(本輪)"),
@@ -3942,6 +3943,7 @@ def api_ticket_status(iid: int, journal: list, sessions: dict,
         "clearquest_id": s.get("clearquest_id"),
         "profile": s.get("profile"), "state": canonical_state(s or None),
         "outcome": s.get("outcome"), "pending_reason": s.get("pending_reason"),
+        "abort_reason": s.get("abort_reason"),         # M2:中止理由泛化
         "attempts": s.get("attempts") or 0,
         "cost_usd": s.get("cost_usd") or 0,
         "score": score,

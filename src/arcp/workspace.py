@@ -70,9 +70,9 @@ def _render_acceptance(profile: Profile | None) -> str:
 
 def render_ticket_md(t: Ticket, profile: Profile | None = None,
                      base_url: str | None = None, human_notes: str = "") -> str:
-    """任務簡報(agent prompt 第一句叫它讀這個)。內容 = Jira 票 + profile + 人類指示。"""
-    comments = "\n".join(
-        f"- [{c.author}] {c.body[:300]}" for c in t.comments[-5:]) or "(無)"
+    """任務簡報(agent prompt 第一句叫它讀這個)。內容 = Jira 票 + profile + 人類指示。
+    M2:不再含「最新留言」段——人類指示的正式通道是 HIL 表單(human sidecar),
+    Jira 留言多為 harness 稽核輸出,餵回 agent 沒價值且是注入面。"""
     head = [f"# {t.key}: {t.summary}", "",
             f"- issue_id: {t.id}", f"- 狀態: {t.state}",
             f"- assignee: {t.assignee or '-'}",
@@ -86,7 +86,6 @@ def render_ticket_md(t: Ticket, profile: Profile | None = None,
     if human_notes:                    # Q10:人類在 HIL 表單補的指示(累加,最新在下)
         parts.append("## 人類指示(累加,請一併遵循)\n\n" + human_notes)
     parts.append("## 驗收標準(通過才算 SUCCESS)\n\n" + _render_acceptance(profile))
-    parts.append(f"## 最新留言(最多 5 則)\n\n{comments}")
     return "\n\n".join(parts) + "\n"
 
 

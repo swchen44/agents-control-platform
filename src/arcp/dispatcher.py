@@ -88,7 +88,8 @@ class Dispatcher:
         self.store.upsert_session(TicketSession(
             issue_id=ticket.id, key=ticket.key, profile="notfound",
             workspace="(untriaged)", session_id=None, attempts=0,
-            outcome="ABORTED", pending_reason=None, cost_usd=0.0))
+            outcome="ABORTED", pending_reason=None, cost_usd=0.0,
+            abort_reason="untriageable"))
         events.append(self.store.journal(
             "aborted", ticket.id, ticket.key, reason="untriageable",
             detail=reason[:200]))
