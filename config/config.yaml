@@ -32,10 +32,11 @@ outer_loop:
     # (可修描述;繼續=人審放行之後不擋 / 中止=ABORTED reason=security)。
     # 掃描器需另裝(建議 cisco skill-scanner:純靜態 pattern 引擎、不用 LLM;
     # 內網 snapshot 請預先裝好)。詳 docs/design/security-scan.md。
-    # security_scan:
-    #   command: 'uvx cisco-ai-skill-scanner'  # 或已裝好的 skill-scanner 路徑
-    #   fail_on: high             # critical|high|medium|low(>= 此嚴重度才擋)
-    #   timeout_sec: 180
+    security_scan:              # 2026-08-12 KP2 實測開啟(T5 端到端過)。裝法:
+      command: 'skill-scanner'  # uv tool install --from ~/git/skill-scanner
+      #                         # cisco-ai-skill-scanner(需在 PATH;內網預裝)
+      fail_on: high             # critical|high|medium|low(>= 此嚴重度才擋)
+      timeout_sec: 180
     # N:內部態 → Jira 狀態同步(選配;沒設=不轉,現行為)。dispatcher 每輪
     # 收尾按推導態精確轉(名稱比對,轉不到只 log);close 裁決走 closed
     # (不可達→先 hil_end 再 closed 兩步)。queued/inactive 不動(定案)。
@@ -68,7 +69,7 @@ outer_loop:
     host: 127.0.0.1
     port: 8790
     # base_url: 'http://<intranet-host>:8790'   # 選填;預設 http://host:port
-    # mention_account_id: '...'                  # 選填
+    mention_account_id: '712020:1b451b8e-dc83-4ff2-98c4-ccc708049016'  # swchen44(通知驗證)
 
   # K:全站管理者 email(選填)。負責人 email 門禁的「豁免名單」——HIL 表單/指令台
   # 提交的 email 若 ∈ 此清單即放行(不必是該票負責人 owner_email_list 名單內)。可 hot reload。

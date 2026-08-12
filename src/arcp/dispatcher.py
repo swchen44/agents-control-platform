@@ -154,15 +154,17 @@ class Dispatcher:
             return True
         sess.pending_reason = "security"
         self.store.upsert_session(sess)
+        from .secscan import sort_findings
+        fs = sort_findings(res.findings)          # critical 在前(摘要才有用)
         top = "; ".join(f"[{x['severity']}] {x['title'] or x['rule_id']}"
-                        for x in res.findings[:3])
+                        for x in fs[:3])
         why = ("掃描器異常(fail-closed,非必為威脅):" + res.error
                if res.error else top or "掃描命中")
         from .hil import request_human
         request_human(
             self.source, self.store, ticket.id, ticket.key, "security_review",
             question=f"TICKET.md 安全掃描未過,請人工裁決:{why[:300]}",
-            payload_extra={"findings": res.findings[:20],
+            payload_extra={"findings": fs[:20],
                            "ticket_md": text[:8000],
                            "scan_error": res.error},
             base_url=self.form_base_url, mention=self.mention)

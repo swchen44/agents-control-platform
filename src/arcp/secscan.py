@@ -41,6 +41,13 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
 
 
+def sort_findings(findings: list) -> list:
+    """嚴重度降冪(critical 在前)——comment 摘要/表單都要先看最嚴重的,
+    scanner 原始順序常是雜訊(low/info)在前。"""
+    return sorted(findings or [],
+                  key=lambda x: -_SEV_ORDER.get(str(x.get("severity", "")), 0))
+
+
 def _parse_findings(doc) -> list[dict]:
     """skill-scanner JSON(ScanResult.to_dict)→ 精簡 findings。寬鬆解析:
     只取表單/journal 需要的欄位,缺欄容錯。"""

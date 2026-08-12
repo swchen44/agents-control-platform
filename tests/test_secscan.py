@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arcp.dispatcher import Dispatcher  # noqa: E402
 from arcp.hil import _apply_security_review  # noqa: E402
 from arcp.interaction import build_request  # noqa: E402
-from arcp.secscan import content_hash, scan_text  # noqa: E402
+from arcp.secscan import content_hash, scan_text, sort_findings  # noqa: E402
 from arcp.store import Store, TicketSession  # noqa: E402
 from arcp.ticket import Ticket  # noqa: E402
 from arcp.workspace import DESC_OVERRIDE, render_ticket_md  # noqa: E402
@@ -168,6 +168,13 @@ check("表單卡:命中表(嚴重度/規則/片段)+ 原文內容",
 req3 = build_request(1, "P-1", "security_review",
                      payload={"findings": [], "scan_error": "timeout"})
 check("表單卡:掃描器異常標明 fail-closed", "掃描器異常" in _security_html(req3))
+
+# ── sort_findings:嚴重度降冪(critical 在前;摘要才有用)──────────── #
+_mix = [{"severity": "low", "rule_id": "a"}, {"severity": "critical", "rule_id": "b"},
+        {"severity": "info", "rule_id": "c"}, {"severity": "high", "rule_id": "d"}]
+check("sort_findings:critical→high→low→info",
+      [x["rule_id"] for x in sort_findings(_mix)] == ["b", "d", "a", "c"])
+check("sort_findings:空 → 空", sort_findings([]) == [])
 
 print(f"test-secscan: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)
