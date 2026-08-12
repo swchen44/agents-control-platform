@@ -8,9 +8,12 @@ outer_loop:
     # 「ARCP Control Plane · <name>」與瀏覽器分頁)。多實例務必各取不同名 + 不同
     # Jira project/jql + 不同 port(見 README「多實例部署」)。
     name: default
-    project: SCRUM
+    # 2026-08-12 起整合測試改用 KP2(Kanban-Project-2,模擬內網 workflow:
+    # To Do→In Progress→Resolve→Closed,Pending 等人、Cancelled 各處可進)。
+    # SCRUM 的 workflow 與未來內網差太多,不再使用。
+    project: KP2
     poll_interval_sec: 30
-    jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
+    jql: 'project = KP2 AND statusCategory != Done ORDER BY created ASC'
     # jira_base_url: https://<你的>.atlassian.net  # 填了 dashboard/poller 都用它;
     #                    # 不填則用 ~/.env 的 JIRA_BASE_URL(此檔進版控,勿寫機密)
     # jira_flavor: dc   # 主題 L:cloud(預設)| dc(Data Center/Server)。
@@ -31,6 +34,15 @@ outer_loop:
     #   command: 'uvx cisco-ai-skill-scanner'  # 或已裝好的 skill-scanner 路徑
     #   fail_on: high             # critical|high|medium|low(>= 此嚴重度才擋)
     #   timeout_sec: 180
+    # N:內部態 → Jira 狀態同步(選配;沒設=不轉,現行為)。dispatcher 每輪
+    # 收尾按推導態精確轉(名稱比對,轉不到只 log);close 裁決走 closed
+    # (不可達→先 hil_end 再 closed 兩步)。queued/inactive 不動(定案)。
+    status_sync:
+      running: In Progress       # attempt 執行中
+      hil_middle: Pending        # 等人(審批/表單/安全審/UNKNOWN 交人查)
+      hil_end: Resolve           # SUCCESS/FAILURE 終態,等人評分/裁決
+      closed: Closed             # 評分裁決 close(人授權關單)
+      aborted: Cancelled         # 各種中止(cancel/安全審/untriageable/交接)
     write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
     # bot_account_id: '...'   # 可選(W12):機器人 accountId;不填→啟動 myself() 解析
     # W6.4:定時快照器已移除(耗資源)。transcript 改事件觸發+被動按鈕。

@@ -247,8 +247,27 @@ def _apply_security_review(source, store, sess, req, data, now) -> list:
     return evs
 
 
+def _close_transition(source, issue_id, status_sync) -> bool:
+    """N:close 裁決轉 Jira。status_sync 有 closed → 精確按名稱轉;目標不可達
+    → 先轉 hil_end(如 Resolve,workflow 常要求 Closed 只能從 Resolve 進)再試
+    一次。沒設 status_sync → 原行為(statusCategory done 第一個 match)。"""
+    cfg = status_sync or {}
+    closed = cfg.get("closed")
+    if not closed:
+        return source.transition(issue_id, "done")
+    if source.transition_to(issue_id, closed):
+        return True
+    mid = cfg.get("hil_end")
+    if mid and source.transition_to(issue_id, mid) \
+            and source.transition_to(issue_id, closed):
+        return True
+    log.warning("close 轉 %r 失敗(workflow 轉不到)issue=%s", closed, issue_id)
+    return False
+
+
 def apply_submission(source, store, req: InteractionRequest, *,
                      profiles: dict | None = None,
+                     status_sync: dict | None = None,
                      now: float | None = None) -> list[dict]:
     """提交後:回寫 human 段 + 稽核 comment + 觸發 resume/評分/關單/handoff。回事件。
 
@@ -292,9 +311,9 @@ def apply_submission(source, store, req: InteractionRequest, *,
                     request_id=req.request_id))
             else:                              # close:人授權 → 系統轉 Done
                 store.upsert_session(sess)
-                # transition() 比對 statusCategory key(小寫 new/indeterminate/
-                # done),非狀態名——真 Jira curl 測抓到:須傳 "done" 非 "Done"
-                if source.transition(req.issue_id, "done"):
+                # N:status_sync.closed 設了→精確按名稱(兩步保險);沒設→原行為
+                # (statusCategory done 第一個 match;真 Jira 測過須傳 "done")
+                if _close_transition(source, req.issue_id, status_sync):
                     store.invalidate_ticket_commands(req.issue_id)  # 指令台失效
                     evs.append(store.journal(       # closed(有別於 SUCCESS 的
                         "closed", req.issue_id, req.key, by="human",  # resolved)

@@ -84,6 +84,7 @@ def make_reload(loop, disp, ext, config_path: str = "config.yaml"):
         disp.user_map = s_cfg.get("user_map") or {}          # L6:可 reload
         disp.username_rule = s_cfg.get("username_rule") or ""
         disp.security_scan = s_cfg.get("security_scan") or {}  # M3:可 reload
+        disp.status_sync = s_cfg.get("status_sync") or {}      # N:可 reload
         ext.profiles = new_profiles                    # W4.5:離手定格查表同步
         new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
         if new_cancel:
@@ -165,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     disp.user_map = source_cfg.get("user_map") or {}          # L6:email→識別碼映射
     disp.username_rule = source_cfg.get("username_rule") or ""  # L6:推導規則
     disp.security_scan = source_cfg.get("security_scan") or {}  # M3:TICKET.md 掃描
+    disp.status_sync = source_cfg.get("status_sync") or {}      # N:Jira 狀態同步
     # budget soft 破→發增額表單需 form base_url/mention(下方 fcfg 定義後補設)
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。
@@ -239,7 +241,8 @@ def main(argv: list[str] | None = None) -> int:
     form = FormServer(store, host=form_host, port=form_port,
                       jira_health_fn=_jira_up,
                       on_submit=lambda r: apply_submission(
-                          src, store, r, profiles=profiles),  # W10.3 handoff 候選
+                          src, store, r, profiles=profiles,   # W10.3 handoff 候選
+                          status_sync=disp.status_sync),      # N:close 精確轉
                       command_fn=_command_fn,                 # 指令台(取代 comment)
                       profiles_fn=lambda: profiles,           # next 下拉候選
                       admin_emails_fn=lambda: disp.admin_emails)  # K:門禁豁免(可 reload)

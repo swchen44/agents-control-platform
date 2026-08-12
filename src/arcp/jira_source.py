@@ -356,6 +356,22 @@ class JiraCloudSource:
                 return True
         return False
 
+    def transition_to(self, id_or_key: str | int, status_name: str) -> bool:
+        """主題 N(狀態同步):**精確按目標狀態名**轉;名稱不在當前可用
+        transitions → False(不 fallback category——同步寧可不轉也不亂轉,
+        免得 workflow 有多個同 category 狀態時轉錯,如 Cancelled vs Closed)。"""
+        data = self._request("GET",
+                             f"{self._api}/issue/{id_or_key}/transitions")
+        want = status_name.strip().lower()
+        for tr in data.get("transitions", []):
+            if (tr["to"].get("name") or "").strip().lower() == want:
+                self._request("POST",
+                              f"{self._api}/issue/{id_or_key}/transitions",
+                              body={"transition": {"id": tr["id"]}})
+                self._notify_write("transition", id_or_key, status_name)
+                return True
+        return False
+
     def set_description(self, id_or_key: str | int, text: str) -> None:
         """Overwrite the issue description (W2.3 審批門寫分區段 plan)。"""
         self._request("PUT", f"{self._api}/issue/{id_or_key}",

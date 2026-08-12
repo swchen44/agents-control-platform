@@ -330,6 +330,21 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 | M2 | **TICKET.md 重組 + abort_reason** | 移除「最新留言」段(注入面+噪音;使用者確認不需要);`ticket_session.abort_reason`(cancel/external/untriageable/handoff/security)+ 各 ABORTED 點統一 journal `aborted(reason)`;駕駛艙/REST 露出 | ✅ `99f1a17` |
 | M3 | **安全掃描 + HIL 安全審** | `secscan.scan_text`(skill-scanner 靜態,SKILL.md 暫存+JSON 解析+fail_on 門檻);dispatcher spawn 前 `_security_gate`(hash 快取);`security_review` 表單(命中表+原文+修訂框+繼續/abort);修訂→`.arcp_desc_override.md` 取代描述段(Jira 不動);`sec_reviewed_at` 人審放行 | ✅ 本批 |
 
+## 主題 N — Jira 狀態同步 + KP2 整合測試(2026-08-12 定案 + 實作)
+
+> 使用者建 **KP2(Kanban-Project-2)**模擬內網 workflow;**config 已切 KP2、SCRUM 不再用**
+> (workflow 與未來差太多)。實測轉移圖(探測票 KP2-2,收尾 Cancelled 可刪):
+> `To Do→In Progress→Resolve→Closed`(**Closed 只能從 Resolve 進**)、Pending↔In Progress、
+> Cancelled 各處可進。定案 mapping:running→In Progress、hil_middle(含 **UNKNOWN**)→Pending、
+> hil_end(SUCCESS/**FAILURE**)→Resolve、close→Closed、abort→Cancelled;**queued/inactive 不動**。
+
+| # | 項目 | 內容 | 現況 |
+|---|---|---|---|
+| N1 | **transition_to** | 精確按狀態名轉、不 fallback category(修 close 在多 done 狀態 workflow 挑錯 Cancelled 的致命 gap) | ✅ 本批 |
+| N2 | **輪同步** | dispatcher.handle 收尾按推導態同步(`_sync_key` 特判定案);目標=現況 skip;轉不到只 log;event `status_synced` | ✅ 本批 |
+| N3 | **close 兩步保險** | status_sync.closed 精確轉;不可達→先 hil_end(Resolve)再 closed;沒設=原 category 行為 | ✅ 本批 |
+| N4 | **KP2 實測** | poller 對 KP2 真跑全生命週期(In Progress/Pending/Resolve/Closed/Cancelled 各路徑)——**待使用者實測** | ⏳ |
+
 ## AI 建議(供參考,你決定)
 
 **若目標是「盡快能上生產用」** → high: **B1**(真實 Jira)+ **B3**(Resolve 轉狀態)

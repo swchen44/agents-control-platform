@@ -254,6 +254,14 @@ soft 上限、評分、workspace 路徑、驅逐次數…新欄位也不漏)+ **
 [DC 首驗 checklist](dc-first-run-checklist.md) 逐項勾**(最關鍵:@mention 要真的
 觸發通知);設計正本 [design/jira-dc.md](design/jira-dc.md)。
 
+## 6.6 Jira 狀態同步(主題 N,選配)
+
+config `source.status_sync:`(五鍵:`running/hil_middle/hil_end/closed/aborted` →
+Jira 狀態名)讓看板反映 harness 實況:執行中→In Progress、等人(HIL/審批/安全審/
+UNKNOWN)→Pending、終態等評分→Resolve、關單→Closed、中止→Cancelled。
+**精確按名稱轉**(workflow 轉不到只 log 不亂轉);close 有兩步保險(Closed 只能從
+Resolve 進的 workflow 也通)。queued(排隊)與交人類的票不動。沒設此段=不轉(舊行為)。
+
 ## 7. 異常處置
 
 | 症狀 | 處置 |

@@ -101,13 +101,14 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `security_scan` | `error`, `n_findings`, `ok` | `src/arcp/dispatcher.py` |
 | `session_created` | `profile`, `workspace` | `src/arcp/dispatcher.py` |
 | `status_changed` | `new`, `old` | `src/arcp/poller.py` |
+| `status_synced` | `state`, `to` | `src/arcp/dispatcher.py` |
 | `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py`, `src/arcp/dispatcher.py` |
 | `trigger_error` | `error` | `src/arcp/poller.py`, `src/arcp/triggers.py` |
 | `watcher_added` | `approver` | `src/arcp/dispatcher.py` |
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 48 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 49 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)

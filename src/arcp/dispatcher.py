@@ -79,6 +79,7 @@ class Dispatcher:
         self.user_map: dict = {}                # L6:email→識別碼手動映射(可 reload)
         self.username_rule: str = ""            # L6:查無時推導(local/{local} 模板)
         self.security_scan: dict = {}           # M3:TICKET.md 掃描 config(可 reload)
+        self.status_sync: dict = {}             # N:內部態→Jira 狀態同步(可 reload)
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
                             events: list[dict]) -> list[dict]:
@@ -368,7 +369,55 @@ class Dispatcher:
         return agent
 
     def handle(self, ticket: Ticket, profile_name: str) -> list[dict]:
-        """Idempotent: terminal/pending sessions are skipped silently."""
+        """Idempotent: terminal/pending sessions are skipped silently.
+        主題 N:收尾統一做 Jira 狀態同步(config status_sync;沒設=關)。"""
+        events = self._handle_core(ticket, profile_name)
+        try:
+            self._sync_status(ticket, events)
+        except Exception as e:  # noqa: BLE001 — 同步 best-effort,不擋派工
+            log.warning("%s Jira 狀態同步失敗:%s", ticket.key, e)
+        return events
+
+    @staticmethod
+    def _sync_key(sess) -> str | None:
+        """session → status_sync 的鍵。特判(2026-08-12 定案):UNKNOWN=交人查
+        → hil_middle(Pending);queued(排隊)與 inactive(交人類)不動。"""
+        if sess is None:
+            return None
+        if sess.outcome == "ABORTED":
+            return "aborted"
+        if sess.outcome == "UNKNOWN":
+            return "hil_middle"
+        if sess.outcome in ("SUCCESS", "FAILURE"):
+            return "hil_end"
+        if sess.pending_reason:
+            return "hil_middle"
+        if sess.queued or sess.inactive:
+            return None
+        return "running"
+
+    def _sync_status(self, ticket: Ticket, events: list) -> None:
+        """依 session 推導態把 Jira 票轉到 config status_sync 對應狀態。
+        目標=現況 → skip;transition_to 精確按名稱、轉不到只記 log(workflow
+        限制/名稱打錯都不擋 harness)。"""
+        cfg = self.status_sync or {}
+        if not cfg:
+            return
+        sess = self.store.get_session(ticket.id)
+        key = self._sync_key(sess)
+        target = cfg.get(key) if key else None
+        if not target or (ticket.state or "").strip().lower() \
+                == target.strip().lower():
+            return
+        if self.source.transition_to(ticket.id, target):
+            events.append(self.store.journal(
+                "status_synced", ticket.id, ticket.key,
+                state=key, to=target))
+        else:
+            log.warning("%s 狀態同步 %s→%r:當前 workflow 轉不到(略過)",
+                        ticket.key, ticket.state, target)
+
+    def _handle_core(self, ticket: Ticket, profile_name: str) -> list[dict]:
         events: list[dict] = []
         profile = self.profiles[profile_name]
         sess = self.store.get_session(ticket.id)
