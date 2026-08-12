@@ -1,0 +1,224 @@
+<meta charset="utf-8">
+<title>L2→L3 Agent 平台 · 手繪資訊圖卡</title>
+<style>
+:root{
+  --paper:#faf6ec; --line:#dfd8c4; --ink:#4a4340; --ink-soft:#6e675f;
+  --red:#c05b4d; --blue:#4a6fa5; --green:#5d7d54; --marker:#f5d76e;
+  --sticky:#fdf3c0; --sticky2:#d9e8f5; --sticky3:#e4f0dd;
+  --bg:#efe9db;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme=light]){--bg:#2a2724}}
+:root[data-theme=dark]{--bg:#2a2724}
+:root[data-theme=light]{--bg:#efe9db}
+*{box-sizing:border-box}
+body{margin:0;padding:4cqw 2vw 6vh;background:var(--bg);
+  font-family:'Kaiti TC','BiauKai','KaiTi','DFKai-SB','Chalkboard SE','Comic Sans MS',cursive;
+  color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:5vh}
+.card169{width:min(96vw,1500px);aspect-ratio:16/9;container-type:inline-size;
+  background:
+    repeating-linear-gradient(transparent 0, transparent 2.15cqw, var(--line) 2.15cqw, var(--line) 2.22cqw),
+    var(--paper);
+  border:1px solid #cfc7b0;border-radius:.4cqw;position:relative;
+  box-shadow:0 .3cqw 1.6cqw rgba(60,50,30,.28);overflow:hidden;
+  padding:2.2cqw 2.6cqw}
+.card169::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .40 0 0 0 0 .33 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")}
+.card169::after{content:'';position:absolute;top:0;bottom:0;left:5.2cqw;width:.14cqw;
+  background:#e5b8b0;opacity:.65}
+/* 手繪框 */
+.sk{border:.16cqw solid var(--ink);background:rgba(255,255,255,.55);
+  border-radius:1.2cqw 1.8cqw 1.4cqw 2cqw/2cqw 1.2cqw 1.9cqw 1.3cqw;
+  padding:.9cqw 1.1cqw;position:relative}
+.sk.alt{border-radius:2cqw 1.1cqw 1.9cqw 1.2cqw/1.2cqw 2cqw 1.2cqw 1.8cqw}
+.hl{background:linear-gradient(transparent 42%,var(--marker) 42%,var(--marker) 88%,transparent 88%);
+  padding:0 .25cqw}
+.tape{position:absolute;top:-1cqw;left:50%;transform:translateX(-50%) rotate(-2.5deg);
+  width:5.4cqw;height:1.7cqw;background:rgba(232,214,150,.75);border:1px dashed rgba(140,120,70,.4)}
+h1,h2,h3,p,ul{margin:0}
+ul{padding-left:1.4cqw}
+li{margin:.18cqw 0}
+.t-hero{font-size:2.7cqw;letter-spacing:.06cqw}
+.t-sub{font-size:1.15cqw;color:var(--ink-soft)}
+.t-sec{font-size:1.5cqw;margin-bottom:.5cqw}
+.t-body{font-size:1.02cqw;line-height:1.5}
+.t-tiny{font-size:.88cqw;line-height:1.45;color:var(--ink-soft)}
+.red{color:var(--red)} .blue{color:var(--blue)} .green{color:var(--green)}
+.rot-l{transform:rotate(-.9deg)} .rot-r{transform:rotate(.8deg)} .rot-l2{transform:rotate(-.4deg)}
+/* 便利貼 */
+.sticky{background:var(--sticky);border:none;box-shadow:.15cqw .3cqw .6cqw rgba(80,60,20,.25);
+  border-radius:.2cqw;padding:.9cqw 1cqw}
+.sticky.b{background:var(--sticky2)} .sticky.g{background:var(--sticky3)}
+/* 佈局 */
+.g1{display:grid;grid-template-columns:29% 34% 34%;gap:1.4cqw;height:82%}
+.col{display:flex;flex-direction:column;gap:1cqw}
+/* 階梯 */
+.ladder{position:relative;flex:1;min-height:0}
+.step{position:absolute;width:56%;padding:.55cqw .8cqw;font-size:1cqw;line-height:1.32}
+.step b{font-size:1.08cqw}
+/* 流程節點(卡2) */
+.flow{display:grid;grid-template-columns:repeat(6,1fr);gap:1.1cqw;align-items:stretch}
+.node{font-size:.95cqw;line-height:1.42;padding:.7cqw .8cqw}
+.node b{font-size:1.05cqw}
+.arr{position:absolute;color:var(--ink);font-size:1.6cqw}
+.badge{display:inline-block;border:.13cqw solid var(--ink);border-radius:2cqw;
+  padding:.05cqw .55cqw;font-size:.85cqw;background:#fff}
+.states{display:flex;gap:.5cqw;align-items:center;font-size:.95cqw;flex-wrap:wrap}
+.stbox{border:.14cqw solid var(--ink);border-radius:.9cqw 1.4cqw 1cqw 1.5cqw/1.4cqw .9cqw 1.5cqw 1cqw;
+  padding:.18cqw .7cqw;background:#fff}
+.cloud{border:.16cqw dashed var(--ink-soft);border-radius:50% 45% 55% 48%/60% 55% 45% 50%;
+  padding:1cqw 1.3cqw;background:rgba(255,255,255,.4)}
+svg.doodle{overflow:visible}
+.foot{position:absolute;bottom:1cqw;right:2.4cqw;font-size:.85cqw;color:var(--ink-soft)}
+.pgno{position:absolute;bottom:.9cqw;left:2.4cqw;font-size:.9cqw;color:var(--ink-soft)}
+</style>
+
+<!-- ═══════════════════ 卡 1:Background / Why / What / Key ═══════════════════ -->
+<section class="card169">
+  <div style="display:flex;align-items:baseline;gap:1.6cqw;margin-bottom:1.1cqw">
+    <h1 class="t-hero">📓 L2 → L3:把個人 AI 技能<span class="hl">平台化</span></h1>
+    <span class="t-sub">Background・Why・What・Key(ARCP = Agent Runtime / Control Plane)</span>
+  </div>
+
+  <div class="g1">
+    <!-- 左:BACKGROUND 階梯 -->
+    <div class="col">
+      <div class="sk rot-l" style="height:100%;display:flex;flex-direction:column">
+        <h2 class="t-sec">🪜 BACKGROUND:AI 賦能五階</h2>
+        <div class="ladder">
+          <div class="step sk alt" style="bottom:1%;left:0;background:#fff"><b>L0</b> 手工作業<br><span class="t-tiny">全部人做,沒有 AI</span></div>
+          <div class="step sk" style="bottom:21%;left:11%;background:#fff"><b>L1</b> 個人賦能<br><span class="t-tiny">各自用 ChatGPT / Claude / Codex</span></div>
+          <div class="step sk alt" style="bottom:41%;left:22%;background:var(--sticky)"><b>L2</b> 技能可複用<br><span class="t-tiny">提示詞/skill 整理成資產(Jarvis)</span></div>
+          <div class="step sk" style="bottom:61%;left:33%;background:var(--marker);border-width:.22cqw"><b class="red">L3</b> <b>流程化整合 ★現在</b><br><span class="t-tiny">事件驅動、進 CI/CD/SQC 正式流程</span></div>
+          <div class="step sk alt" style="bottom:81%;left:44%;background:#fff;border-style:dashed"><b>L4</b> 自主閉環<br><span class="t-tiny">自跑自檢,異常才找人(未來)</span></div>
+          <svg class="doodle" viewBox="0 0 100 100" style="position:absolute;left:2%;top:6%;width:26%;height:80%">
+            <path d="M14 92 C 4 60, 18 30, 34 10" fill="none" stroke="var(--red)" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="1 6"/>
+            <path d="M28 20 L34 9 L37 22" fill="none" stroke="var(--red)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <p class="t-tiny" style="margin-top:.4cqw">人的角色:執行者 → AI 協作者/操作員/<b>治理者</b>;AI:個人工具 → <b>可驗證、可規模化的流程能力</b></p>
+      </div>
+    </div>
+
+    <!-- 中:WHY 三張便利貼 -->
+    <div class="col">
+      <h2 class="t-sec" style="margin-left:.4cqw">🤔 WHY:L2→L3 會痛在哪?</h2>
+      <div class="sticky rot-r"><b class="red">① 變成黑盒子</b>
+        <p class="t-body">互動模式(Claude Code/codex 看得到、能插話)→ <b>非互動</b>後:看不到中間狀態、不能中途補 log/需求、不能最後把關。</p></div>
+      <div class="sticky b rot-l2"><b class="blue">② 執行環境改變</b>
+        <p class="t-body">換 SDK 直連 model?CLI 自帶的 <b>harness engineering</b>(上下文管理)就沒了——好結果無法直接延用,又要重新 debug。</p></div>
+      <div class="sticky g rot-r"><b class="green">③ 部署流程重複討論</b>
+        <p class="t-body">每個 agent 上 L3 都要跟公司流程再談一次 debuggability / traceability / 人機交接……<b>N 個 agent 談 N 次</b>,浪費。</p></div>
+      <div class="sk alt rot-l2" style="margin-top:auto;border-style:dashed">
+        <b>✏️ 名詞小抄(定義)</b>
+        <ul class="t-tiny">
+          <li><b>daemon agent</b>:python while loop 常駐,watch WITS/Jira、有 timer、call 其他 agent(=Assignment/poller)</li>
+          <li><b>non-interactive agent</b>:headless(claude -p/codex exec)+ workspace + SKILLS,可 resume,context 只限該票任務</li>
+          <li><b>溝通與 log</b>:cross/internal 一律記在 <b>Jira ticket + session log</b>——短期 debug、長期餵 L4</li>
+          <li><b>WITS</b>(CR)=QA/客戶 issue;<b>Jira</b>(ticket)=人與 agent 互動</li>
+        </ul></div>
+    </div>
+
+    <!-- 右:WHAT + KEY -->
+    <div class="col">
+      <h2 class="t-sec" style="margin-left:.4cqw">💡 WHAT:三個對策(全部已落地)</h2>
+      <div class="sk rot-l2"><b>① Jira 當紀錄機制</b><span class="badge" style="margin-left:.5cqw">debuggability・traceability</span>
+        <ul class="t-tiny">
+          <li>status 同步看板(monitor/kanban)・<b>context id 留存 → resume</b></li>
+          <li>人機互動:<b>一次性表單</b>(比切 assignee 更穩:驗格式+留 email/IP 稽核)</li>
+          <li>算效率效益(KPI)・lesson learn・<b>L4 素材</b>:人為何介入全留 log</li>
+        </ul></div>
+      <div class="sk rot-r"><b>② 不換 SDK,直接包 CLI</b>
+        <p class="t-tiny">rawcli 直接 spawn <b>claude&nbsp;-p / codex&nbsp;exec</b> ——保留 CLI 的 harness 工程;A/B/C 實測對照(事件粒度 18:1)佐證這條路。</p></div>
+      <div class="sk alt rot-l2"><b>③ 泛化成同一個平台</b>
+        <p class="t-tiny">新 agent = <b>一個 profile + skill 資料夾</b>;trace/HIL/審批/budget/門禁/KPI 全繼承,<b>只討論一次</b>。</p></div>
+      <div class="cloud rot-r" style="margin-top:auto">
+        <b class="red" style="font-size:1.25cqw">🔑 KEY</b>
+        <p class="t-body"><b>「Jira 是人與 Agent 的溝通系統」</b>——票=工作日誌;平台把黑盒子重新打開:L0–L3 四層 trace、6 態生命週期、證據型驗收,<b>異常才找人</b>。</p>
+      </div>
+    </div>
+  </div>
+  <div class="pgno">✎ 1/2 — 背景與主張</div>
+  <div class="foot">ARCP・2026-08</div>
+</section>
+
+<!-- ═══════════════════ 卡 2:HOW + 細節 ═══════════════════ -->
+<section class="card169">
+  <div style="display:flex;align-items:baseline;gap:1.6cqw;margin-bottom:.8cqw">
+    <h1 class="t-hero">🛠 HOW:一張票的<span class="hl">旅程</span>與所有細節</h1>
+    <span class="t-sub">WITS/CR → Jira → Agent → 驗證 → 人關單(全流程已在 KP2 端到端實測)</span>
+  </div>
+
+  <!-- 上緣:狀態同步條 -->
+  <div class="states rot-l2" style="margin:.2cqw 0 1cqw .3cqw">
+    <span class="t-tiny"><b>Jira 看板同步:</b></span>
+    <span class="stbox">To Do</span>➜<span class="stbox" style="background:var(--sticky2)">In Progress<span class="t-tiny">=執行中</span></span>➜
+    <span class="stbox" style="background:var(--sticky)">Pending<span class="t-tiny">=等人(HIL)</span></span>➜
+    <span class="stbox" style="background:var(--sticky3)">Resolve<span class="t-tiny">=等評分</span></span>➜
+    <span class="stbox" style="background:var(--marker)">Closed</span>
+    <span class="t-tiny">/ 任何狀態 ➜</span><span class="stbox" style="border-color:var(--red);color:var(--red)">Cancelled<span class="t-tiny">(cancel/安全審/交接…理由入庫)</span></span>
+  </div>
+
+  <!-- 主流程 六節點 -->
+  <div class="flow">
+    <div class="node sk rot-l"><b>📥 來源</b><br>
+      <span class="t-tiny"><b>WITS/CQ</b>(CR 編號)scan job 掃描;或人開票/排程 job。<br><b>CRID 去重</b>:harness 必擋 + REST 預濾(404=新)</span></div>
+    <div class="node sk alt rot-r"><b>🎫 Jira 開票</b><br>
+      <span class="t-tiny">label = <b>入場券</b>(arcp.*);description 契約:crid / prompt / <b>email→負責人門禁</b></span></div>
+    <div class="node sk rot-l2"><b>🚦 Assignment(poller)</b><br>
+      <span class="t-tiny">python while loop 常駐;route/keyword 分類 → <b>select 遞歸 triage</b> 挑 profile;判不出→中止。審批 profile 先發<b>審批表單</b>(提交即放行)</span></div>
+    <div class="node sk alt rot-r"><b>🗂 Workspace 佈建</b><br>
+      <span class="t-tiny">template + <b>SKILLS</b> + TICKET.md(任務簡報);<b>安全掃描</b>(prompt injection→擋下交人審)</span></div>
+    <div class="node sk rot-l"><b>🤖 Non-interactive Agent</b><br>
+      <span class="t-tiny"><b>claude -p / codex exec</b>(headless);internal loop:attempt→<b>證據 verify</b>(檔案/命令/CI)→敗則帶證據重試;crash→<b>resume(context id)</b>不重工</span></div>
+    <div class="node sk alt rot-r"><b>📦 交付 + 人關單</b><br>
+      <span class="t-tiny">OUTPUT.json→票上交付物(報告/patch/Gerrit 連結);<b>評分表單(0–10 必填)</b>→close / 續跑 / 換手</span></div>
+  </div>
+  <svg class="doodle" viewBox="0 0 100 4" style="width:96%;height:2.2cqw;margin:.1cqw 0 .6cqw" preserveAspectRatio="none">
+    <path d="M2 2 C 20 .6, 40 3.4, 58 1.8 S 90 2.6, 99 2" fill="none" stroke="var(--ink)" stroke-width=".35" stroke-linecap="round" stroke-dasharray="2 1.3"/>
+    <path d="M96.6 .9 L99.2 2 L96.6 3.1" fill="none" stroke="var(--ink)" stroke-width=".4" stroke-linecap="round"/>
+  </svg>
+
+  <!-- 中段:領域 Coding Agents 陣列 -->
+  <div class="sk rot-l2" style="margin:.2cqw 0 1cqw;background:rgba(255,255,255,.35)">
+    <div style="display:flex;align-items:baseline;gap:1cqw;flex-wrap:wrap">
+      <b style="font-size:1.15cqw">👷 領域 Coding Agents(scan 找問題・fix 有標準答案・dev 沒有)</b>
+      <span class="t-tiny">→ 每個=<b>一個 profile + skill 資料夾</b>,平台機制全繼承;內網落地時照 KP2 已驗證的模式建即可</span>
+    </div>
+    <div style="display:flex;gap:.55cqw;flex-wrap:wrap;margin-top:.5cqw;align-items:center">
+      <span class="t-tiny"><b>scan</b>(發 CR,去重不重發):</span>
+      <span class="badge">Security</span><span class="badge">Quality</span><span class="badge">Memslim</span>
+      <span class="t-tiny" style="margin-left:.8cqw"><b>fix</b>(CR→分析報告+patch+UT/IT 報告):</span>
+      <span class="badge" style="background:var(--sticky2)">Fuzz</span><span class="badge" style="background:var(--sticky2)">Coverity</span><span class="badge" style="background:var(--sticky2)">Memslim</span><span class="badge" style="background:var(--sticky2)">Phy 回歸</span><span class="badge" style="background:var(--sticky2)">Performance</span>
+      <span class="t-tiny" style="margin-left:.8cqw"><b>dev</b>:</span>
+      <span class="badge" style="background:var(--sticky3)">專業 Dev(spec→FRD/SRS/SDS→code)</span>
+    </div>
+    <p class="t-tiny" style="margin-top:.45cqw">skill 內容 = 看 log・控制設備/儀器・夾版本・Auto-UT 派單・x86/wut 實驗・preflight/CI/CD——<b>把做法拆成 flow skill + 共同 skill</b>,大任務開 sub-agent(跨 agent overhead 太高,sub-agent 解 context)。</p>
+  </div>
+
+  <!-- 下緣:四格細節 -->
+  <div style="display:grid;grid-template-columns:26% 26% 25% 20%;gap:1.1cqw;align-items:stretch">
+    <div class="sticky rot-r"><b>🔁 兩種迴圈</b>
+      <p class="t-tiny"><b>internal</b>:agent 自己的 attempt/verify 迴圈(監 CI 結果、分類、再試)。<br>
+      <b>cross-agent</b>:票留言/表單 → Assignment 重新派工:<b>retry・同票 next 換手・跨票 base 交接</b>(帶 BASE_ 脈絡開新票)。CI/CD 監看採 <b>Jira 引擎定期喚醒</b>(你偏好的方案)而非 agent 內 timer。</p></div>
+    <div class="sticky b rot-l2"><b>🛡 護欄(黑盒子的把手)</b>
+      <p class="t-tiny">HIL 表單:審批・補資訊・<b>hold 中斷給新指示</b>・評分;負責人 email 門禁(+管理者豁免、IP 稽核);<b>budget 6 層上限</b>(soft 自助增額);併發閘門+排隊;TICKET.md 安全掃描(fail-closed)。</p></div>
+    <div class="sticky g rot-r"><b>🔎 可觀測(L0–L3)</b>
+      <p class="t-tiny">journal 事件 50 種・attempt 封套・agent 對話全文・transcript 打包;dashboard:<b>全域時間軸(粗看)+ 單票駕駛艙(細看)</b>;<b>KPI 北極星 = First-pass close rate</b> + 制衡指標(人評/打回率/UNKNOWN)防「調鬆驗收」作弊;A/B 對照。</p></div>
+    <div class="cloud rot-l" style="display:flex;flex-direction:column;justify-content:center">
+      <b class="blue">🔮 L4(未來)</b>
+      <p class="t-tiny">Evolution Agent 讀 ticket/session log/<b>人類介入原因</b> → 自己改 skill、補實驗——素材今天已經全在庫裡。</p></div>
+  </div>
+
+  <!-- 底部:Normal / Except flow 兩行 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.1cqw;margin-top:1cqw">
+    <div class="sk rot-r" style="background:rgba(255,255,255,.45)">
+      <b class="green">😊 Normal flow</b>
+      <p class="t-tiny">改碼 → 觸發上碼/preflight(狀態持續更新 Jira)→ 完成 → <b>Jira 通知人 review + submit</b> → 評分表單 close(或 profile 設 auto_close 全自動)。</p></div>
+    <div class="sk alt rot-l2" style="background:rgba(255,255,255,.45)">
+      <b class="red">😰 Except flow</b>
+      <p class="t-tiny">需要人決定 → 票轉 <b>Pending</b> 發表單 → 人下指示(提交)→ Assignment 重新喚起 agent,<b>從 resume id 讀回之前 context 繼續</b>——不重工。卡死/斷線:watchdog killpg→resume;超限:budget 擋下→自助增額。</p></div>
+  </div>
+
+  <div class="pgno">✎ 2/2 — 怎麼做(細節)</div>
+  <div class="foot">daemon = poller・non-interactive = rawcli(claude/codex)・記錄 = Jira + journal</div>
+</section>

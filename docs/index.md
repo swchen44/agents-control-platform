@@ -71,3 +71,8 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 **Jira = 對外的工作日誌 / System of Record**;Agent 以「員工」身分接單 → 做事(後台)
 → 更新進度 → 回報成果讓人評分關單。真正的工作與細節在後台(workspace = 工作台;
 dashboard/transcript = 完整飛行記錄器),Jira 只承載策展後的摘要/決策/結果/連結。
+
+## 溝通素材
+
+- [`l2-l3-infographic.html`](l2-l3-infographic.html) — 兩張 16:9 手繪筆記本風資訊圖卡(①L0–L4 背景/Why/What/Key ②How:一張票的旅程+領域 agents+護欄/觀測/兩種迴圈/Normal+Except flow);對外溝通 L2→L3 用,瀏覽器直開。
+
