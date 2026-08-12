@@ -10,16 +10,19 @@
 
 | | A-raw claude | B-OpenHands claude | A-raw codex | B-OpenHands codex |
 |---|---|---|---|---|
-| 結果 | ✅ done,grader PASS | ✅ done,grader PASS | ⛔ quota | ⛔ quota |
-| 時長 | 30.4s | 31.6s | — | — |
-| 事件數 | **248** | **14** | — | — |
-| 事件粒度 | thinking delta 62、raw stream 162、tool 5+5 | ACPToolCallEvent 10、Message/Action/Observation | — | — |
-| 成本 | $0.053(haiku,可控) | 未落地(冒煙 $0.45,adapter 預設模型) | — | — |
-| session id | ✅ 預指定 | ✅(SDK 持久化) | — | — |
+| 結果 | ✅ done,grader PASS | ✅ done,grader PASS | ✅ done,grader PASS | ✅ done,grader PASS |
+| 時長 | 19.5s | 27.3s | 48.6s | 34.2s |
+| 事件數 | **176** | **8** | 33 | 22 |
+| 事件粒度 | raw 120、thinking 36、tool 5+5 | ACPToolCallEvent 4、Message/Action/Observation | raw 11、tool 6+6、message 7 | ACPToolCallEvent 18 |
+| 成本 | $0.052(haiku,可控) | $0.437(adapter 預設模型,貴 8×) | $0(訂閱制不回報) | $0(訂閱制不回報) |
+| session id | ✅ 預指定 | ✅(SDK 持久化) | ✅ thread id | ✅ |
 
-⛔ **codex 兩路皆被 ChatGPT 用量額度擋下**(`You've hit your usage limit... Aug 31st`)
-——非相容性問題:A 路 codex 歷史實測 2×2 矩陣全過;B 路 codex-acp@1.1.2 **冒煙已
-PASS**(68s、14 事件、file probe 過)。對照數據點待額度重置後補。
+> 2026-08-13(E1):codex quota 恢復後四格重跑同日全綠——codex 欄補齊;
+> claude 兩欄同輪重測,粒度比 176:8(方向同 8/3 的 248:14)。
+> codex 原生流本就粗(33 vs claude 176),A/B 粒度差在 codex 上較小(33:22)。
+
+(歷史:8/3 首輪 codex 兩路被 quota 擋下 `usage limit... Aug 31st`;
+8/13 恢復後已補齊上表。)
 **營運發現(實測)**:訂閱 quota 是跨路線共用資源,兩條路都吃同一個 codex 帳號額度
 → pipeline 需要預算/節流管理。
 
@@ -89,12 +92,16 @@ agent-server 形態另附併發/隔離);A-raw 留給需秒級觀測/精準控制
 (`harness/arcp_rawcli/`,OpenHands 骨架 + raw CLI 執行單元)。
 數據源 `harness/runtime_abc/results.json`(`compare_abc.py`)。
 
-| | A-raw supervisor | B-ACP(agent-server) | **C-RawCLIAgent** |
-|---|---|---|---|
-| 蒸餾事件(語意層) | 93(未蒸餾,含 token delta 噪音) | 17(ACP 粗語意) | **10(乾淨有意義)** |
-| 原生保真(raw 行) | 93 | **0**(adapter 吞掉底層) | **94(全保留)** |
-| cost(haiku) | $0.0285 | $0.0285 | $0.0291 |
-| completed / grader | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
+| | A-raw supervisor | B-ACP(agent-server) | **C-RawCLIAgent** | **C×codex**(E1,8/13) |
+|---|---|---|---|---|
+| 蒸餾事件(語意層) | 93(未蒸餾,含 token delta 噪音) | 17(ACP 粗語意) | **10(乾淨有意義)** | 18 |
+| 原生保真(raw 行) | 93 | **0**(adapter 吞掉底層) | **94(全保留)** | 26(codex 原生流本就粗) |
+| cost(haiku) | $0.0285 | $0.0285 | $0.0291 | $0(codex 訂閱制) |
+| completed / grader | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
+
+> 8/13 同日重跑(`compare_abc.py A B C C-codex`):A 86/86 $0.032、
+> B 17/0 $0.042、C 13/121 $0.042、**C-codex 18/26 $0**——四路 done+grader
+> 全過,形狀與 8/3 一致(C 兩者兼得、B 零保真),judgment 不變。
 | 中途控制窗口 | ✅(recovery_test kill) | ❌(批次無窗口) | ✅(C.4 fault kill) |
 | crash→resume | ✅(2×2 矩陣) | ✅(session/load) | ✅(C.4,--resume) |
 | setup | 零依賴 | venv+server(最重) | venv(無 server) |

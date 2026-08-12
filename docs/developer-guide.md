@@ -146,6 +146,55 @@ uv run python tests/it_kp2.py T5 T6      # 進階測項
 - 隔離驗證法(改完相關程式碼後):記下 `stat -f %m runtime/harness.db`,跑完
   整測再比對 mtime 不變 = 沒碰正式 DB。
 
+## 重跑 E 群真環境驗證(E1 對照數據點 / E2 crash→resume)
+
+E 群是**需要真 CLI/真 token 的環境級驗證**,不進 CI(CI 只跑離線
+`test_*.py`);每次大改 rawcli/inner loop、或 CLI 升版後,照下面重跑。
+
+### E1 — A/B/C × claude/codex 對照數據點(~3 分鐘,幾美分 + codex 訂閱額度)
+
+```bash
+# 四格:A-raw / B-OpenHands ACP × claude / codex(examples PoC 層)
+cd examples/openhands-acp-poc && .venv/bin/python compare_run.py
+# 四路:A(raw supervisor)/ B(agent-server)/ C(rawcli)/ C×codex(生產鏈路層)
+uv run python scripts/compare_abc.py A B C C-codex
+```
+
+- 判準:全路 `done + grader PASS`;數據(事件數/保真行/成本)貼回
+  `examples/openhands-acp-poc/COMPARISON.md` 對應表,**形狀該保持**:
+  C 路同時有乾淨蒸餾語意層與原生全保真、B 路(ACP adapter)原生保真=0。
+- codex 訂閱 quota 是**跨路線共用資源**,額度用罄兩路一起紅——先跑
+  `codex exec "Reply: QUOTA-OK"` 探路再燒對照。
+- 2026-08-13 實測基線:compare_run 四格全綠(A-claude 176 事件/B-claude 8/
+  A-codex 33/B-codex 22);compare_abc 四路全綠(A 86/86、B 17/0、
+  C 13/121、C-codex 18/26)。
+
+### E2 — 長跑/大 context crash→resume(`tests/it_e2_resume.py`,~$0.03)
+
+crash-safe 宣稱的硬證據:大 context 任務 killpg 後 native resume
+**(a) context 傳承 (b) 不重工 (c) 完成剩餘步驟**。
+
+```bash
+uv run python tests/it_e2_resume.py                  # claude+codex 兩格
+uv run python tests/it_e2_resume.py --engine claude  # 單格
+uv run python tests/it_e2_resume.py --lines 5000     # 放大 context 深測
+```
+
+設計要點(讀懂 FAIL 時需要):facts.txt 埋 SECRET_TOKEN → phase 1 寫
+memo.txt 即被 `fault_kill_on_file` killpg(sleep 30 是 kill 窗)→
+**刪 facts.txt**(封死重讀,token 唯一來源=session context)→ phase 2
+resume 只說「繼續」→ 驗 final.txt=token 反轉、memo.txt mtime 不變。
+phase 2 只給 Write/Read 工具:claude 曾把「sleep && echo > final.txt」
+丟後台就收工,CLI 退出後台命令跟著死 → 誤判(不是 resume 壞)。
+
+2026-08-13 實測基線:claude(haiku)與 codex 兩格皆 **6/6 PASS**
+(codex 亮點:killpg 後 thread id 仍擷取得到,`codex exec resume` 同樣
+傳承 context;dur ~49s/格)。
+
+30 分鐘級超長跑:`--lines 50000` 並把 P1 的 sleep 拉長;**不用
+caffeinate**(使用者明令)——接電源跑,異常先查 `pmset -g log`
+(筆電睡眠會凍結計時器產生假 stall)。
+
 ## 加一個 backend
 
 1. 在 `inner_*_runner.py` 加執行單元,產出符合 `contract` 的 envelope。

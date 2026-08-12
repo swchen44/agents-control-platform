@@ -77,7 +77,9 @@ def main() -> int:
     picks = sys.argv[1:] or ["A", "B", "C"]
     runners = {"A": route_a,
                "B": lambda: route_bc("filechain-server", "B-acp-server"),
-               "C": lambda: route_bc("filechain-rawcli", "C-rawcli")}
+               "C": lambda: route_bc("filechain-rawcli", "C-rawcli"),
+               # E1(2026-08-13):C 路第二引擎 codex 的量化欄(quota 恢復後補)
+               "C-codex": lambda: route_bc("filechain-codex", "C-rawcli-codex")}
     results = []
     for p in picks:
         print(f"=== {p} ===", flush=True)

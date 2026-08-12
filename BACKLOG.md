@@ -83,7 +83,7 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 | B4 常駐服務化 | ◐ 部分 | run_poller 時間盒 + control API;systemd/daemon 化未做(operator 手冊有跑法) |
 | A2 冪等 ledger | ✅ 結論不建 | native resume + at-most-once + 一次性 token 已達目標(見 idempotency.md) |
 | D2 codex sandbox | ⏳ 真環境 | 需 codex quota;`--sandbox` 欄位已在 |
-| B1/D1/E1/E2/A1 | ⏳ 真環境 | 真 Jira Server / docker / codex 對照 / 長跑 resume / Postgres —— 需真環境,我不能替跑 |
+| B1/A1 | ⏳ 真環境 | 真 Jira Server / Postgres —— 需真環境,我不能替跑(E1/E2 已於 2026-08-13 完成;D1 docker 不做) |
 | V1 付費複驗 | ⏳ 真環境 | 免費部分已驗綠;付費(真派工)清單見 `scripts/reverify_v1.py` |
 
 ## ★ 使用者圈定優先級(2026-08-04,全 23 項逐項問過)
@@ -182,8 +182,8 @@ workspace(instance)、命名 resume-safe、起點審批門(description YAML 參�
 
 | # | 項目 | 做法 | effort | 價值 |
 |---|---|---|---|---|
-| E1 | **codex 對照點**(quota 8/31 後) | 一鍵 `compare_run.py a-codex b-codex` + `compare_abc.py C` | 低(等 quota) | 補齊 A/B/C 三方 codex 欄 |
-| E2 | **長跑/大 context resume**(v5 深水區) | 30 分鐘+大 context 任務 crash→resume;--resume 對大 context 可靠性 | 高(token 貴、需防睡) | crash-safe 生產宣稱前最後硬證據 |
+| E1 | **codex 對照點** | ✅ **完成(2026-08-13,quota 提前恢復)**:`compare_run.py` 四格(A/B×claude/codex)+ `compare_abc.py A B C C-codex` 同日全綠;數據入 COMPARISON.md(C-codex 18 蒸餾/26 保真/$0) | — | ✅ |
+| E2 | **長跑/大 context resume** | ✅ **完成(2026-08-13,縮尺自動化版)**:`tests/it_e2_resume.py` claude+codex 兩格 6/6——大 context(facts 600 行)killpg 後 native resume:context 傳承(刪 facts 後仍答對 token)+不重工(mtime)+完成;深測 `--lines 50000` 路徑留存(developer-guide) | — | ✅ |
 | E3 | **agent-server 閒置 Evict→rehydrate 對照** | 閒置 20 分→子進程關→再存取 rehydrate 續 | 低-中 | qm/OpenHands 的常態機制,我們只間接驗過 |
 | E4 | **qm Jira adapter spike**(對比研究延伸) | 在 qm 寫個 surface="jira" adapter,實測 effort | 中 | 驗證「把我們功能搬 qm」的低 effort 判斷 |
 
