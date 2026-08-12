@@ -120,7 +120,7 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
 ## 12. 與 W10 的關係 / 對既有設計的改動
 
 - 這是 HIL 的**具體人機介面**,取代「人直接編 description human 段 / assignee→bot 觸發」。
-- `need_info`/`decision` = HIL(Middle)(triage/審批/補資訊);`score_and_close` = HIL(End)。
+- `need_info`/`decision`/`approval`(起點審批,2026-08-13 表單化:提交即放行)= HIL(Middle);`score_and_close` = HIL(End)。
 - **要改**:`dispatcher.py` 不再主動 `assign` 人;`external.py` 不再以 assignee 為訊號;
   `DESIGN_lifecycle` 的「assignee=資源開關」改寫;`sections.py` human 段改系統寫+hash;
   poller 加 Jira 健康偵測 + 降級暫停/恢復 + 回寫執行。

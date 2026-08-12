@@ -55,6 +55,24 @@ Jira summary 可編輯,**不可入 path**。
 
 ### 4.1 流程
 
+> ★ **2026-08-13 表單化改版**:人**不再手編 description**——審批走**一次性表單**
+> (與 HIL 其他表單一致;連結寫進 control 段=hash 範圍+comment @mention 審批者)。
+> **放行 = 表單提交**;格式錯(agent_name 非 snake_case)表單端就地擋,
+> **不再有 Jira 往返的退回/escalate 迴圈**(`max_revisions` 保留相容不再使用)。
+> 下方原設計流程留作歷史脈絡。
+
+```
+機器人:  match → 把 PLAN 寫進 description(control 段 status=awaiting-approval,
+           含 approval_form 表單連結;human 段不再渲染填寫欄)
+         → 發一次性審批表單 + comment @mention 審批者(冪等;遺失下輪自癒補發)
+         → assignee 改成審批者(通知/看板顯示,不是放行信號)
+人類:    開表單連結 → 填 agent_name(snake_case 就地驗)/ human_email / param → 送出
+機器人:  hil.apply_submission(approval)→ 清 pending + assignee 收回機器人
+           → 審批紀錄由表單回寫 human 段(archive)→ copy template → fork
+```
+
+<details><summary>2026-08-05 原設計(人編 description + assignee 交回;已被表單化取代)</summary>
+
 ```
 機器人:  match(title keyword / assignee regex)
          → 把 PLAN 寫進 ticket description(§4.2):原始需求上方保留,
@@ -67,6 +85,8 @@ Jira summary 可編輯,**不可入 path**。
            ✗ 有問題 → 把 error message 寫進 comments → assignee 轉回人類(退回重填)
                      → 迴圈,直到通過或超過 max_revisions
 ```
+
+</details>
 
 ### 4.2 description 參數區塊(Q4:標記包起的 YAML)
 
@@ -97,7 +117,8 @@ param:                                # ← 選填
 
 ### 4.3 放行 / 觸發(Q3/Q5)
 
-- **放行信號 = assignee 改回機器人**(現成 assignee 監看,不解析文字,不誤判)。
+- **放行信號 = 審批表單提交**(2026-08-13;assignee 由 harness 自動收回)。
+  ~~assignee 改回機器人~~ 原雙信號已簡化——表單提交本身就是明確完成時點。
 - **per-profile 可選**:`require_approval: true/false` + `approver:`(該 profile 的審批者
   email,不同 profile 可交不同人)。
 - **觸發範圍**:綁 `require_approval`,**不綁「首次」**——凡是要 **copy template + fork

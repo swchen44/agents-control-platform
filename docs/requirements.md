@@ -56,7 +56,7 @@
 ## 3. 生命週期與人機協作(W2)
 
 - **起點審批門**(per-profile `require_approval`):貼 plan 到 Jira description
-  分區段 → 人填表 → assignee 交回機器人放行;填錯退回、超 max_revisions escalate。
+  分區段 → **一次性審批表單提交即放行**(2026-08-13 表單化;人不編 description,格式錯表單就地擋,assignee 由 harness 收回;原「assignee 交回+退回迴圈」已取代)。
   **Why**:高風險任務要人核准起點;用分區段 description 當多方協作表單。
 - **分區段 description + hash**(human/control/agent:<名>,機器段附 sha256):
   區塊置頂、human 前置、結束標記、全掃描驗 hash+log、區塊外不碰。

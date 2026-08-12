@@ -189,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     form_base = fcfg.get("base_url") or f"http://{form_host}:{form_port}"
     mention = fcfg.get("mention_account_id", "")
     disp.form_base_url, disp.mention = form_base, mention  # budget soft 增額表單用
+    disp.approval.form_base_url = form_base   # W2.3 表單化:審批表單連結 base
     # W4.5:cancel_states 從 config 接線(原 hardcode)。人的指令改走指令台表單,
     # 不再有 @agent comment 白名單。
     ext = ExternalChangePolicy(
@@ -255,7 +256,8 @@ def main(argv: list[str] | None = None) -> int:
                       jira_health_fn=_jira_up,
                       on_submit=lambda r: apply_submission(
                           src, store, r, profiles=profiles,   # W10.3 handoff 候選
-                          status_sync=disp.status_sync),      # N:close 精確轉
+                          status_sync=disp.status_sync,       # N:close 精確轉
+                          bot_account_id=bot_id),             # 審批放行收回 assignee
                       command_fn=_command_fn,                 # 指令台(取代 comment)
                       profiles_fn=lambda: profiles,           # next 下拉候選
                       admin_emails_fn=lambda: disp.admin_emails)  # K:門禁豁免(可 reload)

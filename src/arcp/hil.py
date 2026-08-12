@@ -268,6 +268,7 @@ def _close_transition(source, issue_id, status_sync) -> bool:
 def apply_submission(source, store, req: InteractionRequest, *,
                      profiles: dict | None = None,
                      status_sync: dict | None = None,
+                     bot_account_id: str = "",
                      now: float | None = None) -> list[dict]:
     """提交後:回寫 human 段 + 稽核 comment + 觸發 resume/評分/關單/handoff。回事件。
 
@@ -323,6 +324,19 @@ def apply_submission(source, store, req: InteractionRequest, *,
         elif req.schema_id == "security_review":   # M3:安全審裁決
             evs.extend(_apply_security_review(source, store, sess, req,
                                               data, now))
+        elif req.schema_id == "approval":          # W2.3 表單化:提交即放行
+            sess.pending_reason = None
+            store.upsert_session(sess)
+            if bot_account_id:                     # assignee 收回機器人
+                try:                               # (W2.4 資源開關語意)
+                    source.assign(req.issue_id, bot_account_id)
+                except Exception as e:  # noqa: BLE001 — 收不回不擋放行
+                    log.warning("審批放行收回 assignee 失敗 %s: %s",
+                                req.key, e)
+            evs.append(store.journal(
+                "approval", req.issue_id, req.key, decision="proceed",
+                agent_name=data.get("agent_name"),
+                request_id=req.request_id))
         else:                                  # need_info / decision → resume
             sess.pending_reason = None
             sess.inactive = False

@@ -80,7 +80,7 @@ sess = TicketSession(issue_id=1, key="P-1", profile="p", workspace="ws",
                      session_id=None, attempts=0, outcome=None,
                      pending_reason=None, cost_usd=0.0)
 ag = ApprovalGate(src, st, "BOT")
-ag._write_plan(src.get_ticket(1), prof, sess)
+ag._write_plan(src.get_ticket(1), prof, sess, form_url="")
 _before, secs, _after = parse(src.desc[1])
 ctrl = next((s for s in secs if s.owner == "control"), None)
 check("approval 寫 plan 後 control 有 plan(profile 行)",

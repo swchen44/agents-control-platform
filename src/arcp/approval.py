@@ -1,50 +1,48 @@
-"""W2.3 — 起點審批門(DESIGN §4)。
+"""W2.3 — 起點審批門(DESIGN §4;2026-08-13 表單化)。
 
-per-profile `require_approval`:match 後不直接 fork,先把 plan 寫進 description 分區段
-(control 段 status=awaiting-approval + human 空欄段)、貼填表說明 comment(幂等)、
-assignee 改審批者;等人填 human 段參數 + 把 assignee 交回機器人 → 校驗:
-  通過 → proceed(dispatcher 照常 copy+fork)
-  失敗 → reprompt(comment 寫 error + assignee 退回審批者,approval_revisions++)
-  超 max_revisions → escalate(pending:escalated,需人工)
+per-profile `require_approval`:match 後不直接 fork——貼 plan 進 description
+分區段(control 段 status=awaiting-approval,**含一次性審批表單連結,在 hash
+範圍內**)、發審批表單 + comment @mention 審批者、assignee 指審批者(通知/
+看板顯示用,**不是放行信號**)。
 
-審批狀態在 store(pending_reason + approval_revisions);description 分區段是「展示 +
-人類輸入表單」——真實決策看 store,人類誤改展示無害(機器段 hash 於重寫時還原)。
+**放行 = 表單提交**(2026-08-13 定案,取代「人編 description human 段 +
+assignee 交回機器人」雙信號——人不再手編 description 的 ARCP 內容):
+`hil.apply_submission` 的 approval 分支驗過 → 清 pending、assignee 收回機器人、
+審批紀錄(agent_name/human_email/param)由表單回寫進 human 段(archive)。
+格式錯誤(agent_name 非 snake_case)表單端就地擋,**不再有 Jira 往返的
+reprompt/escalate 迴圈**;`max_revisions` 設定保留相容但不再使用。
 
-註:approver 設定值視為 accountId(email→accountId 解析是真實 Jira 細節,另補)。
+審批狀態在 store(pending_reason);description 分區段是展示——真實決策看
+store,人類誤改展示無害(機器段 hash 於重寫時還原)。
 """
 
 from __future__ import annotations
 
 from .logutil import get_logger
-from .sections import Section, parse, render, validate_keys
+from .sections import Section, parse, render
 
 log = get_logger("approval")
 
-_INSTRUCTIONS = (
-    "[agent] 這張票需要人工審批才會開始。請在 description 的 "
-    "`### [ARCP owner=human]` 區段填好參數(至少 agent_name,snake_case),"
-    "然後把 assignee 改回機器人,系統就會開始。填錯會退回並在此說明。")
-
 
 class ApprovalGate:
-    def __init__(self, source, store, bot_account_id: str | None):
+    def __init__(self, source, store, bot_account_id: str | None,
+                 form_base_url: str = ""):
         self.source = source
         self.store = store
         self.bot_account_id = bot_account_id or ""
+        self.form_base_url = form_base_url
 
-    # -- render 機器/人類區段 --------------------------------------------- #
-    def _control_body(self, profile, session) -> str:
-        return (f"template: {profile.workspace_template}\n"
+    # -- render 機器區段 --------------------------------------------------- #
+    def _control_body(self, profile, session, form_url: str = "") -> str:
+        body = (f"template: {profile.workspace_template}\n"
                 f"profile: {profile.name}\n"
                 f"status: awaiting-approval\n"
                 f"revisions: {session.approval_revisions}")
+        if form_url:                       # 審批表單連結(control 段=hash 範圍)
+            body += f"\napproval_form: {form_url}"
+        return body
 
-    def _human_body(self) -> str:
-        return ("agent_name:            # ← 請填(snake_case)\n"
-                "human_email:           # 選填:接手人 Jira email(空=審批者)\n"
-                "param:")
-
-    def _write_plan(self, ticket, profile, session) -> None:
+    def _write_plan(self, ticket, profile, session, form_url: str) -> None:
         before, secs, after = parse(ticket.description or "")
         if not secs and not after:
             # 首次:原本無 ARCP 區塊,原始描述整段沉到區塊下方(區塊置頂)
@@ -54,33 +52,17 @@ class ApprovalGate:
         # control 時別把它蓋掉)
         prev = by.get("control")
         cc = prev.data().get("command_console") if prev else None
-        body = self._control_body(profile, session)
+        body = self._control_body(profile, session, form_url)
         if cc:
             body += f"\ncommand_console: {cc}"
         by["control"] = Section("control", body)
-        by.setdefault("human", Section("human", self._human_body()))
-        # render 依 canonical 序(human→control→agent)自動排,不需手排
+        # 表單化:human 段不再渲染「請填」欄位(人不編 description);審批
+        # 紀錄由表單提交後回寫(hil._write_human_section)。
         self.source.set_description(
             ticket.id, render(before, list(by.values()), after))
 
-    def _validate_human(self, human: Section | None) -> list[str]:
-        if human is None:
-            return ["缺 human 區段"]
-        errs = [f"key 非 snake_case: {k}" for k in validate_keys(human)]
-        if not str(human.data().get("agent_name") or "").strip():
-            errs.append("agent_name 必填")
-        # human_email 選填(空=fallback 審批者);有填就即時驗證是合法 Jira 帳號
-        email = str(human.data().get("human_email") or "").strip()
-        if email:
-            find = getattr(self.source, "find_account_id", None)
-            if "@" not in email:
-                errs.append(f"human_email 不像 email: {email}")
-            elif find is not None and find(email) is None:
-                errs.append(f"human_email 不是合法 Jira 帳號: {email}")
-        return errs
-
     def _acct(self, value: str | None) -> str | None:
-        """email → accountId(assign API 收 accountId);已是 accountId /
+        """email → accountId/username(assign API 用);已是識別碼 /
         離線 mock(無 user-search)→ 原樣。"""
         if value and "@" in value:
             find = getattr(self.source, "find_account_id", None)
@@ -88,55 +70,60 @@ class ApprovalGate:
                 return find(value) or value
         return value
 
+    def _open_approval_form(self, ticket_id: int):
+        """該票是否已有待填的審批表單(冪等/自癒鍵)。"""
+        for r in self.store.open_interactions_for_ticket(ticket_id):
+            if getattr(r, "schema_id", "") == "approval":
+                return r
+        return None
+
+    def _issue_form(self, ticket, profile) -> str:
+        """發一次性審批表單(comment @mention 審批者)→ 回表單 URL。"""
+        from .hil import form_link, request_human
+        req = request_human(
+            self.source, self.store, ticket.id, ticket.key, "approval",
+            question=(f"這張票需要審批才會開始(profile={profile.name})。"
+                      "請填此表單放行;格式錯誤表單會直接提示。"),
+            payload_extra={"title": f"審批 {ticket.key}",
+                           "profile": profile.name},
+            base_url=self.form_base_url,
+            mention=self._acct(profile.approver) or "")
+        return form_link(self.form_base_url, req.token)
+
     # -- 狀態機 ------------------------------------------------------------ #
     def gate(self, ticket, profile, session) -> str:
-        """回 proceed | awaiting | reprompt | escalate;副作用:寫 description/
-        comment/assignee + 改 session(pending_reason/approval_revisions)。
+        """回 proceed | awaiting;副作用:寫 description/comment/assignee +
+        session.pending_reason。放行由表單提交事件驅動(hil.apply_submission
+        清 pending)——session 不在 pending:approval 即視為已放行。
 
-        A2(W3.2):session 變更**先持久化、再外寫**(comment/assign/description)
-        ——crash 在外寫途中,revisions/pending 已落 store,重跑不會重置退回計數
-        (escalate 上限跨 crash 有效);首貼的冪等 key = description 已有 control
-        段(重跑走 awaiting 分支,不重貼)。
+        A2(W3.2):session 變更**先持久化、再外寫**;首貼冪等 key =
+        description 已有 control 段 + 已有待填審批表單(缺表單會自癒補發)。
         """
         _before, secs, _after = parse(ticket.description or "")
         by = {s.owner: s for s in secs}
 
-        if "control" not in by:                       # 首次:貼 plan、指派審批者
+        if "control" not in by:                   # 首次:貼 plan + 發表單
             session.pending_reason = "approval"
-            self.store.upsert_session(session)        # 先持久化(A2)
-            self._write_plan(ticket, profile, session)
-            self.source.add_comment(ticket.id, _INSTRUCTIONS)
+            self.store.upsert_session(session)    # 先持久化(A2)
+            form_url = ""
+            try:
+                form_url = self._issue_form(ticket, profile)
+            except Exception as e:  # noqa: BLE001 — 表單發失敗下輪自癒補發
+                log.warning("%s 審批表單發送失敗(下輪補發):%s",
+                            ticket.key, e)
+            self._write_plan(ticket, profile, session, form_url)
             self.source.assign(ticket.id, self._acct(profile.approver))
-            log.info("%s 審批門:貼 plan,指派審批者 %s", ticket.key, profile.approver)
+            log.info("%s 審批門:貼 plan+發表單,指派審批者 %s",
+                     ticket.key, profile.approver)
             return "awaiting"
 
-        if (ticket.assignee_id or "") != self.bot_account_id:
-            session.pending_reason = "approval"       # 還在人手上,繼續等
-            self.store.upsert_session(session)
+        if session.pending_reason == "approval":  # 等表單提交(事件驅動)
+            if self._open_approval_form(ticket.id) is None:
+                try:                              # 自癒:crash 在發表單前
+                    form_url = self._issue_form(ticket, profile)
+                    self._write_plan(ticket, profile, session, form_url)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("%s 審批表單補發失敗:%s", ticket.key, e)
             return "awaiting"
 
-        errs = self._validate_human(by.get("human"))  # 交回機器人 → 校驗
-        if not errs:
-            session.pending_reason = None
-            self.store.upsert_session(session)
-            log.info("%s 審批通過,放行", ticket.key)
-            return "proceed"
-
-        session.approval_revisions += 1
-        if session.approval_revisions > profile.max_revisions:
-            session.pending_reason = "escalated"
-            self.store.upsert_session(session)        # 先持久化(A2)
-            self.source.add_comment(
-                ticket.id, f"[agent] 審批退回超過 {profile.max_revisions} 次,"
-                           f"需人工介入(escalate)。")
-            log.info("%s 審批 escalate", ticket.key)
-            return "escalate"
-
-        session.pending_reason = "approval"
-        self.store.upsert_session(session)            # 先持久化(A2)
-        self.source.add_comment(
-            ticket.id, "[agent] 填表有誤,請修正後把 assignee 交回機器人:\n"
-                       + "\n".join(f"- {e}" for e in errs))
-        self.source.assign(ticket.id, self._acct(profile.approver))
-        log.info("%s 審批退回(第 %d 次)", ticket.key, session.approval_revisions)
-        return "reprompt"
+        return "proceed"                          # 表單已提交放行(pending 清)

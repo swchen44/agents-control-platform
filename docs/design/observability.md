@@ -60,7 +60,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 |---|---|---|
 | `aborted` | `author`, `detail`, `reason`, `request_id`, `state`, `to_key` | `src/arcp/commands.py`, `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
 | `adopted` | — | `scripts/run_poller.py` |
-| `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py` |
+| `approval` | `agent_name`, `decision`, `request_id`, `revisions` | `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
 | `assignee_alert` | `assignee` | `src/arcp/commands.py` |
 | `assignee_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `assignee_restored` | — | `src/arcp/commands.py` |

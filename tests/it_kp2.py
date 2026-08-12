@@ -254,11 +254,11 @@ def t5(src):
                    timeout=120))
 
 
-# ── T6 審批門全程:awaiting → 填表放行 → agent 真跑 → SUCCESS ─────── #
+# ── T6 審批門全程:awaiting → 審批表單放行 → agent 真跑 → SUCCESS ──── #
 def t6(src):
-    print("== T6 審批門全程(填 agent_name + assignee 交回 → agent 執行)==")
+    print("== T6 審批門全程(表單提交即放行;2026-08-13 表單化)==")
     t = src.create_ticket(
-        "KP2", "[it] T6 審批門全程(放行後真跑)",
+        "KP2", "[it] T6 審批門全程(表單放行後真跑)",
         "請在 workspace 建立 done.txt,內容寫 done。",
         issue_type_id=TASK_TYPE, labels=["arcp.approval-demo"])
     print(f"    建票 {t.key}(id={t.id})")
@@ -268,17 +268,24 @@ def t6(src):
     check("T6: Jira Pending(hil_middle 同步)",
           wait("Pending", lambda: jira_state(src, t.id) == "Pending",
                timeout=120))
-    # 模擬人放行:human 段填 agent_name + assignee 改回機器人
-    full = src.get_ticket(t.id, with_comments=False)
-    desc = full.description
-    if "agent_name:" not in desc:
-        check("T6: description 有 human 段 agent_name 欄", False, desc[:200])
+    # 表單化:description 不再有「請填」欄;control 段有表單連結(hash 範圍)
+    desc = src.get_ticket(t.id, with_comments=False).description
+    check("T6: human 段不再引導手編(無 agent_name 欄)+ control 段有表單連結",
+          "agent_name:" not in desc and "approval_form:" in desc)
+    tok = wait("審批表單連結", lambda: form_token_from_comments(
+        src, t.id, must_contain="審批"), timeout=60)
+    check("T6: 審批表單已發(comment 有連結)", bool(tok))
+    if not tok:
         return
-    src.set_description(t.id, desc.replace("agent_name:",
-                                           "agent_name: tester", 1))
-    bot = src.my_uid()
-    src.assign(t.id, bot)
-    print("    已填 agent_name=tester + assignee 交回機器人")
+    code, body = _post(f"{FORM}/form/{tok}", {
+        "agent_name": "Bad Name!", "by": EMAIL})       # 格式錯 → 就地擋
+    check("T6: agent_name 非 snake_case → 表單就地擋(不放行)",
+          code == 200 and "snake_case" in body
+          and arcp(t.id).get("pending_reason") == "approval")
+    code, _ = _post(f"{FORM}/form/{tok}", {
+        "agent_name": "tester", "by": EMAIL})          # 正確 → 提交即放行
+    check("T6: 表單提交 200(放行)", code == 200)
+    print("    表單放行(agent_name=tester);assignee 由 harness 收回")
     check("T6: 放行 → agent 真跑 → SUCCESS",
           wait("SUCCESS", lambda: arcp(t.id).get("outcome") == "SUCCESS",
                timeout=420))

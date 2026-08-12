@@ -99,9 +99,13 @@ def test_terminal_rerun_no_duplicate():
 
 # -- 盤點 #4:approval 先持久化、escalate 上限跨 crash --------------------- #
 def test_approval_revisions_survive_crash():
+    """2026-08-13 表單化改版:reprompt/escalate 迴圈已由表單端 validate 取代,
+    A2 等價項改測——首貼途中外寫 crash(comment 炸):pending 已先持久化、
+    gate 容錯回 awaiting;表單(interaction)在 comment 前已落 store →
+    下輪好 source 冪等 awaiting(不重發、不重貼)。"""
     store = Store(tempfile.mkdtemp())
     prof = _profile(require_approval=True, approver="APPR", max_revisions=2)
-    t = _ticket(desc=_filled_empty_agent_name(), assignee_id=BOT)
+    t = _ticket()
 
     def _sess():
         s = store.get_session(1)
@@ -112,30 +116,28 @@ def test_approval_revisions_survive_crash():
                               outcome=None, pending_reason=None, cost_usd=0.0)
         return s
 
-    # 退回 #1:外寫 crash——revisions 必須已在 store
-    g_bad = ApprovalGate(CrashOnCommentSource(), store, BOT)
-    try:
-        g_bad.gate(t, prof, _sess())
-        raise AssertionError("應該炸在外寫")
-    except RuntimeError:
-        pass
-    assert store.get_session(1).approval_revisions == 1   # 已持久化
+    g_bad = ApprovalGate(CrashOnCommentSource(), store, BOT,
+                        form_base_url="http://f:1")
+    d = g_bad.gate(t, prof, _sess())
+    assert d == "awaiting"                       # 外寫炸不擋(容錯+自癒設計)
+    assert store.get_session(1).pending_reason == "approval"   # 先持久化
+    forms = [r for r in store.open_interactions_for_ticket(1)
+             if r.schema_id == "approval"]
+    assert len(forms) == 1                       # 表單先落 store(comment 前)
 
-    # 重啟後退回 #2(正常)→ revisions 2(不是重置回 1)
-    g = ApprovalGate(MockSource(), store, BOT)
-    assert g.gate(t, prof, _sess()) == "reprompt"
-    assert store.get_session(1).approval_revisions == 2
-
-    # 退回 #3 → 超過 max_revisions=2 → escalate(上限跨 crash 有效)
-    assert g.gate(t, prof, _sess()) == "escalate"
-    assert store.get_session(1).pending_reason == "escalated"
+    g = ApprovalGate(MockSource(), store, BOT, form_base_url="http://f:1")
+    t2 = _ticket(desc=g_bad.source.desc.get(1, t.description))
+    assert g.gate(t2, prof, _sess()) == "awaiting"   # 冪等:不重發
+    forms2 = [r for r in store.open_interactions_for_ticket(1)
+              if r.schema_id == "approval"]
+    assert len(forms2) == 1
 
 
 def test_approval_first_entry_idempotency_key():
     store = Store(tempfile.mkdtemp())
     prof = _profile(require_approval=True, approver="APPR", max_revisions=3)
     src = MockSource()
-    g = ApprovalGate(src, store, BOT)
+    g = ApprovalGate(src, store, BOT, form_base_url="http://f:1")
     from arcp.store import TicketSession
     sess = TicketSession(issue_id=1, key="P-1", profile="p", workspace="?",
                          session_id=None, attempts=0, outcome=None,

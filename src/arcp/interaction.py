@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -74,6 +75,24 @@ FORM_SCHEMAS: dict[str, dict] = {
         "fields": [
             {"key": "human_prompt", "label": "給 agent 的補充指示(寫進 TICKET.md)",
              "type": "textarea", "required": True},
+        ],
+    },
+    # W2.3 表單化(2026-08-13):起點審批走一次性表單,取代「人編 description
+    # human 段 + assignee 交回」雙信號——**表單提交即放行**(hil.apply_submission
+    # 驗過 → 清 pending + assignee 收回機器人)。格式錯誤表單端就地擋
+    # (pattern),不再有 Jira 往返的 reprompt/escalate 迴圈。
+    "approval": {
+        "version": SCHEMA_VERSION, "title": "起點審批:放行這張票",
+        "hil": "middle",
+        "fields": [
+            {"key": "agent_name", "label": "agent_name(執行名義,snake_case)",
+             "type": "text", "required": True,
+             "pattern": r"[a-z][a-z0-9_]*", "pattern_hint": "snake_case"},
+            {"key": "human_email",
+             "label": "接手人 email(選填,審批紀錄)",
+             "type": "text", "required": False},
+            {"key": "param", "label": "param(選填,附加參數,入審批紀錄)",
+             "type": "textarea", "required": False},
         ],
     },
     # M3:TICKET.md 安全掃描命中 → 交人裁決。payload(唯讀)帶 findings(命中
@@ -259,7 +278,14 @@ def validate_submission(schema_id: str, data: dict | None,
                 continue
             cleaned[k] = sval
         else:                                  # text / textarea
-            cleaned[k] = str(raw).strip()
+            sval = str(raw).strip()
+            pat = f.get("pattern")             # W2.3 表單化:格式就地擋(如
+            if pat and not re.fullmatch(pat, sval):   # snake_case),不走 Jira 往返
+                errors.append(f"{f['label']}:格式不符"
+                              + (f"({f['pattern_hint']})"
+                                 if f.get("pattern_hint") else ""))
+                continue
+            cleaned[k] = sval
     return (not errors), errors, cleaned
 
 
