@@ -85,7 +85,9 @@ def make_reload(loop, disp, ext, config_path: str = "config.yaml"):
         disp.username_rule = s_cfg.get("username_rule") or ""
         disp.security_scan = s_cfg.get("security_scan") or {}  # M3:可 reload
         disp.status_sync = s_cfg.get("status_sync") or {}      # N:可 reload
-        disp.source.issue_type_id = s_cfg.get("issue_type_id") or "10003"
+        _src = getattr(disp, "source", None)     # 測試 mock 可能無 source
+        if _src is not None:
+            _src.issue_type_id = s_cfg.get("issue_type_id") or "10003"
         ext.profiles = new_profiles                    # W4.5:離手定格查表同步
         new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
         if new_cancel:
