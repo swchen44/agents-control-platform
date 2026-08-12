@@ -40,6 +40,8 @@ def main() -> int:
             source = JiraCloudSource(*jira_credentials(
                 base_url_override=source_cfg.get("jira_base_url"),
                 flavor=_flavor), flavor=_flavor)
+            source.issue_type_id = (source_cfg.get("issue_type_id")
+                                    or "10003")
             project = source_cfg.get("project") or "SCRUM"
             evs = fire_agent_job(tr, source, store, root, project)
         for e in evs:

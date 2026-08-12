@@ -12,6 +12,8 @@ outer_loop:
     # To Do→In Progress→Resolve→Closed,Pending 等人、Cancelled 各處可進)。
     # SCRUM 的 workflow 與未來內網差太多,不再使用。
     project: KP2
+    issue_type_id: '10012'    # KP2(team-managed)的 Task type id;開票用
+    #                         # (agent-job / a2a 跨票)。SCRUM 是 10003。
     poll_interval_sec: 30
     jql: 'project = KP2 AND statusCategory != Done ORDER BY created ASC'
     # jira_base_url: https://<你的>.atlassian.net  # 填了 dashboard/poller 都用它;
@@ -216,7 +218,7 @@ inner_loop:
       verify:
         - name: article
           files:
-            ARTICLE.md: '#'
+            ARTICLE.md: null       # existence-only(品質交人評分;files 值=完全比對,勿放子字串)
       loop:
         max_attempts: 2
         on_unknown: pending
@@ -238,7 +240,7 @@ inner_loop:
       verify:
         - name: review
           files:
-            REVIEW.md: 'Review'
+            REVIEW.md: null        # existence-only(同上)
       loop:
         max_attempts: 2
         on_unknown: pending

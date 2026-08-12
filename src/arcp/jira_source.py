@@ -307,13 +307,17 @@ class JiraCloudSource:
         return out[0] if isinstance(out, list) and out else {}
 
     def create_ticket(self, project_key: str, summary: str,
-                      description: str = "", issue_type_id: str = "10003",
+                      description: str = "", issue_type_id: str | None = None,
                       labels: list[str] | None = None) -> Ticket:
         """Dev/test helper — production tickets are created by humans (v5 D6b).
 
         issue_type_id (not name): names are locale data (「任務」/Task/Tarefa);
-        the id (10003 = the standard Task type) is stable (lesson #4/§6-19).
-        """
+        the id is stable (lesson #4/§6-19) but **per-project**(team-managed
+        project 各有自己的 id,如 SCRUM Task=10003、KP2 Task=10012)——
+        未指定時用 `self.issue_type_id`(config source.issue_type_id,
+        run_poller/run_trigger 建構後塞;agent-job / a2a 跨票開票都吃它)。"""
+        if issue_type_id is None:
+            issue_type_id = getattr(self, "issue_type_id", "10003")
         fields: dict[str, Any] = {
             "project": {"key": project_key},
             "summary": summary,
