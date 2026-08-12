@@ -54,11 +54,16 @@ def _tk():
                   assignee_id=None, labels=["arcp.agent"], description="做 X")
 
 
-d = tempfile.mkdtemp()
-nf = os.path.join(d, "nf.sh")
-open(nf, "w").write('#!/bin/sh\ncat >/dev/null\n'
-                    'echo \'{"profile":"notfound","reason":"沒有適用的 agent"}\'\n')
-os.chmod(nf, os.stat(nf).st_mode | stat.S_IEXEC)
+import arcp.paths as _paths  # noqa: E402
+
+d = tempfile.mkdtemp()                       # 假 config/scripts/(M1 規範)
+_paths.job_scripts_dir = lambda: d
+os.makedirs(os.path.join(d, "sel"), exist_ok=True)
+_nf_abs = os.path.join(d, "sel", "nf.sh")
+open(_nf_abs, "w").write('#!/bin/sh\ncat >/dev/null\n'
+                         'echo \'{"profile":"notfound","reason":"沒有適用的 agent"}\'\n')
+os.chmod(_nf_abs, os.stat(_nf_abs).st_mode | stat.S_IEXEC)
+nf = "sel/nf.sh"                             # config 值=相對 config/scripts/
 
 root = tempfile.mkdtemp()
 store = Store(os.path.join(root, "s"))

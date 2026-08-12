@@ -1,8 +1,15 @@
-# config/scripts/ — job 腳本的家(J1)
+# config/scripts/ — config 引用腳本的家(J1 + M1)
 
-`outer_loop.triggers[].script` 相對這裡,放在**子資料夾**下:`{subfolder}/xxx.sh`。
-執行時 **cwd 進該 subfolder**(所以腳本能讀自己旁邊的檔),log 存
-`runs/<name>__<run_name>__<ts>/transcript/`(stdout/stderr.log + run.tgz;dashboard 可看可下載)。
+**config 裡所有腳本**——`outer_loop.triggers[].script` **和 profile 的
+`select.script`**——都相對這裡,且**必須放子資料夾**:`{subfolder}/xxx.sh`
+(直接放本資料夾根會被拒;路徑穿越 `../` 亦擋)。執行時 **cwd 進該 subfolder**
+(腳本能讀自己旁邊的檔)。統一解析:`arcp.paths.resolve_config_script`。
+
+- trigger script:log 存 `runs/<name>__<run_name>__<ts>/transcript/`
+  (stdout/stderr.log + run.tgz;dashboard 可看可下載)。
+- select script:JSON stdin(ticket/crid/候選+yaml)→ stdout 回
+  `{"profile": "...", "reason": "..."}`(見 docs/design/selection.md);
+  要用 uv/npx 等 runner 請寫進腳本 shebang 或包一層 .sh。
 
 兩種 `trigger_type`:
 

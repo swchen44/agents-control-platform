@@ -57,6 +57,25 @@ def job_scripts_dir() -> str | None:
     return _under_root("config", "scripts")
 
 
+def resolve_config_script(argv) -> tuple[list, str]:
+    """config 裡引用的腳本(trigger.script / profile.select.script)統一解析:
+    argv[0] = 相對 `config/scripts/` 的路徑,**必須放 subfolder**(如 cq/scan.sh,
+    不可直接放根)→ 回 (abs_argv, cwd=腳本所在 subfolder)。realpath 擋路徑穿越。
+    無效 → ValueError(呼叫端 fail-safe);找不到 base → RuntimeError。"""
+    base = job_scripts_dir()
+    if not base:
+        raise RuntimeError("找不到 config/scripts/(job_scripts_dir() 為 None)")
+    real_base = os.path.realpath(base)
+    full = os.path.realpath(os.path.join(base, argv[0]))
+    if not full.startswith(real_base + os.sep):
+        raise ValueError(f"script 路徑越界 config/scripts/:{argv[0]!r}")
+    cwd = os.path.dirname(full)
+    if os.path.realpath(cwd) == real_base:
+        raise ValueError("script 必須放 config/scripts/ 的 subfolder"
+                         f"(如 cq/scan.sh),不可直接放根:{argv[0]!r}")
+    return [full, *argv[1:]], cwd
+
+
 def common_skills_dir() -> str | None:
     """common skills 庫(config/skills/<name>/;profile.common_skills 選子集)。"""
     return _under_root("config", "skills")

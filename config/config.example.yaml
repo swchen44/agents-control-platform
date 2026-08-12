@@ -68,7 +68,9 @@ inner_loop:
       # select:
       #   candidates: [default_v2]     # 候選 profile 名,prefix 須 = 本 profile 名;本 profile 自動納入池
       #   method: random               # random(隨機分流)| script(條件式)
-      #   script: 'uv run select.py'   # method=script:JSON stdin(ticket/crid/候選+yaml)→ stdout 回 profile 名
+      #   script: sel/triage.sh        # method=script(M1):相對 config/scripts/、必放
+      #                                # subfolder、執行 cwd 進 subfolder;JSON stdin
+      #                                # (ticket/crid/候選+yaml)→ stdout 回 profile 名
       agent:
         backend: rawcli              # 純 stdlib,無需 openhands venv
         engine: claude               # claude | codex

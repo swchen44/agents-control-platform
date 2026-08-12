@@ -70,14 +70,19 @@ picks = {select_profile(_tk(), main,
 check("random:選出的都在 pool", picks <= {"fc", "fc_v2"})
 
 # ── script 單層 + 軸 B(回任何已定義 profile)+ notfound/fail-safe ─────── #
-d = tempfile.mkdtemp()
+import arcp.paths as _paths  # noqa: E402
+
+_base = tempfile.mkdtemp()                  # 假 config/scripts/(M1 規範)
+_paths.job_scripts_dir = lambda: _base
+d = os.path.join(_base, "sel")              # 腳本一律放 subfolder
+os.makedirs(d, exist_ok=True)
 
 
 def _script(name, target_json):
     p = os.path.join(d, name)
     open(p, "w").write("#!/bin/sh\ncat >/dev/null\necho '" + target_json + "'\n")
     os.chmod(p, os.stat(p).st_mode | stat.S_IEXEC)
-    return p
+    return f"sel/{name}"                    # config 值=相對 config/scripts/
 
 
 def _pscript(name, target):        # profile `name`:select.script 回 {profile:target}
@@ -103,11 +108,40 @@ check("軸 B:script 回非候選的已定義 profile(other)→ 鎖定它", chose
 chosen, _ = _sel_raw("undef.sh", '{"profile":"nonexistent"}')
 check("script:未定義名 → fallback main", chosen == "fc")
 m = _prof("fc", {"method": "script", "candidates": [],
-                 "script": os.path.join(d, "rc.sh")})
+                 "script": "sel/rc.sh"})
 open(os.path.join(d, "rc.sh"), "w").write("#!/bin/sh\nexit 5\n")
 os.chmod(os.path.join(d, "rc.sh"), 0o755)
 check("script:rc!=0 → fallback main",
       select_profile(_tk(), m, {"fc": m})[0] == "fc")
+
+# ── M1:config/scripts 規範(強制 subfolder、擋越界、cwd 切 subfolder)── #
+try:
+    _paths.resolve_config_script(["../evil.sh"])
+    _e1 = ""
+except ValueError as e:
+    _e1 = str(e)
+check("M1:resolve 擋路徑越界(ValueError)", "越界" in _e1)
+open(os.path.join(_base, "root.sh"), "w").write("#!/bin/sh\necho x\n")
+os.chmod(os.path.join(_base, "root.sh"), 0o755)
+try:
+    _paths.resolve_config_script(["root.sh"])
+    _e2 = ""
+except ValueError as e:
+    _e2 = str(e)
+check("M1:resolve 拒絕直接放根(必 subfolder)", "subfolder" in _e2)
+m = _prof("fc", {"method": "script", "candidates": [],
+                 "script": "../evil.sh"})
+check("M1:select 越界 → fallback main(不執行)",
+      select_profile(_tk(), m, {"fc": m})[0] == "fc")
+_cwd_sh = os.path.join(d, "cwd.sh")         # 驗 cwd 真的切進 subfolder
+open(_cwd_sh, "w").write(
+    '#!/bin/sh\ncat >/dev/null\n[ "$(pwd)" = "%s" ] '
+    '&& echo \'{"profile":"other"}\' || echo \'{"profile":"nope"}\'\n'
+    % os.path.realpath(d))
+os.chmod(_cwd_sh, 0o755)
+m = _prof("fc", {"method": "script", "candidates": [], "script": "sel/cwd.sh"})
+chosen, _ = select_profile(_tk(), m, {"fc": m, "other": _prof("other")})
+check("M1:執行 cwd = 腳本所在 subfolder", chosen == "other")
 
 # ── 遞歸(軸 A):鏈 / 回自己 / 繞圈 / 第 10 層截斷 ────────────────────── #
 a = _pscript("a", "b"); b = _pscript("b", "c"); c = _prof("c")   # c=葉

@@ -9,7 +9,6 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp import triggers as tmod  # noqa: E402
 from arcp.store import Store  # noqa: E402
 from arcp.ticket import Ticket  # noqa: E402
 from arcp.triggers import (  # noqa: E402
@@ -45,9 +44,12 @@ class FakeSource:
                       labels=labels or [], description=description)
 
 
+import arcp.paths as _paths  # noqa: E402
+
+
 def _script(body, rel="cq/scan.sh"):
     base = tempfile.mkdtemp()
-    tmod.job_scripts_dir = lambda: base
+    _paths.job_scripts_dir = lambda: base   # M1:base 移到 paths
     full = os.path.join(base, rel)
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w") as f:

@@ -9,7 +9,6 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from arcp import triggers as tmod  # noqa: E402
 from arcp.routing import ConfigError  # noqa: E402
 from arcp.store import Store  # noqa: E402
 from arcp.triggers import (  # noqa: E402
@@ -76,9 +75,12 @@ def test_due_and_oneshot():
 
 
 # ── _run_logged_script:cwd 進 subfolder、存 log、註冊 session ──────────── #
+import arcp.paths as _paths  # noqa: E402
+
+
 def _script(body, rel="job/run.sh"):
     base = tempfile.mkdtemp()
-    tmod.job_scripts_dir = lambda: base            # monkeypatch config/scripts
+    _paths.job_scripts_dir = lambda: base   # M1:base 移到 paths            # monkeypatch config/scripts
     full = os.path.join(base, rel)
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w") as f:

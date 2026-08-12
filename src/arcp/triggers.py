@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 import yaml
 
 from .logutil import get_logger
-from .paths import job_scripts_dir
+from .paths import resolve_config_script as _resolve_script
 from .routing import ConfigError
 from .store import TicketSession
 
@@ -196,17 +196,8 @@ def due(trigger: Trigger, store, now: float | None = None) -> bool:
     return now - store.trigger_last_run(trigger.name) >= trigger.every_sec
 
 
-def _resolve_script(argv):
-    """argv[0] = 相對 config/scripts/ 的腳本檔 → (abs_argv, cwd=腳本所在資料夾)。
-    擋路徑穿越(必須在 config/scripts/ 內)。"""
-    base = job_scripts_dir()
-    if not base:
-        raise RuntimeError("找不到 config/scripts/(job_scripts_dir() 為 None)")
-    real_base = os.path.realpath(base)
-    full = os.path.realpath(os.path.join(base, argv[0]))
-    if full != real_base and not full.startswith(real_base + os.sep):
-        raise ConfigError(f"script 路徑越界 config/scripts/:{argv[0]!r}")
-    return [full, *argv[1:]], os.path.dirname(full)
+# M1:_resolve_script 提升為 paths.resolve_config_script(相對 config/scripts/、
+# 強制 subfolder、cwd 切 subfolder、擋越界),與 selection(select.script)共用。
 
 
 _META_KEYS = ("crid", "prompt", "email")
@@ -252,7 +243,7 @@ def _run_logged_script(trigger: "Trigger", store, root: str,
     os.makedirs(tdir, exist_ok=True)
     try:
         abs_argv, cwd = _resolve_script(trigger.script)
-    except (ConfigError, RuntimeError) as e:
+    except (ConfigError, RuntimeError, ValueError) as e:
         return None, "", [store.journal("trigger_error", ts, trigger.run_name,
                                         error=str(e)[:200])]
     events = [store.journal("script_run_started", ts, trigger.run_name,

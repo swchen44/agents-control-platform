@@ -80,11 +80,20 @@ def _select_once(ticket: Ticket, profile, profiles: dict,
                for n in pool}
     all_names = sorted(profiles.keys())
     argv = shlex.split(cfg["script"])
+    try:                     # M1:必在 config/scripts/<subfolder>/、cwd 切 subfolder
+        from .paths import resolve_config_script
+        abs_argv, cwd = resolve_config_script(argv)
+    except (ValueError, RuntimeError) as e:
+        log.warning("select script 路徑無效 ticket=%s: %s → fallback %s",
+                    ticket.key, e, profile.name)
+        meta.update(chosen=profile.name, error=str(e))
+        return profile.name, meta
     try:
         proc = subprocess.run(
-            argv, input=json.dumps(_script_input(ticket, profile, pool,
-                                                 yaml_of, clearquest_id,
-                                                 all_names)),
+            abs_argv, cwd=cwd,
+            input=json.dumps(_script_input(ticket, profile, pool,
+                                           yaml_of, clearquest_id,
+                                           all_names)),
             capture_output=True, text=True, timeout=_SCRIPT_TIMEOUT)
     except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("select script 失敗 ticket=%s: %s → fallback %s",
