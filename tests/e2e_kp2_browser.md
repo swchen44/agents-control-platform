@@ -54,8 +54,13 @@
 - B1 ✅:KP2-7 Closed(非 Cancelled——雙 done 回歸點過)、KP2-6 Cancelled、
   KP2-3/4/5 Resolved、KP2-8 曾 Pending;KP2-1(無 label)不被接管留 To Do。
 - B2 ✅:description yaml/ARCP 區塊分段正常;outcome comment(SUCCESS/驗證
-  結果清單)與指令台連結 comment 渲染正常。@mention 通知未驗
-  (config 未設 mention_account_id,後續補)。
+  結果清單)與指令台連結 comment 渲染正常。
+- B2 @mention(2026-08-12 二次驗)✅ + **抓到並修 bug**:初驗 comment 顯示
+  灰色死文字 `[~accountid:712020:…]`(Cloud ADF 用純 text node 包 wiki 語法
+  → 不渲染、不通知)。修 `text_to_adf` 拆 `[~accountid:ID]` 為 ADF **mention
+  node** 後,comment 正確顯示藍色 `@fox44`(觸發 Jira 通知)。此 bug 影響
+  K 期所有 @mention(approver watcher / HIL 通知)——REST 驗不到,只有
+  browser 看得出。
 - B3 ✅:評分表單駕駛艙(票/HIL(End)/grader 對照/花費/attempts/email 必填)
   渲染正常;已提交表單顯示「✓ 已提交」+ 唯讀提交內容(一次性語意)。
 - B4 ✅:/timeline 每票一列、✔/✘ 終點與看板狀態一致。

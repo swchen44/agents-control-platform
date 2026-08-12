@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import ssl
 import time
 import urllib.error
@@ -79,13 +80,34 @@ def adf_to_text(node: Any) -> str:
     return ""
 
 
+# Cloud ADF:`[~accountid:ID]` 必須是 mention **node** 才會渲染+通知;
+# 純 text node 只是死文字(2026-08-12 KP2 browser 實測抓到:@mention 不通知)。
+_MENTION_RE = re.compile(r"\[~accountid:([A-Za-z0-9:_-]+)\]")
+
+
+def _adf_inline(line: str) -> list:
+    """一行 → ADF inline nodes,把 [~accountid:ID] 拆成 mention node、
+    其餘為 text node(空行 → 空 list)。"""
+    if not line:
+        return []
+    out, pos = [], 0
+    for m in _MENTION_RE.finditer(line):
+        if m.start() > pos:
+            out.append({"type": "text", "text": line[pos:m.start()]})
+        out.append({"type": "mention", "attrs": {"id": m.group(1)}})
+        pos = m.end()
+    if pos < len(line):
+        out.append({"type": "text", "text": line[pos:]})
+    return out
+
+
 def text_to_adf(text: str) -> dict:
-    """One paragraph per line — enough for harness comments."""
+    """One paragraph per line — enough for harness comments。行內
+    `[~accountid:ID]` 轉 Cloud mention node(渲染+觸發通知)。"""
     return {
         "type": "doc", "version": 1,
         "content": [
-            {"type": "paragraph",
-             "content": [{"type": "text", "text": line}] if line else []}
+            {"type": "paragraph", "content": _adf_inline(line)}
             for line in text.split("\n")
         ],
     }

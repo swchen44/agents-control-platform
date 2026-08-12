@@ -157,6 +157,19 @@ c.add_comment("P-1", "hi")
 check("add_comment cloud:仍是 ADF dict(零變)",
       isinstance(_cb[-1]["body"], dict) and _cb[-1]["body"]["type"] == "doc")
 
+# Cloud ADF mention:[~accountid:ID] 必須拆成 mention node 才會通知(非死文字)
+from arcp.jira_source import text_to_adf  # noqa: E402
+
+_adf = text_to_adf("[agent] [~accountid:abc-123] 需要你:填表")
+_nodes = _adf["content"][0]["content"]
+check("text_to_adf:[~accountid:] → mention node(渲染+通知)",
+      any(n["type"] == "mention" and n["attrs"]["id"] == "abc-123"
+          for n in _nodes)
+      and _nodes[0] == {"type": "text", "text": "[agent] "})
+check("text_to_adf:無 mention 的行仍是純 text node",
+      text_to_adf("純文字")["content"][0]["content"]
+      == [{"type": "text", "text": "純文字"}])
+
 import json as _json  # noqa: E402
 import tempfile as _tf  # noqa: E402
 
