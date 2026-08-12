@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 import time
 
 import yaml
@@ -16,7 +17,7 @@ from .jira_source import mention_tag_of
 from .logutil import get_logger
 from .sections import Section, parse, render
 from .store import TicketSession
-from .workspace import append_human_instruction
+from .workspace import DESC_OVERRIDE, append_human_instruction
 
 log = get_logger("hil")
 
@@ -211,6 +212,41 @@ def _apply_budget_increase(source, store, sess, req: InteractionRequest,
                           reason="budget_increase", request_id=req.request_id)]
 
 
+def _apply_security_review(source, store, sess, req, data, now) -> list:
+    """M3:安全審裁決。abort → ABORTED(reason=security)+ comment;
+    continue → 修訂描述(選填)寫 DESC_OVERRIDE sidecar(TICKET.md 描述段改用
+    修訂版;Jira description 不動)+ sec_reviewed_at 蓋章(之後掃描不再擋)。"""
+    evs: list = []
+    if data.get("decision") == "abort":
+        sess.outcome, sess.pending_reason = "ABORTED", None
+        sess.abort_reason = "security"
+        store.upsert_session(sess)
+        evs.append(store.journal("aborted", req.issue_id, req.key,
+                                 reason="security",
+                                 request_id=req.request_id))
+        source.add_comment(req.issue_id, (
+            "[agent] 安全審裁決:**中止**(ABORTED,理由=Security)。"
+            "掃描命中內容詳見先前告警與表單紀錄。"))
+        return evs
+    rt = (data.get("revised_text") or "").strip()
+    if rt and sess.workspace and not sess.workspace.startswith("("):
+        try:
+            with open(os.path.join(sess.workspace, DESC_OVERRIDE), "w",
+                      encoding="utf-8") as f:
+                f.write(rt + "\n")
+        except OSError as e:          # workspace 不在也不擋裁決(降級)
+            log.warning("寫修訂描述失敗 ticket=%s: %s", req.key, e)
+    sess.sec_reviewed_at = now
+    sess.pending_reason = None
+    store.upsert_session(sess)
+    evs.append(store.journal("security_approved", req.issue_id, req.key,
+                             revised=bool(rt), request_id=req.request_id))
+    source.add_comment(req.issue_id, (
+        "[agent] 安全審裁決:放行續跑"
+        + ("(採用人工修訂後的任務描述)" if rt else "") + "。"))
+    return evs
+
+
 def apply_submission(source, store, req: InteractionRequest, *,
                      profiles: dict | None = None,
                      now: float | None = None) -> list[dict]:
@@ -265,6 +301,9 @@ def apply_submission(source, store, req: InteractionRequest, *,
                         request_id=req.request_id))
         elif req.schema_id == "budget_increase":   # 自助調高本票 soft(≤hard)
             evs.extend(_apply_budget_increase(source, store, sess, req, data))
+        elif req.schema_id == "security_review":   # M3:安全審裁決
+            evs.extend(_apply_security_review(source, store, sess, req,
+                                              data, now))
         else:                                  # need_info / decision → resume
             sess.pending_reason = None
             sess.inactive = False

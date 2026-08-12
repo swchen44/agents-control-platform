@@ -60,6 +60,8 @@ class TicketSession:
     soft_usd: float | None = None     # budget:本票可調 soft usd(None=用 profile 預設)
     abort_reason: str | None = None   # M2:ABORTED 理由(cancel/external/
     #                                    untriageable/handoff/security;泛化統一)
+    sec_reviewed_at: float = 0.0      # M3:安全審人工放行時間(>0=之後不再擋)
+    sec_scanned_hash: str | None = None   # M3:掃過且通過的 TICKET.md hash(快取)
     owner_email_list: str | None = None    # K:負責人 email(首建自 description 契約;鎖定
     #                                   後只由指令台改)。有值→HIL/指令台提交比對門禁
 
@@ -103,6 +105,8 @@ class Store:
                 soft_usd       REAL,
                 owner_email_list    TEXT,
                 abort_reason        TEXT,
+                sec_reviewed_at     REAL NOT NULL DEFAULT 0,
+                sec_scanned_hash    TEXT,
                 queued         INTEGER NOT NULL DEFAULT 0,
                 queued_at      REAL NOT NULL DEFAULT 0,
                 inactive       INTEGER NOT NULL DEFAULT 0,
@@ -176,7 +180,10 @@ class Store:
                           ("soft_tokens", "INTEGER"),     # budget 可調 soft
                           ("soft_usd", "REAL"),           # budget 可調 soft
                           ("owner_email_list", "TEXT"),        # K:負責人 email 門禁
-                          ("abort_reason", "TEXT")):           # M2:中止理由泛化
+                          ("abort_reason", "TEXT"),            # M2:中止理由泛化
+                          ("sec_reviewed_at",
+                           "REAL NOT NULL DEFAULT 0"),         # M3
+                          ("sec_scanned_hash", "TEXT")):       # M3
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -308,7 +315,8 @@ class Store:
                      " inactive, approval_revisions, finished_at, evict_count,"
                      " clearquest_id, human_score, score_reminded_at, base_ref,"
                      " agent_score, tokens, soft_tokens, soft_usd,"
-                     " owner_email_list, abort_reason")
+                     " owner_email_list, abort_reason, sec_reviewed_at,"
+                     " sec_scanned_hash")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -322,7 +330,9 @@ class Store:
             human_score=row[16], score_reminded_at=row[17] or 0.0,
             base_ref=row[18], agent_score=row[19],
             tokens=row[20] or 0, soft_tokens=row[21], soft_usd=row[22],
-            owner_email_list=row[23], abort_reason=row[24])
+            owner_email_list=row[23], abort_reason=row[24],
+            sec_reviewed_at=row[25] or 0.0,
+            sec_scanned_hash=row[26])
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -368,8 +378,8 @@ class Store:
                      finished_at, evict_count, clearquest_id,
                      human_score, score_reminded_at, base_ref, agent_score,
                      tokens, soft_tokens, soft_usd, owner_email_list,
-                     abort_reason)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     abort_reason, sec_reviewed_at, sec_scanned_hash)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
@@ -389,7 +399,9 @@ class Store:
                     tokens=excluded.tokens, soft_tokens=excluded.soft_tokens,
                     soft_usd=excluded.soft_usd,
                     owner_email_list=excluded.owner_email_list,
-                    abort_reason=excluded.abort_reason
+                    abort_reason=excluded.abort_reason,
+                    sec_reviewed_at=excluded.sec_reviewed_at,
+                    sec_scanned_hash=excluded.sec_scanned_hash
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
@@ -397,7 +409,7 @@ class Store:
                   s.clearquest_id, s.human_score, s.score_reminded_at,
                   s.base_ref, s.agent_score,
                   s.tokens, s.soft_tokens, s.soft_usd, s.owner_email_list,
-                  s.abort_reason))
+                  s.abort_reason, s.sec_reviewed_at, s.sec_scanned_hash))
 
     # -- W3.4 trigger last_run 水位 ---------------------------------------- #
     def trigger_last_run(self, name: str) -> float:

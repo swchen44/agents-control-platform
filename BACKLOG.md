@@ -317,6 +317,19 @@ close→CQ 回寫對**所有** close 生效(不只 SUCCESS),因為 CQ 端需知�
 **其他權威來源**:`/rest/api/3/user/search/query`(類 JQL)、Organizations REST `/v1/orgs/{orgId}/users/search`
 (org admin,最權威);連 admin 都拿不到完整 email → 管理主控台 CSV 匯出。
 
+## 主題 M — config 腳本規範 + TICKET.md 安全掃描(2026-08-12 定案 + 實作,全完成)
+
+> 設計正本:`docs/design/security-scan.md`。定案:fail-closed 命中走 **HIL 安全審表單**
+> (顯示內容+命中理由+**可修文字框**+繼續/中止);人審=最終裁決(放行後不再擋);
+> 沒配=關、配了掃描器失敗=擋;掃描器=cisco skill-scanner **純靜態**(不用 LLM);
+> **abort 理由泛化**(使用者:「abort 有各種原因…要設計一下」)。
+
+| # | 項目 | 內容 | 現況 |
+|---|---|---|---|
+| M1 | **config 腳本規範** | trigger.script + **select.script** 統一 `paths.resolve_config_script`:必放 `config/scripts/<subfolder>/`(**強制 subfolder**)、執行 cwd 切 subfolder、realpath 擋越界 | ✅ `a62976a` |
+| M2 | **TICKET.md 重組 + abort_reason** | 移除「最新留言」段(注入面+噪音;使用者確認不需要);`ticket_session.abort_reason`(cancel/external/untriageable/handoff/security)+ 各 ABORTED 點統一 journal `aborted(reason)`;駕駛艙/REST 露出 | ✅ `99f1a17` |
+| M3 | **安全掃描 + HIL 安全審** | `secscan.scan_text`(skill-scanner 靜態,SKILL.md 暫存+JSON 解析+fail_on 門檻);dispatcher spawn 前 `_security_gate`(hash 快取);`security_review` 表單(命中表+原文+修訂框+繼續/abort);修訂→`.arcp_desc_override.md` 取代描述段(Jira 不動);`sec_reviewed_at` 人審放行 | ✅ 本批 |
+
 ## AI 建議(供參考,你決定)
 
 **若目標是「盡快能上生產用」** → high: **B1**(真實 Jira)+ **B3**(Resolve 轉狀態)

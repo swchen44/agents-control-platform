@@ -76,6 +76,21 @@ FORM_SCHEMAS: dict[str, dict] = {
              "type": "textarea", "required": True},
         ],
     },
+    # M3:TICKET.md 安全掃描命中 → 交人裁決。payload(唯讀)帶 findings(命中
+    # 規則/嚴重度/片段)+ ticket_md(被掃內容)+ scan_error(掃描器異常時)。
+    "security_review": {
+        "version": SCHEMA_VERSION, "title": "安全審:掃描命中,請裁決",
+        "hil": "middle",
+        "fields": [
+            {"key": "revised_text",
+             "label": "修訂後的任務描述(選填:可修掉可疑內容;留空=照原文放行)",
+             "type": "textarea", "required": False},
+            {"key": "decision", "label": "裁決", "type": "select",
+             "required": True,
+             "options": [["continue", "繼續(人審放行;之後此票不再擋)"],
+                         ["abort", "中止(ABORTED,理由=Security)"]]},
+        ],
+    },
     # budget:單票 soft 上限破 → 使用者自助調高(≤hard)。context(唯讀)放 payload:
     # 已用 token/usd、soft/hard、summary 快照、transcript/jira 連結。上限校驗(≤hard)
     # 在 hil.apply_submission(clamp 到 payload 帶的 hard)。

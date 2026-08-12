@@ -56,6 +56,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 [Budget / Max-Token 管理](design/budget.md) ·
 [負責人 email 身分門禁](design/identity-gate.md) ·
 [Jira Data Center 相容](design/jira-dc.md) ·
+[TICKET.md 安全掃描](design/security-scan.md) ·
 [互動服務(HIL 人機介面)](design/interaction.md) ·
 [可觀測性](design/observability.md) ·
 [DB Schema](design/database.md) ·

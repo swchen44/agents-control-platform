@@ -55,6 +55,8 @@ padding:10px 12px;margin:10px 0;font-size:13px}.ok{color:#2f7d45}
 .md code{background:rgba(0,0,0,.06);padding:1px 4px;border-radius:4px;
 font-family:ui-monospace,Menlo,monospace;font-size:12px}
 .md pre{background:#f0ede4;padding:10px;border-radius:8px;overflow:auto}
+.ckpre{max-height:380px;overflow:auto;background:#f0ede4;border-radius:8px;
+  padding:10px;font-size:12px;white-space:pre-wrap}
 .md pre code{background:none;padding:0}.md ul{margin:4px 0 4px 18px}
 @media(prefers-color-scheme:dark){body{background:#1e1c19;color:#e8e3d8}
 .card{background:#26241f;border-color:#3a362e}.ctx,.hint,.rid{color:#a49d8f}
@@ -219,6 +221,39 @@ def _deliverables_html(req) -> str:
     return "".join(parts)
 
 
+def _security_html(req) -> str:
+    """M3:安全審表單的唯讀脈絡卡——命中清單(嚴重度/規則/片段)+ 被掃的
+    TICKET.md 內容(人要看得出被檢查到什麼、原文長怎樣,才能修或裁決)。"""
+    if req.schema_id != "security_review":
+        return ""
+    p = req.payload or {}
+    parts = ["<div class='card'><h2>掃描結果(供裁決參考)</h2>"]
+    if p.get("scan_error"):
+        parts.append("<div class='warn'>⚠️ 掃描器異常(fail-closed 擋下,"
+                     f"非必為威脅):{_esc(p['scan_error'])}</div>")
+    fs = p.get("findings") or []
+    if fs:
+        parts.append("<div style='overflow-x:auto'><table><thead><tr>"
+                     "<td><b>嚴重度</b></td><td><b>規則</b></td>"
+                     "<td><b>說明</b></td><td><b>命中片段</b></td>"
+                     "</tr></thead><tbody>")
+        for x in fs:
+            parts.append(
+                f"<tr><td>{_esc(x.get('severity'))}</td>"
+                f"<td>{_esc(x.get('rule_id'))}</td>"
+                f"<td>{_esc(x.get('title') or '')} "
+                f"{_esc(x.get('description') or '')}</td>"
+                f"<td><code>{_esc(x.get('snippet') or '')}</code></td></tr>")
+        parts.append("</tbody></table></div>")
+    if p.get("ticket_md"):
+        parts.append("<details open><summary><b>被掃的 TICKET.md 內容</b>"
+                     "(修訂請貼到下方文字框)</summary>"
+                     f"<pre class='ckpre'>{_esc(p['ticket_md'])}</pre>"
+                     "</details>")
+    parts.append("</div>")
+    return "".join(parts)
+
+
 def _ctx_html(req) -> str:
     p = req.payload or {}
     rows = [f"<div class='ctx'><b>票</b> {_esc(req.key)}"
@@ -261,6 +296,7 @@ def render_form_page(req, jira_up: bool = True, errors=None,
     body = (f"<h1>{_esc(schema.get('title'))}</h1>"
             f"<div class='card'>{_ctx_html(req)}</div>"
             f"{_deliverables_html(req)}"           # 自足評分駕駛艙(交付物)
+            f"{_security_html(req)}"               # M3:安全審脈絡(命中+內容)
             f"{warn}{err}"
             f"<form method='POST' class='card'>{fields}"
             f"<button type='submit'>送出</button></form>")

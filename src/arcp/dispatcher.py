@@ -78,6 +78,7 @@ class Dispatcher:
         self.admin_emails: list[str] = []       # K:全站管理者 email(門禁豁免;可 reload)
         self.user_map: dict = {}                # L6:email→識別碼手動映射(可 reload)
         self.username_rule: str = ""            # L6:查無時推導(local/{local} 模板)
+        self.security_scan: dict = {}           # M3:TICKET.md 掃描 config(可 reload)
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
                             events: list[dict]) -> list[dict]:
@@ -122,6 +123,55 @@ class Dispatcher:
         except Exception as e:  # noqa: BLE001 — watcher 是加值,失敗不擋派工
             log.warning("%s 加 approver watcher 失敗:%s", ticket.key, e)
             return []
+
+    def _security_gate(self, ticket: Ticket, sess: TicketSession,
+                       events: list) -> bool:
+        """M3:spawn 前掃 TICKET.md(prompt injection 防線)。True=放行。
+        命中 >= fail_on 或掃描器異常(fail-closed)→ pending:security +
+        security_review 表單交人裁決,回 False。沒配 security_scan=功能關;
+        人審放行過(sec_reviewed_at)或同內容掃過且通過(hash)→ 不重掃。"""
+        cfg = self.security_scan or {}
+        if not cfg.get("command") or sess.sec_reviewed_at:
+            return True
+        p = os.path.join(sess.workspace, "TICKET.md")
+        try:
+            text = open(p, encoding="utf-8").read()
+        except OSError:
+            return True                    # 哨值 workspace / 無 TICKET.md 不擋
+        from .secscan import content_hash, scan_text
+        if sess.sec_scanned_hash == content_hash(text):
+            return True                    # 同內容掃過且通過
+        res = scan_text(text, cfg)
+        if res is None:
+            return True
+        events.append(self.store.journal(
+            "security_scan", ticket.id, ticket.key, ok=res.ok,
+            n_findings=len(res.findings), error=(res.error or "")[:200]))
+        if res.ok:
+            sess.sec_scanned_hash = res.content_hash
+            self.store.upsert_session(sess)
+            return True
+        sess.pending_reason = "security"
+        self.store.upsert_session(sess)
+        top = "; ".join(f"[{x['severity']}] {x['title'] or x['rule_id']}"
+                        for x in res.findings[:3])
+        why = ("掃描器異常(fail-closed,非必為威脅):" + res.error
+               if res.error else top or "掃描命中")
+        from .hil import request_human
+        request_human(
+            self.source, self.store, ticket.id, ticket.key, "security_review",
+            question=f"TICKET.md 安全掃描未過,請人工裁決:{why[:300]}",
+            payload_extra={"findings": res.findings[:20],
+                           "ticket_md": text[:8000],
+                           "scan_error": res.error},
+            base_url=self.form_base_url, mention=self.mention)
+        events.append(self.store.journal(
+            "security_blocked", ticket.id, ticket.key,
+            n_findings=len(res.findings), scanner_error=bool(res.error)))
+        log.warning("%s 安全掃描未過(%d 命中%s)→ pending:security",
+                    ticket.key, len(res.findings),
+                    ",掃描器異常" if res.error else "")
+        return False
 
     def _post_deliverables(self, sess: TicketSession, ticket: Ticket,
                            outcome: str, res, events: list[dict]) -> None:
@@ -418,6 +468,11 @@ class Dispatcher:
         # 之後 resume 不再重注)。workspace 已於上方 provision/health 解析為實體目錄。
         if sess.base_ref and os.path.isdir(sess.workspace):
             self._inject_base(sess, ticket, profile, events)
+
+        # M3:TICKET.md 安全掃描門(spawn 前最後一道;涵蓋 description /
+        # agent-job prompt / 人類指示全部來源)。沒配=關;人審過不再擋。
+        if not self._security_gate(ticket, sess, events):
+            return events
 
         grader = _grader(profile)
         artifacts = os.path.join(os.path.dirname(sess.workspace), "attempts")

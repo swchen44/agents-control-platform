@@ -58,7 +58,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 <!-- BEGIN gen_event_dict -->
 | 事件 | 欄位(kwargs) | 產生點 |
 |---|---|---|
-| `aborted` | `author`, `detail`, `reason`, `state`, `to_key` | `src/arcp/commands.py`, `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
+| `aborted` | `author`, `detail`, `reason`, `request_id`, `state`, `to_key` | `src/arcp/commands.py`, `src/arcp/dispatcher.py`, `src/arcp/hil.py` |
 | `adopted` | — | `scripts/run_poller.py` |
 | `approval` | `decision`, `revisions` | `src/arcp/dispatcher.py` |
 | `assignee_alert` | `assignee` | `src/arcp/commands.py` |
@@ -96,6 +96,9 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `score_requested` | `request_id` | `src/arcp/scoring.py` |
 | `script_run_finished` | `duration_sec`, `outcome`, `rc`, `timeout`, `trigger` | `src/arcp/triggers.py` |
 | `script_run_started` | `cwd`, `script`, `trigger` | `src/arcp/triggers.py` |
+| `security_approved` | `request_id`, `revised` | `src/arcp/hil.py` |
+| `security_blocked` | `n_findings`, `scanner_error` | `src/arcp/dispatcher.py` |
+| `security_scan` | `error`, `n_findings`, `ok` | `src/arcp/dispatcher.py` |
 | `session_created` | `profile`, `workspace` | `src/arcp/dispatcher.py` |
 | `status_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py`, `src/arcp/dispatcher.py` |
@@ -104,7 +107,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 45 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 48 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)

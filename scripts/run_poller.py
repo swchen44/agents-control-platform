@@ -83,6 +83,7 @@ def make_reload(loop, disp, ext, config_path: str = "config.yaml"):
         disp.admin_emails = s_cfg.get("admin_emails") or []  # K:管理者可 reload
         disp.user_map = s_cfg.get("user_map") or {}          # L6:可 reload
         disp.username_rule = s_cfg.get("username_rule") or ""
+        disp.security_scan = s_cfg.get("security_scan") or {}  # M3:可 reload
         ext.profiles = new_profiles                    # W4.5:離手定格查表同步
         new_cancel = (s_cfg.get("external_change") or {}).get("cancel_states")
         if new_cancel:
@@ -163,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     disp.admin_emails = source_cfg.get("admin_emails") or []  # K:管理者 email 門禁豁免
     disp.user_map = source_cfg.get("user_map") or {}          # L6:email→識別碼映射
     disp.username_rule = source_cfg.get("username_rule") or ""  # L6:推導規則
+    disp.security_scan = source_cfg.get("security_scan") or {}  # M3:TICKET.md 掃描
     # budget soft 破→發增額表單需 form base_url/mention(下方 fcfg 定義後補設)
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
     # 裝置要能連 → 綁 0.0.0.0 並設 form.base_url 為該主機 IP。mention=人 Counterpart。

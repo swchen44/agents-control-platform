@@ -21,6 +21,16 @@ outer_loop:
     #   alice@corp.com: alice     # cloud 填 accountId、dc 填 username;可 hot reload)
     # username_rule: local        # L6:查無時推導——local=email @ 前段;
     #                             # 或含 {local} 模板(如 'corp-{local}')
+    # M3:TICKET.md 安全掃描(prompt injection 防線;選配、沒設=關)。spawn 前
+    # 掃 TICKET.md(涵蓋 description/agent-job prompt/人類指示);命中 >= fail_on
+    # 或掃描器執行失敗(fail-closed)→ 擋派工 + security_review 表單交人裁決
+    # (可修描述;繼續=人審放行之後不擋 / 中止=ABORTED reason=security)。
+    # 掃描器需另裝(建議 cisco skill-scanner:純靜態 pattern 引擎、不用 LLM;
+    # 內網 snapshot 請預先裝好)。詳 docs/design/security-scan.md。
+    # security_scan:
+    #   command: 'uvx cisco-ai-skill-scanner'  # 或已裝好的 skill-scanner 路徑
+    #   fail_on: high             # critical|high|medium|low(>= 此嚴重度才擋)
+    #   timeout_sec: 180
     write_retry: {max: 5, base_sec: 1}   # A3(N8):寫入撞 429/5xx 指數退避
     # bot_account_id: '...'   # 可選(W12):機器人 accountId;不填→啟動 myself() 解析
     # W6.4:定時快照器已移除(耗資源)。transcript 改事件觸發+被動按鈕。
