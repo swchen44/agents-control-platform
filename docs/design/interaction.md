@@ -50,16 +50,44 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
    **稽核 comment**(回填摘要/提交者/提交時間/Request ID)作時間序紀錄。
 4. **表單提交 = HIL resume 觸發**(取代 W10 的 assignee→機器人)。
 
-### 3.1 表單型別(至少,可擴充)
+### 3.1 表單型別(`interaction.FORM_SCHEMAS`,現役 7 種)
 
-| 型別 | 對應 HIL | 用途 |
-|---|---|---|
-| `need_info` | HIL(Middle) | Agent 缺資訊,請人補充 |
-| `decision` | HIL(Middle) | Agent 提選項,請人擇一 / 核可(含 triage 選 profile、審批) |
-| `score_and_close` | HIL(End) | 生命週期終點:評分 + 結案裁決 |
+| 型別 | 對應 HIL | 用途 | 觸發者 |
+|---|---|---|---|
+| `need_info` | HIL(Middle) | Agent 缺資訊,請人補充 | (schema 保留;提交→resume) |
+| `decision` | HIL(Middle) | Agent 提選項,請人擇一 / 核可 | (schema 保留;提交→resume) |
+| `hold` | HIL(Middle) | 人主動中斷後給新指示 | 指令台 `hold`(先 evict killpg) |
+| `approval` | HIL(Middle) | 起點審批門:看 plan、填 agent_name 放行 | profile `require_approval` |
+| `security_review` | HIL(Middle) | TICKET.md 安全掃描命中:看內容+理由,可修文字後繼續或 abort | M3 `_security_gate`(fail-closed) |
+| `budget_increase` | HIL(Middle) | 單票 soft 上限破:自助調高(≤hard) | budget precheck |
+| `score_and_close` | HIL(End) | 生命週期終點:評分 + 結案裁決 + 交接 | ScoreGate(終態後) |
 
 `score_and_close` 呈現三訊號供對照:**grader**(SUCCESS/FAILURE/UNKNOWN,證據型)、
 **agent 自評 0–10**、**人類 0–10**;並含**關票裁決**(見 §8)。
+
+### 3.2 HIL 狀況全表(權威;`session.pending_reason` 值域)
+
+「等人」= session 記 `pending_reason`(推導態 HIL(Middle),Jira 同步 Pending)
+或終態等評分(HIL(End),Jira 同步 Resolve)。全部狀況、處理方式與流程:
+
+| reason | 觸發 | 通知/介面 | 人要做什麼 | 提交/處理後 |
+|---|---|---|---|---|
+| `approval` | `require_approval` profile 首次派工 | 票貼 plan+**approval 表單**,assign approver+@mention | 看 plan,填 agent_name(snake_case)提交 | **提交即放行**:清 pending、assign 回 bot、agent 開跑 |
+| `security` | TICKET.md 掃描命中或掃描器故障(**fail-closed**) | **security_review 表單**(全文+命中理由+可修文字框) | 裁決:修訂文字→繼續;或 abort | 繼續→修訂版取代 TICKET.md 描述段(`sec_reviewed_at` 記錄);abort→ABORTED(reason=security)轉 Cancelled |
+| `budget` | 單票 soft 上限破(token 或 usd) | **budget_increase 表單**(已用/soft/hard+交付物快照) | 調高 soft(≤hard);要超過 hard → 找管理者改 profile(hot reload) | 下輪 resume 續跑,attempt 不重來 |
+| `hold` | 指令台 `hold`(人主動;立即 evict killpg,不耗 attempt) | **hold 表單** | 填給 agent 的新指示 | 指示入 human sidecar→TICKET.md 人類指示段→resume |
+| `human-decision` | agent 自報 handoff(kind=human);或指令台 `stop` | 票上 comment(無專屬表單) | 人工接手工作;要 agent 續跑→指令台 `run`/`retry` | run=續(resume)、retry=歸零重來、cancel=中止 |
+| `unknown` | outcome=UNKNOWN(行程消失,無法證明副作用是否發生) | 票上 comment+transcript 打包 | 查 transcript/workspace 確認副作用,再下指令 | **不自動重試**(v5 D3);run/retry/cancel 由人選 |
+| `external` | 基礎設施故障(agent-server 掛、連不上) | 票上 comment | (通常不用動作)修好 server 即可 | **不耗 attempt**;server 恢復後下一輪 poll 自動 resume |
+| (End)終態 | SUCCESS/FAILURE 落定(UNKNOWN 走上行) | **score_and_close 表單**(三訊號+交付物) | 評分 0–10(**必填**)+ 裁決 | close→轉 Closed;continue(打回)→帶指示 resume;next→同票換 profile;base→開新票交接脈絡 |
+
+跨切面(全部狀況共用):**一次性 token 連結**(用後失效,遺失可自癒補發)、
+**assignee 恆定**(bot;assign 給人=資源開關關閉,另一回事)、**@mention 通知**、
+**email 身分門禁**(表單提交 email ∈ owners/admin_emails/approver 才收;
+沒設 owner 則不擋)、**狀態同步**(config `status_sync`,Middle→Pending、
+End→Resolve;見 operator-guide §6.6)。程式碼錨點:觸發=`hil.request_human`
+(dispatcher/approval/scoring/commands 呼叫)、提交=`hil.apply_submission`
+(分支依 schema)、值域=grep `pending_reason =`。
 
 ## 4. Token 規格
 

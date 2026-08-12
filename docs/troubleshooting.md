@@ -52,8 +52,20 @@
     **不耗 attempt**,下輪自動 native resume 續跑(不重花錢)。這也是「不知原因卡住,
     evict/resume 就救回」的通用手段。
 - **看到 `pending`**:讀它的 `reason`/`cause`/`scope` —— 這是「為什麼沒進展」的直接
-  答案(預算超限、額度閘、需人、外部變更…)。對應處置見 §8(預算)/ §2下(排隊)/
-  §6(外部)。
+  答案。**全部 reason 速查**(權威流程表:[interaction.md §3.2](design/interaction.md)):
+
+  | reason | 在等什麼 | 解法 |
+  |---|---|---|
+  | `approval` | 審批表單沒人填 | approver(或 admin)開表單填 agent 名提交=放行;連結丟了→下輪 poll 自癒補發 |
+  | `security` | 安全審裁決 | 開 security_review 表單:誤報→修文字繼續;真可疑→abort;掃描器故障(fail-closed)→修 `security_scan.command` 再放行 |
+  | `budget` | 增額 | 負責人表單自助調高 ≤hard;超 hard/月/全站→管理者改 config+hot reload(§8) |
+  | `hold` | hold 表單的新指示 | 填了就帶指示 resume |
+  | `human-decision` | 人工接手中(agent 交人或 stop) | 要 agent 續→指令台 `run`/`retry` |
+  | `unknown` | 人查證副作用 | 看 transcript+workspace 確認做到哪,再 run/retry/cancel;**設計上不自動重試** |
+  | `external` | infra 恢復(server 掛) | 修好自動續、不耗 attempt;不用下指令 |
+
+  終態(SUCCESS/FAILURE)後停住=**HIL(End) 等評分**,不是 bug——填 score_and_close
+  表單(或該 profile 設 `auto_close`)。
 - **停在 `hil_requested` / `score_requested`(可能跟著 `score_reminded`)**:**在等人填
   表單,不是 bug**。去 Jira 那張票看 agent 的 `@mention` 留言 + 一次性表單連結,填了就
   會 `hil_submitted` → `hil_resumed`/`closed`。`hil_stalled` = 催了 N 次還沒人回。
@@ -62,6 +74,10 @@
 - **時間線有超長間隔但無異常事件**:可能是**筆電睡眠凍結計時器**造成的假 stall/假
   hang(見 [LESSONS 索引](lessons.md) + memory)。查 `pmset -g log` 對照時段;⚠️**不要**
   用 caffeinate(耗電),睡醒能續跑。
+- **在票上留言了但 agent 沒反應**:**留言不會進 agent 的 TICKET.md**(M2 起,防未
+  稽核文字繞過安全掃描)。要補資訊/改方向:用指令台 `hold` → 填表單(文字會進
+  TICKET.md「人類指示」段)。agent 實際看到什麼:ticket 頁駕駛艙卡展開 TICKET.md
+  對照;資訊流全圖見 [operator-guide §7.6](operator-guide.md)。
 
 ## 3. 假完成
 

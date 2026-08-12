@@ -79,6 +79,12 @@ race。`canonical_state` 只是**讀模型**(dashboard / `/api/v1/tickets` 用),
 state 就查 API/dashboard,不必動 DB。範例:triage 判不出 → 寫 `outcome=ABORTED` +
 `profile=notfound` → 推導成 `aborted`(理由由 `profile=notfound` + journal `aborted` 得知)。
 
+`pending_reason` 值域(= HIL(Middle) 的「為什麼等人」;**全表與處理流程的權威在
+[interaction.md §3.2](interaction.md)**):`approval`(審批門)/ `security`(安全審)/
+`budget`(soft 上限)/ `hold`(人主動中斷)/ `human-decision`(交人接手/stop)/
+`unknown`(無法證明副作用)/ `external`(infra 故障,自動恢復)。HIL(End) 等評分
+= 終態(SUCCESS/FAILURE)+ score_and_close 表單未提交。
+
 完整轉移圖見 `/concepts` 頁與 [lifecycle.md](lifecycle.md);開發細節見 [開發者手冊](../developer-guide.md)。
 
 ## 4. agent↔agent 交接:兩種機制,怎麼選?

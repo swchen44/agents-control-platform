@@ -272,6 +272,35 @@ Resolve 進的 workflow 也通)。queued(排隊)與交人類的票不動。沒�
 | dashboard 打不開 | 確認 detail_server 在跑、port 沒被占、`<runtime>` 指對 |
 | 更多 | [troubleshooting runbook](troubleshooting.md) |
 
+### 7.5 票在「等人」(HIL)——管理者要管的部分
+
+負責人自己能處理的(填表單/評分)見[使用者手冊 §7](user-guide.md);
+**下面這些輪到你**(全表+流程正本:[interaction.md §3.2](design/interaction.md)):
+
+| pending 原因 | 管理者職責 |
+|---|---|
+| `approval` | 確認 profile 的 `approver` email 設對;approver 不在→你的 email 在 `admin_emails` 也可提交(豁免) |
+| `security` | 安全審裁決常落在管理者:表單上看命中理由,判斷是誤報(修文字放行)還是真可疑(abort);掃描器本身故障也會 fail-closed 進這裡——修 `security_scan.command` 後放行 |
+| `budget` | 負責人只能自助調到 hard;**超過 hard / 月額度 / 全站額度**→ 改 profile 或 `budget:` 設定 + hot reload(§4);月/全站破是全域事件,查 dashboard 花費排行找大戶 |
+| `hold`/`human-decision` | 不用動(負責人的事);久置會出現在 timeline 長黃段——催辦即可 |
+| `unknown` | 陪負責人查 transcript(ticket 頁 L3)確認副作用;結論後在指令台 run/retry/cancel |
+| `external` | **這是你的**:agent-server/基礎設施掛了——修好即自動續跑(不耗 attempt);常見=venv 壞、server port 被占 |
+| (End)等評分 | 若 profile 適合無人值守,設 `auto_close`(§4.5)就不會累積等評分的票 |
+
+**email 身分門禁的管理面**:`admin_emails`(config)內的人可提交任何票的表單/指令
+(豁免 owner 名單);改負責人用指令台 `set_email`(整組取代,留空=解除)。
+見 §2.2 與 [identity-gate.md](design/identity-gate.md)。
+
+### 7.6 「agent 為什麼沒看到 X?」——TICKET.md 資訊流速查
+
+agent 只讀工作區的 TICKET.md(不連 Jira)。資訊進得去的通道只有:
+**description 本文**(含頂部 yaml 變數 `crid:`/`prompt:`/`email:`,只認這三鍵)、
+**profile**(goal/驗收標準)、**HIL 表單文字**(累加進「人類指示」段)、
+**跨票交接的 `BASE_<key>/`**。**票上留言不會進去**(M2 拿掉了,防未稽核文字繞過
+安全掃描)——使用者抱怨「我留言了 agent 沒理」→ 請他改用 hold 表單。
+組成正本:[design/workspace.md](design/workspace.md);ticket 頁的駕駛艙卡可
+直接展開當下 TICKET.md 全文對照。
+
 ## 8. 安全(內網)
 
 - dashboard/control **預設綁 `0.0.0.0`(內網開放、無認證)**:唯讀 dashboard 會顯示系統/程序

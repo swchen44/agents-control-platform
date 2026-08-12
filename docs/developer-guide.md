@@ -80,6 +80,39 @@ main。設計見 [selection.md](design/selection.md)。
   next/base/fail-safe/注入,免真 Jira 用 FakeSource.create_ticket)。真 `create_ticket` 寫入
   屬 V1 付費路徑(見 `scripts/reverify_v1.py` 清單)。設計見 [design/architecture.md §4](design/architecture.md)。
 
+### HIL(等人)機制程式碼地圖
+
+「等人」統一模式:**寫 `sess.pending_reason` + `hil.request_human(schema_id)` 發
+一次性表單 → 人提交 → `hil.apply_submission` 依 schema 分支處理 → 清 pending →
+下輪 resume**。狀況全表(7 種 Middle reason + End 評分)見
+[interaction.md §3.2](design/interaction.md);程式碼錨點:
+
+- **值域**:`pending_reason ∈ {approval, security, budget, hold, human-decision,
+  unknown, external}`(grep `pending_reason =`);HIL(End)=outcome 終態+
+  `scoring.ScoreGate` 發 `score_and_close`。
+- **觸發點**:`approval.gate`(審批)/ `dispatcher._security_gate`(安全審)/
+  `dispatcher._budget_soft_form`(增額)/ `commands.apply_command`(hold/stop)/
+  `dispatcher.handle`(handoff-human、unknown、infra→external)。
+- **表單定義**:`interaction.FORM_SCHEMAS`(7 種;欄位驗證含 pattern)。
+- **加一種新表單**:FORM_SCHEMAS 加 schema → 觸發處 `request_human(…, "你的id")`
+  → `hil.apply_submission` 加分支 → `tests/test_interaction.py`+`test_hil.py` 補
+  正負向 → journal 新事件跑 `gen_event_dict.py`(pre-commit 會擋 drift)。
+- **不變量**:assignee 恆定(通知靠 @mention+表單,不切 assignee);表單提交=唯一
+  resume 信號;email 門禁在 `apply_submission`/`apply_command` 入口驗。
+
+### TICKET.md 與 description 變數的程式碼錨點
+
+- 渲染:`workspace.render_ticket_md`(段落:head/目標/描述/人類指示/驗收);
+  sidecars:`.arcp_human.md`(人類指示累加)、`.arcp_desc_override.md`(安全審
+  修訂);交接:`workspace.inject_base_context`(`BASE_<key>/`)。
+- description 頂部 yaml 變數:`triggers.parse_ticket_meta`(**只認
+  `crid`/`prompt`/`email` 三鍵**,到空行止;寫入端 `_ticket_meta_yaml`)。消費:
+  `crid`→`session.clearquest_id`(+`store.find_by_crid` 去重)、`email`→
+  `owner_email_list`(門禁)、`prompt`→不特別消費(隨描述段整段給 agent)。
+- 改 TICKET.md 組成 → 同步 [design/workspace.md](design/workspace.md)(組成正本)
+  + `tests/test_workspace_provision.py`;⚠️ 驗收段會「教」agent(e2e 教訓
+  lesson #17)——別把測試專用的檢查渲染給真 agent。
+
 ## 測試
 
 測試在 `tests/`(自訂 runner,亦 pytest-相容),從 repo root 執行:

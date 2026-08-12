@@ -89,10 +89,12 @@ skills 複製與 md 注入,都要順應模板已建立的慣例(`.claude/*` 或 
 - md 注入用 marker 包住注入區(同 `sections.py` 手法)→ 即使重跑也不重貼(冪等)。
 - 注入可**關閉**:`profile.inject_md: false`。
 
-## TICKET.md(agent 的任務簡報)
+## TICKET.md(agent 的任務簡報)——組成正本
 
 agent prompt(dispatcher `BASE_PROMPT`)第一句就是「請先閱讀工作目錄裡的 TICKET.md」,
-所以它是任務進入工作區的唯一管道。內容(渲染自 Jira 票 + profile):
+所以它是任務進入工作區的唯一管道。**自足原則:agent 只讀 workspace、不連 Jira——
+要 agent 知道的資訊,一定得經由某條來源匯進 TICKET.md(或 workspace 檔案)。**
+內容(`workspace.render_ticket_md`):
 
 ```markdown
 # {key}: {summary}
@@ -107,25 +109,44 @@ agent prompt(dispatcher `BASE_PROMPT`)第一句就是「請先閱讀工作目錄
 {profile.goal}                          ← profile 層的總目標(無則略)
 
 ## 描述(要做什麼)
-{description}                            ← Jira 描述,人類寫的任務主體
+{description}                            ← Jira 描述整段(含頂部 crid:/prompt:/email:
+                                            變數行——變數契約見 lifecycle.md §4.2/§5)
+   ↑ M3:若安全審後人工修訂過,此段改用修訂版(標題註明「經人工安全審修訂,
+     原文見 Jira」;sidecar `.arcp_desc_override.md`,Jira description 不動)
+
+## 人類指示(累加,請一併遵循)          ← 有 human sidecar 才出現
+{.arcp_human.md 逐條}                    ← HIL 表單(hold/need_info/decision)的
+                                            human_prompt 累加;handoff 時加一行指向 BASE_
 
 ## 驗收標準(通過才算 SUCCESS)
 {由 profile.verify 渲染}                 ← 讓 agent 事先知道 grader 的確定性檢查門檻
   - [<step.name>] 必須存在檔案:`X`(內容含 '…')
   - [<step.name>] 指令需通過:`Y`
-
-## 最新留言(最多 5 則)
-- [author] {body 前 300 字}
 ```
 
-**新增三段的理由**:
+**來源匯流(誰把資訊帶進 TICKET.md)**:
+
+| 來源 | 進入哪段 | 誰寫 |
+|---|---|---|
+| Jira description(含頂部 yaml 變數行) | 描述 | 人開票 / agent-job script(`_ticket_meta_yaml`) |
+| profile(goal/verify) | 目標・驗收標準 | config 設計者 |
+| HIL 表單 human_prompt | 人類指示(sidecar `.arcp_human.md` 累加,不被重渲染蓋掉) | 人(hold/need_info/decision 表單) |
+| 安全審修訂 | 描述(整段取代) | 人(security_review 表單的可修文字框) |
+| 跨票交接(base) | `ws/BASE_<key>/`(前票 TICKET.md+envelope+HANDOFF.md)+ 人類指示段加一行指路 | harness(`inject_base_context`) |
+
+**M2 起不含「最新留言」段**——人類指示的正式通道是 HIL 表單(寫進 sidecar),
+留言不再餵給 agent(避免未經驗證的自由文字繞過安全掃描與稽核)。
+
+**三段設計理由**:
 - **Jira 連結** —— 人從 workspace/transcript 反查回 Jira 票;也讓 agent 知道自己在辦哪張。
 - **目標(goal)** —— profile 層的總目標,補足單票描述可能沒講的「為何/驗收精神」。
 - **驗收標準** —— 從 `profile.verify`(檔案存在/內容/指令)渲染成人看得懂的門檻,讓 agent
   **對著證據做**(loop on evidence),而非自以為完成 → 直接呼應[證據型停止](../decisions.md)。
 
-**刷新語意**:`health_check` 在每次 resume 前比對 TICKET.md;票內容變了(新留言/改描述)
-就重渲染,視為**資訊更新非損壞**(仍回報健康)。這是四樣東西裡唯一會每輪更新的。
+**刷新語意**:`health_check` 在每次 resume 前比對 TICKET.md;票內容變了(改描述/新增
+人類指示)就重渲染,視為**資訊更新非損壞**(仍回報健康)。這是四樣東西裡唯一會每輪更新的。
+**安全掃描**(M3,選配):spawn 前掃 TICKET.md 全文,命中 → 擋派工交人審
+(`pending:security`),見 [security-scan.md](security-scan.md)。
 
 ## 失敗與健康
 

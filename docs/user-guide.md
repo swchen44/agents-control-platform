@@ -85,7 +85,45 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # runtime 資料預設
 ⚠️ dashboard 綁 `0.0.0.0` 會對內網開放(顯示系統/程序資訊);鎖本機用
 `--host 127.0.0.1`。內網零外部依賴(不吃 CDN)。
 
+## 6.5 怎麼把資訊帶給 agent(TICKET.md 與三個變數)
+
+agent **不連 Jira**,只讀工作區裡系統渲染的任務簡報 **TICKET.md**——你想讓 agent
+知道的事,都要走這幾條路進去:
+
+1. **description 本文(自然語言)**:開票時把任務講清楚——這整段會進 TICKET.md
+   的「描述」段。**這就是下指令的主要方式,直接用自然語言寫。**
+2. **description 頂部的變數行(yaml 風格,選填)**:最上面連續的 `key: value` 行
+   (到空行為止),系統只認三個 key:
+
+   ```yaml
+   crid: CR-12345          # 關聯外部 issue(WITS/CQ 的 CR 編號)→ 去重、可用 CR 號查票
+   email: a@x.com, b@y.com  # 指定負責人(可多位)→ 表單/指令台上鎖給這些人
+   prompt: 一句話任務指令    # 通常由 agent-job 掃描腳本自動寫;人直接寫本文即可
+   ```
+
+   人開票或自動化腳本開票都可以寫;其餘內容一律自然語言,**不用學指令語法**。
+3. **開跑之後**想補資訊/改方向:走 **HIL 表單**(hold 給新指示、補資訊表單)——
+   你填的文字會累加進 TICKET.md 的「人類指示」段,agent 續跑時一定看到。
+   ⚠️ 在票上**留言 agent 看不到**(M2 起留言不進 TICKET.md;正式通道是表單)。
+4. **驗收標準**由 profile 設定自動渲染進 TICKET.md,agent 對著證據做。
+
+TICKET.md 完整組成見 [design/workspace.md](design/workspace.md);變數契約正本見
+[design/lifecycle.md §4.2/§5](design/lifecycle.md)。
+
 ## 7. 人怎麼介入(HIL)
+
+**你什麼時候會被叫?(全部 8 種情況與你要做的事)**
+
+| 情況(票會轉 Pending/Resolve) | 你會看到 | 你要做什麼 |
+|---|---|---|
+| **審批門**(該 profile 要求人核准才開跑) | 票上 plan + 審批表單(@mention 審批者) | 看 plan,填 agent 名提交 → **提交即放行** |
+| **安全審**(任務簡報掃到可疑內容/掃描器故障,先擋下) | security_review 表單:原文+命中理由+可修文字框 | 修文字後「繼續」,或中止(理由記 Security) |
+| **花費達 soft 上限** | 增額表單(已用量/上限/進度 summary) | 自助調高(≤hard);要更多找管理者(§8.5) |
+| **你按了 hold**(主動中斷) | hold 表單 | 填新指示 → agent 帶著指示續跑 |
+| **agent 交人 / 你按了 stop** | 票上 comment 說明 | 人工接手;要 agent 續 → 指令台 `run` |
+| **UNKNOWN**(agent 行程消失,做沒做完不確定) | 票上 comment + transcript | 檢查工作區/紀錄確認後下指令(**不會自動重試**) |
+| **infra 故障**(執行環境掛了) | 票上 comment | 通常不用動——修好後自動續跑,不耗重試次數 |
+| **做完等你關單**(HIL End) | 評分表單(成果駕駛艙) | 評分 0–10(必填)+ 裁決:關單/打回續作/換手 |
 
 - **通知**:agent 需要你時,在票上留言並 `@mention` 你,附一次性表單連結(不改 assignee)。
 - **填表單要填 email(你是誰)**:供稽核。若票的 description 頂端填了 `email`(指定負責人,
