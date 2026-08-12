@@ -92,7 +92,7 @@ Server/Introduction,明暗雙主題、離線零 CDN);L0–L3 四層 trace;transc
   暫存寫 `$CLAUDE_JOB_DIR/tmp`;git 狀態用 object store 真值驗證
   (`cat .git/refs/heads/main`、`git show HEAD:<檔>`、`git ls-remote`)。
 - Jira 環境:Atlassian **Cloud** swchen44、project key=SCRUM、憑證 `~/.env`;
-  **內網生產是 Data Center**(無 accountId)→ 相容工程=BACKLOG 主題 L(未做,需討論)。
+  **內網生產是 Data Center**(無 accountId)→ 相容已做(主題 L,`jira_flavor: dc`);整測用 KP2 project(SCRUM 不再用)。
 
 ## 4. 怎麼跑
 
@@ -113,13 +113,13 @@ pre-commit hook:`git config core.hooksPath .githooks`(ruff + 動 src/scripts 時
 
 ## 5. 下一步(全景見 BACKLOG.md)
 
-- **主題 L — Jira Data Center 相容**(L1 flavor 抽象~L7;Cloud user search 三坑已記):
-  內網生產必經,**需與使用者多討論後動工**。
+- ~~主題 L~~ **已完成**(2026-08-12,L1–L7+auth:`jira_flavor: dc` 一鍵切換;內網首次上線照 `docs/dc-first-run-checklist.md` 逐項勾)。
 - **I1 close→CQ 回寫**:設計定案、config 擴充點已留,等使用者給 CQ base_url+欄位名。
 - (C3 KPI 框架與 A/B 對照已完成 2026-08-13;先前誤標的「E4 A/B 報表」實為此項——BACKLOG 的 E4 是 qm adapter spike,另案。)
   (C2 trace CI 與主題 H 文件自足**已完成**;D1 Docker 隔離**不做**——使用者
   決策 2026-08-12,隔離維持 seatbelt/--sandbox,provider 介面留著。)
-- 待複驗:e2e_commands C3/C5(真 Jira+真 agent 疑時序 flaky,下次整合測試專驗)。
+- ~~e2e_commands flaky~~ **已結案**(2026-08-13:三個真 bug 全修,lesson #17)。
+- KP2 整測:`--config config.test.yaml` 整組隔離;測項 `tests/it_kp2.py` T1–T8(developer-guide「重跑 integration/E2E」)。
 
 ## 6. 與使用者協作的規則(務必遵守)
 
