@@ -240,6 +240,28 @@ class Store:
                   w.last_assignee_id, w.route_name, time.time(),
                   w.last_assignee, w.summary, w.description[:2000]))
 
+    def find_by_crid(self, crid: str) -> int | None:
+        """CRID → issue_id(CQ scan 去重)。session.clearquest_id 優先;
+        watch.description 的 yaml `crid:` 行補「票剛開、session 未建」的
+        時窗(≤1 輪 poll)。行界定精確比對——CR-1 不誤中 CR-12。無 → None。"""
+        if not crid:
+            return None
+        with self._lock:
+            r = self._db.execute(
+                "SELECT issue_id FROM ticket_session WHERE clearquest_id=?",
+                (crid,)).fetchone()
+            if r:
+                return r[0]
+            rows = self._db.execute(          # LIKE 粗濾 → python 行界定精確
+                "SELECT issue_id, description FROM ticket_watch"
+                " WHERE description LIKE ?", (f"%crid: {crid}%",)).fetchall()
+        import re as _re
+        pat = _re.compile(rf"^crid:\s*{_re.escape(crid)}\s*$", _re.M)
+        for iid, desc in rows:
+            if pat.search(desc or ""):
+                return iid
+        return None
+
     def get_user_uid(self, email: str) -> str | None:
         """L6:快取查 email→識別碼(cloud=accountId、dc=name);無 → None。"""
         with self._lock:

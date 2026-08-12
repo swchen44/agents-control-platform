@@ -143,5 +143,38 @@ check("dispatcher 建 session 時 crid → clearquest_id",
       _st.get_session(1).clearquest_id == "WCNCR9")
 _st.close()
 
+# ── CRID 去重(harness 必擋層)──────────────────────────────────────── #
+from arcp.store import TicketSession, TicketWatch  # noqa: E402
+
+st = Store(tempfile.mkdtemp())
+st.upsert_session(TicketSession(
+    issue_id=7, key="P-7", profile="p", workspace="w", session_id=None,
+    attempts=0, outcome=None, pending_reason=None, cost_usd=0,
+    clearquest_id="WCNCR7"))
+st.upsert(TicketWatch(issue_id=8, key="P-8", last_comment_id=0,
+                      last_state="To Do", last_assignee_id="",
+                      route_name=None,
+                      description="crid: WCNCR8\n\n剛開的票(session 未建)"))
+check("find_by_crid:session.clearquest_id 命中", st.find_by_crid("WCNCR7") == 7)
+check("find_by_crid:watch description 時窗命中", st.find_by_crid("WCNCR8") == 8)
+check("find_by_crid:前綴不誤中(WCNCR 不中 WCNCR7/8)",
+      st.find_by_crid("WCNCR") is None)
+check("find_by_crid:未知/空 → None",
+      st.find_by_crid("NOPE") is None and st.find_by_crid("") is None)
+
+rel4 = _script(
+    '#!/bin/bash\ncat <<\'J\'\n'
+    '[{"summary":"重複舊 CR","description":"x","crid":"WCNCR7"},'
+    '{"summary":"新 CR","description":"y","crid":"WCNCR-NEW"},'
+    '{"summary":"同輪重複","description":"z","crid":"WCNCR-NEW"}]\nJ\n')
+src = FakeSource()
+evs = fire_agent_job(_job(rel4), src, st, tempfile.mkdtemp(), "SCRUM")
+check("去重:已有票(session)/同輪重複都跳過 → 只開 1 張(新 CR)",
+      len(src.created) == 1 and src.created[0]["summary"] == "新 CR")
+check("去重:journal job_skip_duplicate ×2(帶 crid)",
+      [e.get("crid") for e in evs if e["type"] == "job_skip_duplicate"]
+      == ["WCNCR7", "WCNCR-NEW"])
+st.close()
+
 print(f"test-jobs: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

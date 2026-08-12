@@ -28,6 +28,10 @@
     的 `labels` **覆寫**(例:緊急筆回 `["arcp.urgent"]`、一般筆省略走保底)。程式:
     `it.get("labels") or trigger.labels`(`triggers.py`)。
   - `crid`(選填):來源 ClearQuest CR id → 寫進票 description 最上面的 yaml
-    (`crid: …`)→ dispatcher 建 session 時讀回 `session.clearquest_id`(去重 + close→CQ 回寫)。
+    (`crid: …`)→ dispatcher 建 session 時讀回 `session.clearquest_id`。
+    **CRID 去重(兩層)**:harness 開票前**必擋**(查 session.clearquest_id +
+    watch description;同 CRID 已有票 → journal `job_skip_duplicate`、不開);
+    script 可另用 REST 預濾(`GET /api/v1/tickets/<CRID>`,200=已有、404=新)
+    省日誌雜訊——範例見 `cq/scan-example.sh`。
 
 範例見 `example/scan.sh`。腳本請視自己的資料夾為唯讀(輸出走 stdout,別在 config/ 下寫檔)。

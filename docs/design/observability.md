@@ -85,6 +85,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `hil_submitted` | `request_id`, `schema` | `src/arcp/hil.py` |
 | `jira_write` | `action`, `detail` | `scripts/run_poller.py` |
 | `job_fired` | `crid`, `job`, `run_name`, `task_idx` | `src/arcp/triggers.py` |
+| `job_skip_duplicate` | `crid`, `job` | `src/arcp/triggers.py` |
 | `new_issue` | `state`, `summary` | `src/arcp/poller.py` |
 | `owner_changed` | `author`, `ip`, `new`, `old`, `reissued`, `retagged` | `src/arcp/commands.py` |
 | `pending` | `cause`, `cost_usd`, `reason`, `scope`, `tokens` | `src/arcp/dispatcher.py` |
@@ -108,7 +109,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 49 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 50 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)

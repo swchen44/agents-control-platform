@@ -3845,14 +3845,17 @@ def render_concepts_page() -> str:
 
 # ── W7.7:REST /api/v1(唯讀,給 LLM 監控)────────────────────────────────── #
 def _resolve_ref(ref: str, sessions: dict, watch: dict) -> int | None:
-    """三合一解析器:Jira key(SCRUM-42)/ 內部 id / ClearQuest CR id → issue_id。"""
+    """三合一解析器:Jira key(SCRUM-42)/ 內部 id / ClearQuest CR id → issue_id。
+    CR id 也查 watch description 的 yaml `crid:` 行——補「票剛開、session 未建」
+    的時窗,讓 CQ scan 的 REST 預濾(GET /api/v1/tickets/<CRID>)始終準確。"""
     if ref.isdigit() and (int(ref) in sessions or int(ref) in watch):
         return int(ref)
     for iid, s in sessions.items():
         if s.get("key") == ref or (s.get("clearquest_id") or "") == ref:
             return iid
+    crid_pat = re.compile(rf"^crid:\s*{re.escape(ref)}\s*$", re.M)
     for iid, w in watch.items():
-        if w.get("key") == ref:
+        if w.get("key") == ref or crid_pat.search(w.get("description") or ""):
             return iid
     return None
 

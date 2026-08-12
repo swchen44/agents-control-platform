@@ -312,6 +312,7 @@ def fire_agent_job(trigger: "Trigger", source, store, root: str,
             error="agent-job stdout 非 JSON(應為任務清單;看 transcript/stderr.log)"))
         return events
     items = data if isinstance(data, list) else [data]
+    seen_crids: set = set()             # 同輪(同一次 stdout)內自重複也擋
     for idx, it in enumerate(items):
         if not isinstance(it, dict):
             continue
@@ -321,6 +322,18 @@ def fire_agent_job(trigger: "Trigger", source, store, root: str,
         summary = str(it.get("summary") or f"job:{trigger.run_name}")[:200]
         labels = list(it.get("labels") or trigger.labels)
         crid = it.get("crid")
+        # CRID 去重(harness 必擋層;script 可另用 REST 預濾——兩層設計):
+        # 同 CRID 已開過票(session.clearquest_id / watch description /
+        # 本輪 seen)→ 跳過不開,journal 記 skip 供稽核。
+        if crid:
+            dup = crid in seen_crids or store.find_by_crid(str(crid))
+            if dup:
+                events.append(store.journal(
+                    "job_skip_duplicate", int(dup) if dup is not True else 0,
+                    trigger.run_name, job=trigger.name, crid=crid))
+                log.info("job %s crid=%s 已有票 → 跳過", trigger.name, crid)
+                continue
+            seen_crids.add(crid)
         full_desc = _ticket_meta_yaml({"crid": crid}) + desc
         try:
             t = source.create_ticket(project, summary, full_desc, labels=labels)
