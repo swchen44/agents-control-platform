@@ -170,7 +170,7 @@ uv run python scripts/detail_server.py --config config.test.yaml \
 # 3. REST integration(T1 完成流 / T2 job 分流 / T3 cancel / T4 審批 Pending;
 #    T5 安全掃描需 scanner 已裝、T6 審批門放行全程 → 手動指定)
 uv run python tests/it_kp2.py            # 預設 T1–T4
-uv run python tests/it_kp2.py T5 T6      # 進階測項
+uv run python tests/it_kp2.py T5 T6 T9   # 進階測項(T9=插值+存證+結案回寫)
 # 4. browser E2E(看畫面,REST 驗不到的):照 tests/e2e_kp2_browser.md 逐項
 ```
 

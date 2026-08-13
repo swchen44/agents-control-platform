@@ -19,6 +19,9 @@ config.yaml / runtime/ 完全隔離,詳 docs/developer-guide.md「重跑整測�
   T4 HIL(Middle):建審批門票(arcp.approval-demo)→ pending:approval →
      Jira **Pending**(不需搶時序)→ cancel 收尾 → Cancelled
 
+  T9 P/Q 波:description {crid} 插值進 TICKET.md、TICKET.md 版本附件(2A)、
+     close 後 description 置頂 result 段 + timeline/SESSION/transcript 附件(2B/2C)
+
 測試票留在 KP2(標題帶 [it]/[job])供看板與 browser E2E 檢視;重跑會開新票。
 """
 from __future__ import annotations
@@ -389,6 +392,61 @@ def t8(src):
               os.path.isdir(base_dir), detail=base_dir)
 
 
+# ── T9 P/Q 波:{crid} 插值 + 過程存證 + 結案回寫 ─────────────────────── #
+def t9(src):
+    print("== T9 P/Q:插值({crid})+ TICKET.md 存證 + 結案結果區/附件 ==")
+    t = src.create_ticket(
+        "KP2", "[it] T9 P/Q 插值+存證驗收",
+        f"crid: CR-E2E-9\nemail: {EMAIL}\n\n"
+        "主題:寫一段關於 {crid} 驗證流程的短文。",
+        issue_type_id=TASK_TYPE, labels=["arcp.write"])
+    print(f"    建票 {t.key}(id={t.id})")
+    check("T9: agent SUCCESS",
+          wait("SUCCESS", lambda: arcp(t.id).get("outcome") == "SUCCESS",
+               timeout=420))
+    ws = arcp(t.id).get("workspace") or ""
+    tk = os.path.join(ws, "TICKET.md")
+    txt = open(tk, encoding="utf-8").read() if os.path.isfile(tk) else ""
+    check("T9: TICKET.md 插值(描述段 {crid}→CR-E2E-9,無殘留占位符)",
+          "CR-E2E-9 驗證流程" in txt and "{crid}" not in txt,
+          detail=txt[:200])
+
+    def _att_names():
+        d = src._request("GET", f"{src._api}/issue/{t.id}",
+                         params={"fields": "attachment"})
+        return [a["filename"]
+                for a in (d.get("fields") or {}).get("attachment") or []]
+    check("T9: 2A 存證——TICKET_<key>_*.md 已附到票",
+          wait("TICKET 附件", lambda: any(
+              n.startswith(f"TICKET_{t.key}_") for n in _att_names()),
+               timeout=120))
+    tok = wait("評分表單連結", lambda: form_token_from_comments(
+        src, t.id, must_contain="評分"), timeout=180)
+    check("T9: 評分表單已發", bool(tok))
+    if tok:
+        code, _ = _post(f"{FORM}/form/{tok}", {
+            "human_score": "8", "close_decision": "close", "by": EMAIL})
+        check("T9: close 提交 200", code == 200)
+    check("T9: Jira Closed",
+          wait("Closed", lambda: jira_state(src, t.id) == "Closed",
+               timeout=120))
+
+    def _desc():
+        return src.get_ticket(t.id, with_comments=False).description or ""
+    check("T9: 2B 結果區——description 置頂 [ARCP owner=result]",
+          wait("result 段", lambda: "owner=result" in _desc(), timeout=90))
+    d = _desc()
+    check("T9: 結果區欄位(result: SUCCESS/人評 8/crid/server)",
+          all(k in d for k in ("result: SUCCESS", "人評 8/10",
+                               "crid: CR-E2E-9", "server: ")),
+          detail=d[:400])
+    names = _att_names()
+    check("T9: 2C 結案附件(timeline_*.jsonl + SESSION_*.md + transcript)",
+          any(n.startswith("timeline_") for n in names)
+          and any(n.startswith("SESSION_") for n in names),
+          detail=str(names))
+
+
 def main():
     picks = set(a.upper() for a in sys.argv[1:]) \
         or {"T1", "T2", "T3", "T4"}         # T5 需手動加(要 security_scan 開)
@@ -413,6 +471,8 @@ def main():
         t7(src)
     if "T8" in picks:                   # 跨票換手+評分負向(需 SUCCESS creview 票)
         t8(src)
+    if "T9" in picks:                   # P/Q:{crid} 插值+存證+結案回寫
+        t9(src)
     print(f"\nit-kp2: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok + fail})")
     return 1 if fail else 0
 
