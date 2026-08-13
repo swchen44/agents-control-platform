@@ -306,10 +306,14 @@ def render_form_page(req, jira_up: bool = True, errors=None,
 def render_submitted_page(req) -> str:
     from .interaction import summarize
     s = summarize(req.schema_id, req.submission or {})
+    sub_at = ("" if not req.submitted_at else time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(req.submitted_at)))
     body = (f"<h1 class='ok'>✓ 已提交</h1><div class='card'>"
             f"{_ctx_html(req)}"
             f"<h2>提交內容(唯讀)</h2><div class='ctx'>{_esc(s)}</div>"
-            f"<div class='hint'>提交者 {_esc(req.submitted_by or '—')}</div>"
+            f"<div class='hint'>提交者 {_esc(req.submitted_by or '—')}"
+            f" · 時間 {_esc(sub_at or '—')}"
+            f" · IP {_esc(req.submitted_ip or '—')}</div>"
             f"</div>")
     return _page("已提交", body)
 

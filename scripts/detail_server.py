@@ -2652,12 +2652,19 @@ def _ticket_meta_card(iid, s, evs) -> str:
         st_lab = _IX_STATUS_LABEL.get(r.get("status")) or r.get("status") or "?"
         url = f"{form_base}/form/{r.get('token')}"
         tok = str(r.get("token") or "")
+        # 提交稽核三欄(K 期已入庫:時間/email/IP;未提交顯示 —)
+        sub_at = r.get("submitted_at") or 0
         ix_rows += (f"<tr><td>{esc(lab)}</td><td>{esc(st_lab)}</td>"
                     f"<td>{esc(fmt_ts(r.get('created_at')))}</td>"
+                    f"<td>{esc(fmt_ts(sub_at)) if sub_at else '—'}</td>"
+                    f"<td>{esc(r.get('submitted_by') or '—')}</td>"
+                    f"<td>{esc(r.get('submitted_ip') or '—')}</td>"
                     f"<td><a href='{esc(url)}' rel='noopener' target='_blank'>開啟"
                     f"</a> <span class='rid'>…{esc(tok[-8:])}</span></td></tr>")
     ix_table = (("<table><thead><tr><td><b>類型</b></td><td><b>狀態</b></td>"
-                 "<td><b>建立</b></td><td><b>連結</b></td></tr></thead><tbody>"
+                 "<td><b>建立</b></td><td><b>提交時間</b></td>"
+                 "<td><b>提交者</b></td><td><b>IP</b></td>"
+                 "<td><b>連結</b></td></tr></thead><tbody>"
                  + ix_rows + "</tbody></table><div class='sys' style='text-align:"
                  "left'>⚠️ 這些是 capability 連結(有連結即可操作/下載),dashboard "
                  "請鎖本機/內網存取(見操作手冊 §8)。大檔下載頁在各表單內 "
