@@ -220,7 +220,8 @@ def main(argv: list[str] | None = None) -> int:
                             mention=mention, self_score_fn=None,
                             profiles_fn=lambda: profiles,     # W10.3 handoff 下拉候選
                             jira_base_url=getattr(src, "base_url", ""),
-                            dashboard_url=dash_url))          # Q 波:結案回寫連結
+                            dashboard_url=dash_url,           # Q 波:結案回寫連結
+                            status_sync=disp.status_sync))    # T13:auto_close 精確關單
     loop.poll_interval = interval                            # W9.1 control 顯示
 
     _reload = make_reload(loop, disp, ext, cfg_path)  # W13/W4.5 hot reload

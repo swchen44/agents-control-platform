@@ -66,6 +66,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `assignee_restored` | — | `src/arcp/commands.py` |
 | `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py` |
 | `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `tokens`, `truly_resumed` | `src/arcp/dispatcher.py` |
+| `attempt_skipped` | `pending`, `reason` | `src/arcp/dispatcher.py` |
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
 | `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
 | `closed` | `agent_score`, `by`, `human_score`, `outcome`, `request_id` | `src/arcp/hil.py`, `src/arcp/scoring.py` |
@@ -112,7 +113,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 53 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 54 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)

@@ -90,11 +90,10 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "server_api_key": agent_cfg.get("server_api_key", "harness-local-only"),
         "persist_dir": os.path.join(artifacts_dir, f"a{attempt}.persist"),
     }
-    # E3:清掉殘留 EVICT 檔(上次驅逐留下的),否則新 attempt 秒被驅逐
-    try:
-        os.remove(job["evict_file"])
-    except FileNotFoundError:
-        pass
+    # E3/T10 修(2026-08-13):EVICT 檔改由 dispatcher 於 attempt 結束後統一
+    # 清理——起跑就刪會把「hold 剛寫、搶在 spawn 前後幾秒」的現役驅逐標記
+    # 一併洗掉(race,T10 三輪實測),讓 hold 的 killpg 完全撲空。殘留檔
+    # 不再於此清:見 dispatcher run_attempt 返回後的 _clear_evict。
     job_path = os.path.join(artifacts_dir, f"a{attempt}.job.json")
     with open(job_path, "w") as f:
         json.dump(job, f, ensure_ascii=False)

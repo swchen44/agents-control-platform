@@ -143,6 +143,18 @@ outer_loop:
       profile: kp2-writer
       on_match: create_or_resume
 
+    - name: kp2-lowbud               # it T11:budget 增額全程(soft=1 token 即卡)
+      when:
+        labels: ['arcp.lowbud']
+      profile: kp2-lowbud
+      on_match: create_or_resume
+
+    - name: kp2-auto                 # it T13:auto_close(跑完免評分自動關)
+      when:
+        labels: ['arcp.write-auto']
+      profile: kp2-auto
+      on_match: create_or_resume
+
     - name: kp2-creview              # KP2 整測:C code review
       when:
         labels: ['arcp.creview']
@@ -214,6 +226,53 @@ outer_loop:
 # agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
 inner_loop:
   profiles:
+    kp2-lowbud:                    # it T11:budget 全程(cmd false 保證第二輪,
+      goal: '依描述回覆'            #   attempt2 precheck 卡 soft→表單調高→resume)
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        os_sandbox: true
+        timeout_sec: 120
+      verify:
+        - name: nevermet
+          cmd: ['false']             # 確定性不過(lesson #17:別靠 agent 做不到)
+      budget:
+        ticket_soft_tokens: 1        # 任何用量即破 soft(T11 觸發點)
+        ticket_hard_tokens: 500000
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+      human_minutes_est: 1
+
+    kp2-auto:                      # it T13:auto_close(on_success 自動關單)
+      goal: '依描述主題寫 150-300 字繁中短文到 ARTICLE.md(# 標題開頭)'
+      auto_close: on_success
+      workspace:
+        template: empty
+        folder: 'tickets/{agent}__{key}__{issue_id}'
+        common_skills: [kp2-writing]
+      skills: []
+      agent:
+        backend: rawcli
+        engine: claude
+        model: haiku
+        output_schema: true          # G1 自評→auto_close human_score=自評(三訊號)
+        os_sandbox: true
+        timeout_sec: 300
+      verify:
+        - name: article
+          files:
+            ARTICLE.md: null
+      loop:
+        max_attempts: 2
+        on_unknown: pending
+      human_minutes_est: 20
+
     kp2-writer:                    # KP2 整測:寫短文小任務
       goal: '依描述主題寫 150-300 字繁中短文到 ARTICLE.md(# 標題開頭)'
       workspace:

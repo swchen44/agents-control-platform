@@ -137,6 +137,11 @@ FORM_SCHEMAS: dict[str, dict] = {
                          ["continue", "續跑(重置額度回進行中)"],
                          ["handoff", "換手改派下一棒"]]},
             *_HANDOFF_FIELDS,      # W10.3:選 handoff 時填(kind/下一 profile/prompt)
+            # T12 修(2026-08-13):打回(continue)缺指示通道——之前提交的
+            # human_prompt 不在 schema 被驗證層丟掉,agent 不知道要改什麼
+            {"key": "human_prompt", "label": "打回/續跑時給 agent 的指示"
+             "(選填;寫進 TICKET.md 並隨 resume 帶上)",
+             "type": "textarea", "required": False},
             {"key": "note", "label": "備註(選填)", "type": "textarea",
              "required": False},
         ],

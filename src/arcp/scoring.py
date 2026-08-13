@@ -95,7 +95,8 @@ class ScoreGate:
                  interval_sec: float = REMIND_INTERVAL_SEC, ttl_sec: float = 0.0,
                  stall_after: int = STALL_REMINDERS, self_score_fn=None,
                  profiles_fn=None, jira_base_url: str = "",
-                 dashboard_url: str = ""):
+                 dashboard_url: str = "", status_sync: dict | None = None):
+        self.status_sync = status_sync or {}    # T13:auto_close 精確關單用
         self.source = source
         self.store = store
         self.base_url = base_url                 # 表單服務 base(人開連結用)
@@ -124,7 +125,11 @@ class ScoreGate:
         self.store.upsert_session(session)
         evs = []
         # outcome 保留;不覆寫 handoff(handoff 非 SUCCESS/FAILURE/UNKNOWN,不會到這)
-        if self.source.transition(ticket.id, "done"):
+        # T13 修(2026-08-13):KP2 型雙終態 workflow 下 transition("done")
+        # 按 category 會挑錯 → 用與人評 close 同一條精確關單(status_sync.closed
+        # 精確名+兩步保險);沒配 status_sync 則 fallback 原行為。
+        from .hil import _close_transition
+        if _close_transition(self.source, ticket.id, self.status_sync):
             self.store.invalidate_ticket_commands(ticket.id)  # 指令台失效
             evs.append(self.store.journal(
                 "closed", ticket.id, ticket.key, by="auto",

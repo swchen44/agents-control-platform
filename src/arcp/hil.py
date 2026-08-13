@@ -289,11 +289,27 @@ def apply_submission(source, store, req: InteractionRequest, *,
         f"(by {req.submitted_by or '—'};Request {req.request_id})")
     sess = store.get_session(req.issue_id)
     if sess is not None:
+        # T10 修(第四輪實測):表單提交=人已下指示要它繼續 → 清殘留 EVICT 檔
+        # (hold 在 spawn 前寫的 EVICT 沒人清 → 下輪 spawn 秒被殺,且殺得太早
+        # claude session 未落盤 → resume 撞牆連燒 attempts)。
+        ws = sess.workspace or ""
+        if ws and not ws.startswith("("):
+            try:
+                os.remove(os.path.join(os.path.dirname(ws),
+                                       "attempts", "EVICT"))
+            except OSError:
+                pass
         # Q10:人類補充指示 → 累加寫進 workspace 人類指示段(agent resume 後重讀)
         hp = (data.get("human_prompt") or "").strip()
         if hp and sess.workspace and sess.workspace not in ("(adopted)", "(handoff)"):
             try:
                 append_human_instruction(sess.workspace, hp, now=now)
+                # T10/T12 修:同時落 resume note——下輪 attempt 的 prompt 顯式
+                # 帶上(native resume 的 agent 不一定重讀 TICKET.md,實測)
+                from .workspace import RESUME_NOTE
+                with open(os.path.join(sess.workspace, RESUME_NOTE), "w",
+                          encoding="utf-8") as f:
+                    f.write(hp + "\n")
             except OSError as e:      # workspace 不在也不擋提交(降級)
                 log.warning("寫人類指示失敗 ticket=%s: %s", req.key, e)
         if _handoff_choice(req.schema_id, data):       # W10.3 改派下一棒(優先)

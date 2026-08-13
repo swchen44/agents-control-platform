@@ -128,6 +128,7 @@ pre-commit hook:`git config core.hooksPath .githooks`(ruff + 動 src/scripts 時
 - ~~e2e_commands flaky~~ **已結案**(2026-08-13:三個真 bug 全修,lesson #17)。
 - KP2 整測:`--config config.test.yaml` 整組隔離;測項 `tests/it_kp2.py` T1–T8(developer-guide「重跑 integration/E2E」)。
 - **P/Q 波**(2026-08-13,設計討論 8 分支定案後實作):{crid} 插值(文本類全做/verify cmd 不做)+ 過程存證(TICKET.md 真變才附版本)+ 結案回寫(description 置頂 result 段+timeline/SESSION/transcript 附件;close 與 cancel 同規格)——正本 `docs/design/provenance.md`,KP2 真票 T9 9/9。
+- **HIL 全路徑真環境驗收(2026-08-13)**:it_kp2 新增 T10 hold/T11 budget/T12 continue/T13 auto_close/T14 安全審修訂;T11/T12/T14 全過、T13 實質驗過(KP2-32 Closed+自評);過程修掉 5 個產品 bug(hold-spawn race 兩道閘、score 表單補 human_prompt 欄、resume note 機制、auto_close 精確關單、EVICT 生命週期)。**待補:T10/T13 用最終版乾淨重跑一輪**(`uv run python tests/it_kp2.py T10 T13`,先起整測 poller)。
 - E 群真環境:**E1 codex 對照**(compare_run 四格+compare_abc 四路全綠,數據入 COMPARISON.md)與 **E2 crash→resume**(`tests/it_e2_resume.py` 雙引擎 6/6:context 傳承+不重工)已完成 2026-08-13;重跑手冊=developer-guide「重跑 E 群真環境驗證」。
 
 ## 6. 與使用者協作的規則(務必遵守)

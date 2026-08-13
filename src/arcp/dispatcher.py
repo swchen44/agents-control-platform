@@ -583,6 +583,16 @@ class Dispatcher:
             if blocked:
                 events.extend(blocked)
                 return events
+            # race 閘(2026-08-13 T10 實測):REST hold/stop/cancel 與本輪
+            # dispatch 併發——指令執行緒剛設 pending/outcome,本執行緒已越過
+            # 入口檢查正要 spawn(spawn 還會清舊 EVICT 檔,讓 hold 的 killpg
+            # 完全撲空)。spawn 前從 store 重讀,搶進的指令贏。
+            fresh = self.store.get_session(ticket.id)
+            if fresh and (fresh.pending_reason or fresh.outcome == "ABORTED"):
+                log.info("%s spawn 前偵測到並發指令(pending=%s outcome=%s)"
+                         "→ 本輪放棄派工", ticket.key,
+                         fresh.pending_reason, fresh.outcome)
+                return events
             sess.attempts += 1
             # W5.1 sid 預派(W29):rawcli+claude 首跑先派 uuid,attempt 狀態
             # 先持久化再 spawn——crash 後可 resume;快照器首 attempt 就有 sid
@@ -600,10 +610,38 @@ class Dispatcher:
             prompt = BASE_PROMPT if not feedback else (
                 f"{BASE_PROMPT}\n\n上次嘗試未通過驗證,失敗證據:\n{feedback}\n"
                 f"請只修正缺失的部分,不要重做已完成的部分。")
+            # T10/T12 修:HIL 表單剛給的新指示 → prompt 顯式帶上(單次消費;
+            # TICKET.md 人類指示段仍有全history,這裡保證 resume 輪一定看到)
+            from .workspace import pop_resume_note
+            note = pop_resume_note(sess.workspace)
+            if note:
+                prompt += f"\n\n人類最新指示(最優先遵循):\n{note}"
+            # race 閘第二道(T10 二輪實測:第一道 while 頂的 fresh read 仍輸
+            # 給毫秒窗——handle 執行緒中途的 upsert 也可能舊物件覆蓋)。spawn
+            # 前最後一瞬再讀;搶進的 hold/cancel 贏,本 attempt 回滾不計。
+            fresh = self.store.get_session(ticket.id)
+            if fresh and (fresh.pending_reason or fresh.outcome == "ABORTED"):
+                sess.attempts -= 1
+                sess.pending_reason = fresh.pending_reason
+                sess.outcome = fresh.outcome or sess.outcome
+                self.store.upsert_session(sess)
+                events.append(self.store.journal(
+                    "attempt_skipped", ticket.id, ticket.key,
+                    reason="concurrent-command",
+                    pending=fresh.pending_reason or ""))
+                log.info("%s spawn 最後一瞬偵測到並發指令 → 放棄本 attempt",
+                         ticket.key)
+                return events
             res = run_attempt(agent_cfg, sess.workspace, prompt,
                               artifacts, sess.attempts,
                               resume_session_id=resume_sid,
                               preassigned_session_id=preassigned)
+            # T10 修:attempt 結束統一清 EVICT 檔(取代 inner_runner 起跑刪
+            # ——那會洗掉 hold 現役標記)。這裡清=下一 attempt 乾淨不誤殺。
+            try:
+                os.remove(os.path.join(artifacts, "EVICT"))
+            except OSError:
+                pass
             sess.session_id = res.session_id or sess.session_id
             sess.cost_usd += res.cost_usd or 0.0
             sess.tokens += res.tokens or 0            # budget:累計 token

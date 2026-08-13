@@ -30,6 +30,9 @@ _INJECT_FILE = "inject_claude_md_end.md"
 _MARK_BEGIN = "<!-- BEGIN arcp inject -->"
 _MARK_END = "<!-- END arcp inject -->"
 _HUMAN_SIDECAR = ".arcp_human.md"     # Q10:人類指示累加(不被 TICKET.md 重渲染蓋掉)
+RESUME_NOTE = ".arcp_resume_note"     # T10/T12 修:最新一則人類指示,下輪 resume
+#                                       prompt 顯式帶上後即刪(native resume 的
+#                                       agent 不一定重讀 TICKET.md,實測 haiku 不讀)
 DESC_OVERRIDE = ".arcp_desc_override.md"   # M3:安全審人工修訂後的任務描述
 #                                     (取代 TICKET.md 描述段;Jira description 不動)
 
@@ -44,6 +47,19 @@ def append_human_instruction(ws: str, text: str, now: float | None = None) -> No
     stamp = datetime.datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")
     with open(os.path.join(ws, _HUMAN_SIDECAR), "a", encoding="utf-8") as f:
         f.write(f"- [{stamp}] {text}\n")
+
+
+def pop_resume_note(ws: str) -> str:
+    """讀最新人類指示並清掉(單次消費;dispatcher 組 resume prompt 用)。"""
+    p = os.path.join(ws or "", RESUME_NOTE)
+    if not (ws and os.path.isfile(p)):
+        return ""
+    note = open(p, encoding="utf-8").read().strip()
+    try:
+        os.remove(p)
+    except OSError:
+        pass
+    return note
 
 
 def _read_human_notes(ws: str) -> str:
