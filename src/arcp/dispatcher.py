@@ -662,6 +662,12 @@ class Dispatcher:
             if res.error_kind == "evicted":
                 sess.attempts -= 1
                 sess.evict_count += 1           # W6.3:異常計數
+                # T10 修(第七輪實測):evict 多半是 hold 觸發——command 執行緒
+                # 剛設的 pending_reason 不能被本執行緒的舊物件 upsert 洗掉
+                # (洗掉=被殺的票立刻自動 resume,hold 形同虛設)。
+                fresh = self.store.get_session(ticket.id)
+                if fresh and fresh.pending_reason:
+                    sess.pending_reason = fresh.pending_reason
                 self.store.upsert_session(sess)
                 finalize_transcript(sess.session_id,      # W6.4 evict 定格
                                     engine_of_agent(profile.agent),

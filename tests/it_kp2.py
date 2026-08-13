@@ -398,13 +398,16 @@ def t10(src):
     print("== T10 hold 全程(hold→表單指示→resume 帶指示完成)==")
     t = src.create_ticket(
         "KP2", "[it] T10 hold 全程",
-        f"email: {EMAIL}\n\n主題:寫 700 字長文談持續整合(先列大綱再寫)。",
+        f"email: {EMAIL}\n\n先在前景執行 sleep 60(等它跑完),"
+        "然後寫 150 字短文談持續整合到 ARTICLE.md。",
         issue_type_id=TASK_TYPE, labels=["arcp.write"])
     print(f"    建票 {t.key}(id={t.id})")
-    # watch 有記錄≠session 建立(hold 需 session;profile 欄=session 才有)
-    check("T10: 已接管(session 建立,agent 開跑)",
-          wait("session", lambda: arcp(t.id).get("profile"), timeout=180,
-               every=5))
+    # hold 時機=「真正跑中且 session 已落盤」:任務先 sleep 60 給確定性窗口
+    # (太早殺 claude session 未落盤 resume 撞牆、太晚 haiku 已寫完——六輪實測)
+    check("T10: 已接管且 attempt 跑起來",
+          wait("attempt1", lambda: (arcp(t.id).get("attempts") or 0) >= 1,
+               timeout=180, every=5))
+    time.sleep(12)                     # spawn+讀 TICKET+起 sleep(60s 窗內)
     r = _post_json(f"{CONTROL}/ticket/{t.id}/command",
                    {"cmd": "hold", "by": EMAIL})
     check("T10: REST hold ok", r.get("ok") is True, detail=str(r))
@@ -416,7 +419,7 @@ def t10(src):
     check("T10: hold 表單已發", bool(tok))
     if tok:
         code, _ = _post(f"{FORM}/form/{tok}", {
-            "human_prompt": "文章第一行必須是 HOLD-MARK-7Q(一字不差)",
+            "human_prompt": "不用再 sleep 了,直接寫文;文章第一行必須是 HOLD-MARK-7Q(一字不差)",
             "by": EMAIL})
         check("T10: 指示提交 200", code == 200)
     check("T10: resume 後完成(SUCCESS)",
@@ -514,15 +517,16 @@ def t13(src):
     check("T13: 自動關單 → Jira Closed(不發評分表單)",
           wait("Closed", lambda: jira_state(src, t.id) == "Closed",
                timeout=180))
+    # score=agent 自評(best-effort:haiku 可能不填 → None 也合法);
+    # 硬證據=journal closed(by=auto)+ auto comment(晚 ~10s 貼,要 wait)
     d = arcp(t.id)
-    check("T13: human_score 已記(=agent 自評;by=auto)",
-          d.get("score") is not None, detail=str(d.get("score")))
-    # 精確判斷:找「帶 /form/ 連結的評分表單 comment」(deliverables 的
-    # 「稍後會發評分表單」預告文字含「評分」二字,會誤中字串比對)
+    print(f"    (human_score={d.get('score')};自評 best-effort,None 合法)")
     check("T13: 未發人工評分表單(無評分 form 連結)",
           form_token_from_comments(src, t.id, must_contain="評分") is None)
-    autos = [c for c in src.get_comments(t.id) if "auto_close" in c.body]
-    check("T13: auto_close 稽核 comment(by=auto)", bool(autos))
+    check("T13: auto_close 稽核 comment(by=auto;結案存證後才貼)",
+          wait("auto comment", lambda: any(
+              "auto_close" in c.body for c in src.get_comments(t.id)),
+               timeout=60))
 
 
 # ── T14 security continue(修訂放行半邊;T5 的另一半)────────────────── #

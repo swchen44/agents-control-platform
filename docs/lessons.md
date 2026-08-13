@@ -144,3 +144,17 @@
 - **OpenHands/ACP 陷阱**(litellm rust-wheel、90s startup timeout、批次無
   kill 窗口):`examples/openhands-acp-poc/PLAN.md` 陷阱實錄 + `COMPARISON.md`
 - **v5 設計側陷阱清單**(22 條):`docs/research/2026-08-jira-agent-harness-design-v5.md` §6
+
+## 18. 單票並發寫:舊物件 upsert 會洗掉並發指令的欄位(2026-08-13,T10 八輪)
+
+**症狀**:REST hold 明明成功,票卻照跑到完;pending:hold 閃現後消失。
+**根因**:dispatcher handle 執行緒全程拿著**進入時讀的 sess 物件**多次
+`upsert_session`(整列覆蓋)——command 執行緒(REST/表單)中途寫的
+`pending_reason`/`outcome` 在下一次 upsert 被舊值洗掉。撞出三個變體:
+spawn 前(race 閘)、attempt 完成後、**evicted 分支**(被 hold 殺掉的票
+立刻自動 resume,hold 形同虛設)。
+**修法**:關鍵分支(spawn 前兩道、evicted)`store.get_session` fresh read
+合併欄位;搶進的指令贏。**通則**:跨執行緒共享的 session 列,任何
+「先讀後寫」超過幾秒的路徑都要在寫回前重讀合併,或只寫自己擁有的欄位。
+**教訓**:這類 bug 離線測試(單執行緒 Fake)永遠抓不到——只有真 poller
++真 REST 併發會現形;整測的價值就在這裡。
