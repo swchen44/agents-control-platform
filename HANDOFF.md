@@ -120,6 +120,7 @@ pre-commit hook:`git config core.hooksPath .githooks`(ruff + 動 src/scripts 時
   決策 2026-08-12,隔離維持 seatbelt/--sandbox,provider 介面留著。)
 - ~~e2e_commands flaky~~ **已結案**(2026-08-13:三個真 bug 全修,lesson #17)。
 - KP2 整測:`--config config.test.yaml` 整組隔離;測項 `tests/it_kp2.py` T1–T8(developer-guide「重跑 integration/E2E」)。
+- **P/Q 波**(2026-08-13,設計討論 8 分支定案後實作):{crid} 插值(文本類全做/verify cmd 不做)+ 過程存證(TICKET.md 真變才附版本)+ 結案回寫(description 置頂 result 段+timeline/SESSION/transcript 附件;close 與 cancel 同規格)——正本 `docs/design/provenance.md`,KP2 真票 T9 9/9。
 - E 群真環境:**E1 codex 對照**(compare_run 四格+compare_abc 四路全綠,數據入 COMPARISON.md)與 **E2 crash→resume**(`tests/it_e2_resume.py` 雙引擎 6/6:context 傳承+不重工)已完成 2026-08-13;重跑手冊=developer-guide「重跑 E 群真環境驗證」。
 
 ## 6. 與使用者協作的規則(務必遵守)
