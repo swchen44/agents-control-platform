@@ -140,9 +140,14 @@ timeout、沒有中斷、沒有重試**;隨後讀檔回 `BUILD_RESULT: BUILD_OK`
 ```
 
 → **長前景命令執行期間 `--json` 事件流完全靜默**。對 ARCP 的直接後果:
-`stall_seconds`(預設 0=停用,`inner_runner.py`)若設成 < 最長單一命令時間,
-**好好等 build 的 agent 會被 stall watchdog killpg 誤殺**——風險 R4 對 codex
-已從推論升級為實測;claude 在長 Bash 執行期間同理(未另測)。
+`stall_seconds` 若設成 < 最長單一命令時間,**好好等 build 的 agent 會被 stall
+watchdog killpg 誤殺**——風險 R4 對 codex 已從推論升級為實測。
+
+**claude 半邊補測(2026-08-13)**:同型 prompt(前景 `sleep 90`)+
+stream-json 蓋時戳:8.7s `task_started` → 95.8s `task_notification` 之間
+**87.1 秒零事件**(總 97.9s、61 事件、rc=0 正常完成)→ **claude 同樣靜默**,
+R4 兩引擎皆實測。落地(同日):`stall_seconds` 預設改 **3600**(原 0=停用;
+`inner_runner.py`),指引=自訂必須 > 最長單一前景命令,硬上限交 `timeout_sec`。
 
 ### 實驗 5(codex 補測):`codex exec resume` 可靠性(0.142.5 重驗)
 
@@ -214,10 +219,12 @@ settings `skillOverrides` / permission `Skill(...)` deny 規則能否 pattern �
 
 ## 4. 建議修正(按性價比排序)
 
-1. **一行環境變數,整類消除 R1**:起 `run_poller.py` 的環境設
-   `CLAUDE_CODE_DISABLE_CRON=1`。rawcli 用 `subprocess.Popen` 直接繼承環境
-   (`src/arcp/rawcli/agent.py` `run()`),所有派出的 `claude -p` 自動生效,
-   **零程式改動**;要更保險可在 rawcli spawn 時顯式注入 env(小改動)。
+1. ✅ **已實作(2026-08-13)**:rawcli spawn 時顯式注入
+   `CLAUDE_CODE_DISABLE_CRON=1`(`agent.py`,claude 引擎)。同波落地:
+   建議 2(inject 守則禁令段)、3(HANDOFF 版本基準+developer-guide 冒煙節)、
+   4(stall_seconds 預設 3600+config/troubleshooting 指引)、部署衛生
+   (operator-guide/DC checklist+poller 啟動自檢);R4 claude 半邊補實測
+   (實驗 4b 補記)。
 2. **profile 模板/TICKET.md 明文禁令**(治 R2):「長時間 build/測試必須前景執行
    等到結束;禁止 run_in_background 跑交付相關工作;禁止建立任何排程或雲端任務」。
    等待的正確姿勢=前景 Bash/Monitor + `timeout_sec` ≥ 最長 build;超長工作拆
@@ -240,8 +247,7 @@ settings `skillOverrides` / permission `Skill(...)` deny 規則能否 pattern �
   Not logged in)全部於非 TTY 父行程;codex `--help` 無排程子命令;headless
   權限即時拒絕;codex 300s 前景等待、90s 事件流靜默、resume 暗號回收+跨目錄、
   `resume --sandbox` argv 坑仍在。
-- ⚠️ 推論未實測:R4 的 claude 半邊(長 Bash 期間 stream 是否同樣靜默——codex
-  已實測靜默,claude 同理推論);R5 Cloud Routine 逃逸
+- ⚠️ 推論未實測:R5 Cloud Routine 逃逸
   (機制上成立,但不宜真建雲端排程驗證);#56540 的 hang 在 2.1.206 未重現,
   無法確認是否已修(issue 為 not planned 關閉,官方無修復記錄)。
 - codex `/goal` 未實測(需 feature flag,且為互動 TUI 功能,非 exec 路徑)。

@@ -61,3 +61,6 @@
 | 401 | PAT 過期/沒帶 | 重建 PAT |
 | comment 變成一坨 JSON | flavor 沒切到 dc(還在送 ADF) | config `jira_flavor: dc` |
 | search 400 | JQL 欄位名 DC 不支援 | 調 `source.jql` |
+
+- [ ] **bot 帳號 `~/.claude` 乾淨**(無全域 skills/plugins):`claude -p` 問 available skills 只應回 workspace 注入的那幾個(開發機實測全域 45 個全量漏入=行為不可重現+每 attempt ~43k tokens 稅);poller 啟動警告未出現=過。
+- [ ] **CLI 版本對照驗證基準**(claude 2.1.206/codex 0.142.5;developer-guide「升 CLI 版前的冒煙」)。

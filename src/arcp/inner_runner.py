@@ -69,7 +69,11 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         # 舊寫法 os_sandbox: true == provider auto。runner 端欄位名不變。
         "os_sandbox": resolve_isolation(agent_cfg) == "seatbelt",
         "sandbox": agent_cfg.get("sandbox", "workspace-write"),  # codex 內建
-        "stall_seconds": agent_cfg.get("stall_seconds", 0),      # rawcli N13
+        # rawcli N13 stall watchdog。預設 3600(2026-08-13 定案;原 0=停用):
+        # 卡死一小時自動 killpg→下輪 resume。⚠️ 自訂必須 > 該 profile 最長
+        # 單一前景命令時間——長 build 期間事件流完全靜默(R4 實測),設太短
+        # 會誤殺好好等 build 的 agent;0=停用;硬上限交給 timeout_sec。
+        "stall_seconds": agent_cfg.get("stall_seconds", 3600),
         "output_schema": (CONTRACT_SCHEMA                        # G1 契約(rawcli)
                           if agent_cfg.get("output_schema") else None),
         "server_managed": agent_cfg.get("server_managed", False),  # conc.3

@@ -233,6 +233,25 @@ phase 2 只給 Write/Read 工具:claude 曾把「sleep && echo > final.txt」
 caffeinate**(使用者明令)——接電源跑,異常先查 `pmset -g log`
 (筆電睡眠會凍結計時器產生假 stall)。
 
+## 升 CLI 版前的冒煙(版本釘選)
+
+**驗證基準:claude-code 2.1.206 / codex-cli 0.142.5**(2026-08-13,研究報告
+[headless-scheduling-subagents](research/2026-08-headless-scheduling-subagents.md)
+實驗 1–6)。claude 有版本敏感 bug(#56540:某些版非 TTY 下平行 subagent
+fan-out hang 10 分鐘+)。**升版前跑一發**(~30s、$0.01):
+
+```bash
+claude -p --model haiku --output-format json \
+  "Use the Agent tool to spawn 2 subagents IN PARALLEL, each runs Bash \
+   'sleep 15' then replies done. After BOTH complete, output exactly: \
+   SUBAGENTS_DONE" < /dev/null
+# 約 30s 回 SUBAGENTS_DONE=過;卡 10 分鐘=踩到 fan-out hang,別升
+```
+
+codex 升版另驗 `exec resume`(argv 坑:`resume` 不吃 `--sandbox`,要
+`-c sandbox_mode=`——0.142.5 仍在,rawcli 已繞)。內網凍結 snapshot 記下
+兩個 CLI 版本,與本節基準對照。
+
 ## 加一個 backend
 
 1. 在 `inner_*_runner.py` 加執行單元,產出符合 `contract` 的 envelope。

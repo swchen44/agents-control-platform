@@ -91,6 +91,13 @@ Server/Introduction,明暗雙主題、離線零 CDN);L0–L3 四層 trace;transc
 - **background job 勿用 `/tmp`**(並行 job 互相 clobber → 假輸出/假 commit);
   暫存寫 `$CLAUDE_JOB_DIR/tmp`;git 狀態用 object store 真值驗證
   (`cat .git/refs/heads/main`、`git show HEAD:<檔>`、`git ls-remote`)。
+- **CLI 版本基準 claude 2.1.206 / codex 0.142.5**(2026-08-13 實驗 1–6 驗證;
+  升版先跑 developer-guide「升 CLI 版前的冒煙」防 #56540 fan-out hang)。
+- **headless「之後才發生」機制風險**(研究實測):session 排程隨行程死亡且無錯誤
+  →rawcli 已注入 `CLAUDE_CODE_DISABLE_CRON=1`;背景 Bash 主回覆後 ~5s 被殺
+  →inject 守則明文禁;長前景命令期間事件流**完全靜默**(claude 87s/codex 90s)
+  →stall_seconds 預設 3600、自訂必須>最長單一命令;全域 ~/.claude skills 全量
+  漏入(R7)→生產機乾淨 HOME+poller 啟動自檢。
 - Jira 環境:Atlassian **Cloud** swchen44、project key=SCRUM、憑證 `~/.env`;
   **內網生產是 Data Center**(無 accountId)→ 相容已做(主題 L,`jira_flavor: dc`);整測用 KP2 project(SCRUM 不再用)。
 

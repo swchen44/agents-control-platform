@@ -137,8 +137,13 @@ class RawCLIAgent:
         if self.os_sandbox and self.engine == "claude":
             cmd = ["sandbox-exec", "-f", self._write_sandbox_profile(wd)] + cmd
         raw_f = open(self.raw_events_path, "w") if self.raw_events_path else None
+        env = os.environ.copy()
+        if self.engine == "claude":
+            # R1(研究 2026-08 實測):session 排程(cron/loop)隨行程死亡且
+            # 無任何錯誤訊號 → 整類禁用;=1 對正常任務結果零影響(已實測)。
+            env["CLAUDE_CODE_DISABLE_CRON"] = "1"
         proc = subprocess.Popen(
-            cmd, cwd=wd,
+            cmd, cwd=wd, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL, text=True, bufsize=1,
             start_new_session=True)

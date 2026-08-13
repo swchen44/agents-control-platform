@@ -244,6 +244,17 @@ def main(argv: list[str] | None = None) -> int:
     # W6.4:移除定時快照器(耗資源)。transcript 改純事件觸發(換手/交人/
     # evict/close 由 dispatcher·commands 呼 finalize)+ 被動按鈕(control
     # POST /gen_transcript/<id>)。決策見 requirements.md §10.3。
+    # R7 部署衛生自檢(研究 2026-08 實測):本機全域 ~/.claude 的 skills/plugins
+    # 會「全量」漏入每個 claude attempt(行為擾動 + 每次 ~43k tokens context 稅;
+    # 訂閱登入下無 CLI 開關可擋)。生產機請用乾淨 HOME(bot 帳號不裝全域資產)。
+    _leaks = [d for d in ("~/.claude/skills", "~/.claude/plugins")
+              if os.path.isdir(os.path.expanduser(d))
+              and os.listdir(os.path.expanduser(d))]
+    if _leaks:
+        print(f"[poller] ⚠️ 全域 {'/'.join(_leaks)} 非空——內容會漏入每個 "
+              f"claude attempt(行為擾動+context 稅)。生產機請清空;"
+              f"開發機請自知結果帶擾動。", flush=True)
+
     print(f"[poller] control API on http://{ctl.get('host', '127.0.0.1')}:"
           f"{api.port} (/status /health /pause /resume /reload)", flush=True)
 

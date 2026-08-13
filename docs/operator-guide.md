@@ -317,6 +317,10 @@ agent 只讀工作區的 TICKET.md(不連 Jira)。資訊進得去的通道只有
   `--host 127.0.0.1`、control 設 `config.yaml` 的 `source.control.host: 127.0.0.1`。
   這是信任邊界的取捨,見 [requirements §7](requirements.md)。
 - 憑證只在 `~/.env`,永不進 git、dashboard 只顯示「有/無/到期」不顯示值。
+- **部署衛生(R7)**:跑 poller 的機器/帳號,**`~/.claude` 保持乾淨**(不裝任何
+  全域 skill/plugin)——全域資產會**全量漏入每個 claude attempt**(行為擾動+
+  每次 ~43k tokens context 稅;訂閱登入下無 CLI 開關可擋,實測)。poller 啟動
+  時偵測到非空會印警告。全域層視為部署資產管理。
 - 互動表單的一次性 token 是機密,勿記入共用日誌。
 
 ## 9. 升級/改動後複驗

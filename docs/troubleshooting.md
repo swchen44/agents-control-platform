@@ -74,6 +74,10 @@
 - **時間線有超長間隔但無異常事件**:可能是**筆電睡眠凍結計時器**造成的假 stall/假
   hang(見 [LESSONS 索引](lessons.md) + memory)。查 `pmset -g log` 對照時段;⚠️**不要**
   用 caffeinate(耗電),睡醒能續跑。
+- **agent 等長 build/測試時被驅逐(evict)**:`stall_seconds` 設得比「最長單一
+  前景命令」短——長命令執行期間事件流**完全靜默**(claude/codex 皆實測),
+  watchdog 誤判卡死。解法:調大(> 最長命令)或設 0 停用;預設 3600。
+  卡死的硬上限本來就由 `timeout_sec` 管。
 - **在票上留言了但 agent 沒反應**:**留言不會進 agent 的 TICKET.md**(M2 起,防未
   稽核文字繞過安全掃描)。要補資訊/改方向:用指令台 `hold` → 填表單(文字會進
   TICKET.md「人類指示」段)。agent 實際看到什麼:ticket 頁駕駛艙卡展開 TICKET.md

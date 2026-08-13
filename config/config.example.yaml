@@ -79,6 +79,10 @@ inner_loop:
         os_sandbox: true
         sandbox: workspace-write
         timeout_sec: 300
+        # stall_seconds: 3600  # 卡死偵測:此秒數內事件流零輸出 → killpg→下輪
+        #   resume(不耗 attempt)。預設 3600;0=停用。⚠️ 自訂必須 > 本 profile
+        #   最長單一前景命令時間——長 build 期間事件流「完全靜默」(claude 87s/
+        #   codex 90s 皆實測),設太短會誤殺好好等 build 的 agent。
       verify:
         - name: task-done
           files:
