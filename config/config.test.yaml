@@ -155,12 +155,6 @@ outer_loop:
       profile: kp2-auto
       on_match: create_or_resume
 
-    - name: kp2-browser              # B 案:agent+browser skill 驗收 web 頁
-      when:
-        labels: ['arcp.browser']
-      profile: kp2-browser
-      on_match: create_or_resume
-
     - name: kp2-creview              # KP2 整測:C code review
       when:
         labels: ['arcp.creview']
@@ -232,29 +226,6 @@ outer_loop:
 # agent: 區塊獨立 —— B→C 換執行單元只改這一塊(B 期守則 2)。
 inner_loop:
   profiles:
-    kp2-browser:                   # B 案(2026-08-13):browser E2E 的內網替代
-      goal: '照描述 checklist 用 agent-browser 驗收頁面,產 REPORT.md+截圖'
-      workspace:
-        template: empty
-        folder: 'tickets/{agent}__{key}__{issue_id}'
-        common_skills: [browser-verify]
-      skills: []
-      agent:
-        backend: rawcli
-        engine: claude
-        model: haiku
-        os_sandbox: false            # CDP/Chrome/~/.agent-browser 寫入,seatbelt 會擋
-        allowed_tools: ['Write', 'Read', 'Bash(agent-browser:*)']
-        timeout_sec: 600
-      verify:
-        - name: report
-          files:
-            REPORT.md: null          # 存在即可;判定品質交人看報告
-      loop:
-        max_attempts: 2
-        on_unknown: pending
-      human_minutes_est: 30
-
     kp2-lowbud:                    # it T11:budget 全程(cmd false 保證第二輪,
       goal: '依描述回覆'            #   attempt2 precheck 卡 soft→表單調高→resume)
       workspace:

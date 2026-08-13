@@ -22,9 +22,6 @@ config.yaml / runtime/ 完全隔離,詳 docs/developer-guide.md「重跑整測�
   T9 P/Q 波:description {crid} 插值進 TICKET.md、TICKET.md 版本附件(2A)、
      close 後 description 置頂 result 段 + timeline/SESSION/transcript 附件(2B/2C)
 
-  T15 B 案:agent+agent-browser 驗收 web 頁(內網無 Claude in Chrome 的
-     替代;kp2-browser profile,REPORT.md+截圖,需 npm 裝 agent-browser)
-
 測試票留在 KP2(標題帶 [it]/[job])供看板與 browser E2E 檢視;重跑會開新票。
 """
 from __future__ import annotations
@@ -573,41 +570,6 @@ def t14(src):
                {"cmd": "cancel", "by": EMAIL, "args": {"confirm": True}})
 
 
-# ── T15 B 案:agent+browser skill 驗收 web(內網無 Claude in Chrome 的替代)─ #
-def t15(src):
-    print("== T15 agent+agent-browser 驗收 dashboard(REPORT.md+截圖)==")
-    t = src.create_ticket(
-        "KP2", "[it] T15 browser 驗收",
-        f"email: {EMAIL}\n\n"
-        "用 agent-browser 逐項驗收(照 browser-verify skill 的約定產 REPORT.md):\n"
-        "B-a. http://127.0.0.1:8798/ 首頁應有「KPI · 北極星+制衡」區塊與"
-        "「A/B 對照」區塊。\n"
-        "B-b. http://127.0.0.1:8798/ticket/10084 的「一次性連結」表應有"
-        "提交時間/提交者/IP 三個欄位,且有一列 hold 顯示提交者 email。\n"
-        "B-c. http://127.0.0.1:8798/concepts 應有「等人的全部狀況」表格"
-        "(含 approval/security/budget/hold 等原因列)。",
-        issue_type_id=TASK_TYPE, labels=["arcp.browser"])
-    print(f"    建票 {t.key}(id={t.id})")
-    check("T15: agent SUCCESS(REPORT.md 產出)",
-          wait("SUCCESS", lambda: arcp(t.id).get("outcome") == "SUCCESS",
-               timeout=600))
-    ws = arcp(t.id).get("workspace") or ""
-    rp = os.path.join(ws, "REPORT.md")
-    txt = open(rp, encoding="utf-8").read() if os.path.isfile(rp) else ""
-    print("    REPORT 摘要:", " | ".join(
-        line for line in txt.splitlines() if "RESULT" in line or "## " in line)[:300])
-    check("T15: REPORT.md 有逐項判定與 RESULT 總結行",
-          "RESULT:" in txt and "PASS" in txt, detail=txt[:200])
-    check("T15: 三項全 PASS(0 FAIL)", "0 FAIL" in txt, detail=txt[-200:])
-    shots = [f for f in os.listdir(ws) if f.endswith(".png")] if ws else []
-    check("T15: 至少三張截圖存證", len(shots) >= 3, detail=str(shots))
-    tok = wait("評分表單", lambda: form_token_from_comments(
-        src, t.id, must_contain="評分"), timeout=180)
-    if tok:
-        _post(f"{FORM}/form/{tok}", {
-            "human_score": "9", "close_decision": "close", "by": EMAIL})
-
-
 # ── T9 P/Q 波:{crid} 插值 + 過程存證 + 結案回寫 ─────────────────────── #
 def t9(src):
     print("== T9 P/Q:插值({crid})+ TICKET.md 存證 + 結案結果區/附件 ==")
@@ -699,8 +661,6 @@ def main():
         t13(src)
     if "T14" in picks:                  # 安全審 continue 修訂放行(T5 另一半)
         t14(src)
-    if "T15" in picks:                  # B 案:agent+agent-browser 驗收 web
-        t15(src)
     print(f"\nit-kp2: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok + fail})")
     return 1 if fail else 0
 

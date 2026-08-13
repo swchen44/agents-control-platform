@@ -1,12 +1,3 @@
-> **內網替代(B 案,2026-08-13 已實測)**:公司內無 Claude in Chrome →
-> 改用 **agent+browser skill** 驗:`config/skills/browser-verify/`(教 agent
-> 用 `agent-browser` CLI)+ profile `kp2-browser`(allowed_tools 放行
-> `Bash(agent-browser:*)`)。開一張 `arcp.browser` 票、description 寫
-> checklist → agent 自己開頁/截圖/產 REPORT.md;自動化版=`it_kp2.py T15`
-> (真票 4/4)。依賴:`npm i -g agent-browser && agent-browser install`
-> (內網預帶 node+Chromium)。本檔的人工 checklist 仍適用於有 Claude in
-> Chrome 的開發機。
-
 # KP2 browser E2E checklist(看畫面驗 REST 驗不到的)
 
 > 搭配 `tests/it_kp2.py`(REST integration 主力)使用:REST 驗資料正確,
