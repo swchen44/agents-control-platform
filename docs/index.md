@@ -14,6 +14,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 | **改程式的開發者** | [開發者手冊](developer-guide.md) — 架構、模組、測試、加 backend/profile、CI/CD |
 | **想看全貌** | [專案檔案介紹](project-overview.md) — 目錄地圖、每個檔案在幹嘛 |
 | **想先看一條路徑跑完** | [走一遍:CR→票→triage→claude code](walkthrough-cr-to-agent.md) — 用一個場景串起 label/status/watch/session/config |
+| **互動用得順、要搬進 ARCP** | [從互動到 headless 遷移指南](interactive-to-headless.md) — 差異總表、遷移 checklist、教訓與 profile 對應 |
 | **想懂「為什麼這樣設計」** | [需求與理由](requirements.md) — 每個能力的 What / Why / 現狀 |
 | **想懂重大決策** | [決策記錄](decisions.md) — 關鍵取捨與理由(ADR-lite) |
 | **想看研究與對照** | [Research](research/README.md) — 研究/實驗的結論比較文章 + 原始長文 |

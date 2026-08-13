@@ -11,6 +11,10 @@
 
 **你用既有的 Jira 操作**(開票、貼標籤、留言、填表單、關單)就能指揮一支 agent 大軍。
 
+> 已經在終端機**互動**用 Claude Code / Codex、想把同樣用法搬進 ARCP?先讀
+> [從互動到 headless 遷移指南](interactive-to-headless.md) —— 互動與 headless
+> 的行為差異(權限/排程/背景工作)、遷移 checklist、profile 對應速查。
+
 ## 2. 安裝
 
 需要 Python ≥ 3.10 與 [uv](https://github.com/astral-sh/uv)。
