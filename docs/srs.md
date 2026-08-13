@@ -10,7 +10,8 @@
 > **✅ 已實作且實測**(PoC 內 CI 綠/真 Jira 驗過)、**◐ 部分完成**、
 > **📐 設計已定、程式未接**、**🔮 第二期(未來需求)**、**❌ 明確不做**(刻意排除,推翻需知情)。
 >
-> 依據:`docs/requirements.md`(What/Why 正本)、`docs/decisions.md`(D1–D14)、
+> 依據:原始需求口述稿(L0–L4 賦能階梯、L2→L3 Agent Architecture、agent 艦隊)、
+> `docs/requirements.md`(What/Why 正本)、`docs/decisions.md`(D1–D14)、
 > `docs/design/*`(18 份機制設計)、`docs/lessons.md`(17 條實測教訓)、`BACKLOG.md`、
 > 三份操作手冊與 `docs/research/`(實驗釘住的事實)。追溯表見 §12。2026-08-13。
 
@@ -18,9 +19,40 @@
 
 ## 1. 問題陳述與系統目標
 
-### 1.1 Before(現況痛點)
+### 1.1 背景:AI 賦能成熟度階梯(L0–L4)與本平台的定位
 
-`claude -p` / `codex exec` 這類 **headless coding agent** 已能實際完成工程任務,但直接拿來用有六個結構性缺口:
+| 階段 | 名稱 | 樣貌 |
+|---|---|---|
+| L0 | 手工作業 | 所有工作由人執行,沒有 AI 協助 |
+| L1 | 個人 AI 賦能 | 員工自行使用 ChatGPT / Codex / Gemini / Claude 提高個人效率 |
+| L2 | 技能可複用 | 有效的提示詞/工具/AI 技能整理成可共用資產(**Jarvis** skills),讓更多人重複使用 |
+| **L3** | **流程化整合** | **AI 導入 CI/CD、SQC 等正式流程,由事件自動觸發執行** |
+| L4 | 自主閉環 | AI 執行任務、檢查結果、持續運作;只有異常或需人判斷時才交人 |
+
+人員角色隨階梯從「執行者」轉為「AI 協作者 → 操作員 → 治理者」;AI 從個人工具發展成
+**可規模化、可驗證、可自動運行的流程能力**。
+
+**本平台的定位:L2 → L3 的承載層。** 我們已有一批在 L2 驗證有效的 agent 技能
+(Jarvis,於 Claude Code / Codex **互動模式**下開發打磨);要讓它們進入 L3(事件
+驅動、無人值守、進正式流程),中間隔著三個斷層(§1.2),而這些斷層對**每一個**要上
+L3 的 agent 都一樣——所以答案是**一個共用平台**,不是每個 agent 團隊各自解一遍。
+(兩張手繪風資訊圖卡版見 [docs/l2-l3-infographic.html](l2-l3-infographic.html)。)
+
+### 1.2 Before(現況痛點)
+
+**L2 → L3 的三個斷層**——把互動模式用得很好的 agent 搬進非互動,必然遇到:
+
+1. **工作模式改變**:互動 → 非互動,agent 變**黑盒子**。看不到中間狀態、無法中途
+   介入(補 log、加需求、最後把關),出錯只能等它跑完才知道。
+2. **執行環境改變**:Claude Code / Codex 自帶 harness engineering(上下文管理、
+   工具編排、permission 體系)——L2 的好結果有一大半是它們給的。若 L3 改用裸 SDK
+   直連 model,這層能力**不會自動跟過去**,等於把已驗證的 skills 重新 debug、
+   重新開發一次。
+3. **部署流程改變**:每個 agent 要上 L3,都得跟公司 agent flow 把**同一批問題**
+   (debuggability、traceability、人機協作、resume、成本控管)重新討論一次——
+   N 個 agent × 同一張問題清單 = 大量重複溝通與重工。
+
+疊加 headless coding agent 自身的六個結構性缺口:
 
 1. **不可靠**:行程 crash、假完成(agent 自稱 done / exit code=0 但任務沒做完——codex 收 SIGTERM 也回 rc=0)、卡住無人知。
 2. **不可觀測**:跑了什麼、花了多少錢、卡在哪一步,事後無從稽核。
@@ -29,7 +61,7 @@
 5. **人機協作無介面**:需要人補資訊/審批/評分時,只能靠口頭或 free-text 留言,易錯、不可稽核。
 6. **成本不受控**:模型費用沒有上限機制(單票/月/全站),一個失控迴圈就燒掉預算。
 
-### 1.2 After(目標圖像)
+### 1.3 After(目標圖像)
 
 **你在 Jira 開票(或貼標籤)→ 系統看到 → 派一個 headless agent 去做 → 在隔離
 workspace 執行、產出證據 → 確定性驗證(grader)過才算成功 → 需要人時 agent 在票上
@@ -37,13 +69,43 @@ workspace 執行、產出證據 → 確定性驗證(grader)過才算成功 → �
 人用**既有的 Jira 操作**(開票、貼標籤、填表單、關單)就能指揮一支 agent 大軍,
 全程可稽核、可回放、花費受控。
 
-### 1.3 世界觀(最高層設計立場,D1)
+### 1.4 為什麼需要「共用平台」(給評估團隊的核心論證)
+
+1. **斷層是平台性的,不是 agent 性的**:§1.2 的三斷層+六缺口,對 scan、fix、dev
+   每一種 agent 完全相同。平台解一次,所有 agent 受益;不做平台,就是 N 個團隊
+   各自重新發明監控、resume、表單、預算、稽核。§6.0 的艦隊對照表把這件事量化。
+2. **保留 L2 資產,不掉進斷層 2**:平台直接以 `claude -p` / `codex exec` 為執行
+   單元(rawcli),**完整沿用** Claude Code/Codex 的 harness engineering 與既有
+   Jarvis skills——L2 打磨好的東西原封搬進 L3,不必改寫成裸 SDK 重來。
+3. **把非互動黑盒子重新打開,補回斷層 1**:四層 trace + dashboard 讓「看不到」
+   變「全程可回放」;一次性表單 + 指令台讓「插不了手」變「隨時可補資訊、改方向、
+   中斷、換人」——互動模式失去的能力在平台層還回來。
+4. **上線流程標準化,消滅斷層 3**:新 agent 上 L3 = 一個 profile(yaml)+ 一個
+   label + verify 規則。debuggability/traceability/人機協作那張問題清單,由平台
+   統一回答,不用每個 agent 團隊重談。
+5. **L4 的地基現在就要打**:Jira 上留存的人類介入紀錄(何時介入、為什麼、給了
+   什麼指示)+ 全量 session log,就是未來 Evolution Agent 學習「怎麼讓人不用
+   介入」的素材。不上平台,這些數據散落各處、永遠收不回來。
+
+### 1.5 世界觀:為什麼用 Jira 當紀錄機制(D1)
 
 **Jira = 對外的工作日誌 + System of Record;Agent 以「員工」身分**接單 → 做事 →
 更新進度 → 回報成果讓人評分關單,並像員工一樣被究責(assignee 恆掛它)。真正的工作與
 完整細節在後台(workspace = 工作台;dashboard/transcript = 飛行記錄器);Jira 只承載
 **經策展的摘要、決策、結果與連結**。此立場衍生出:assignee 恆定、受控表單、單一寫入者、
 hash 稽核——全是為把 Jira 維持成**可信可稽核的日誌**而非 free-text 聊天室。
+
+具體來說,Jira 作為紀錄機制承載七件事:
+
+| # | 用途 | 對應能力 |
+|---|---|---|
+| 1 | 留存 status 供 monitor / kanban | 狀態同步(FR-39)、dashboard |
+| 2 | assignee / @mention 承載人機互動與 agent 間互動 | HIL(FR-19–24)、交接(FR-25) |
+| 3 | 留存 context id 供 resume(不重工) | native resume(FR-14) |
+| 4 | 算效率與效益(每票花費/省時/評分) | KPI(FR-36)、效益公式(US-K7) |
+| 5 | debuggability / traceability 的單一入口 | 四層 trace(FR-32)、存證上票 |
+| 6 | lessons learned 沉澱 | 結案結果區 + 附件回放 |
+| 7 | **L4 伏筆**:人類為何介入的 log,供 agent 日後自我進化 | Evolution Agent(§11) |
 
 ---
 
@@ -67,7 +129,12 @@ hash 稽核——全是為把 Jira 維持成**可信可稽核的日誌**而非 f
 | **指令台** | 綁票的常駐指令網頁(run/retry/hold/stop/cancel/next/set_email) |
 | **journal** | append-only 事件流 `events.jsonl`(53 種事件),歷史真相 |
 | **store** | SQLite `harness.db`(4 表),當下狀態與冪等記憶,**絕不 wipe** |
-| **CR / ClearQuest(CQ)** | 公司內部 issue 系統;CR 是 Jira 票的上游來源之一(`crid` 關聯) |
+| **CR / WITS / ClearQuest(CQ)** | 公司內部 issue tracking(QA/客戶來源),單位=**CR**(有 CR 編號);口述需求稱 **WITS**,PoC 程式與文件以 ClearQuest/CQ 代稱**同一角色**;CR 是 Jira 票的上游來源(`crid` 關聯) |
+| **L0–L4** | AI 賦能成熟度階梯(手工→個人賦能→技能複用→流程化整合→自主閉環);本平台=L2→L3 承載層(§1.1) |
+| **Jarvis** | 公司內部 L2 技能資產(可複用的 agent skills),於 Claude Code/Codex 互動模式下開發 |
+| **daemon agent** | 常駐調度者:watch WITS/Jira、分類、開票、喚醒 non-interactive agent、監控卡住/異常——此角色由**平台本體**(poller/routing/triage/dispatcher/triggers)實作,不必每個團隊自寫 while loop |
+| **non-interactive agent** | headless 執行單元(`claude -p`/`codex exec` + workspace + skills);context 限於單一 ticket、可 resume;被 daemon agent 呼叫 |
+| **internal-agent loop / cross-agent loop** | agent 行程**內**的自迴圈(sub-agent、前景等待)vs 由平台「喚醒→留言 ticket→resume」的**跨行程**迴圈;長流程監控定案用 cross-agent(見 §6.0) |
 
 ---
 
@@ -133,6 +200,54 @@ hash 稽核——全是為把 Jira 維持成**可信可稽核的日誌**而非 f
 ---
 
 ## 6. 使用場景(Before / After)
+
+### 6.0 第一波 agent 艦隊(目標應用圖像)
+
+> 平台要承載的具體 agent 清單(源自原始需求口述)。重點不在單一 agent 多強,而在
+> **共通需求**:每一列都需要同一批平台能力——這就是「做一個平台,而不是每個 agent
+> 各自解」的量化理由。
+
+| Agent | 類型 | 輸入 | 產出 | 特殊需求 |
+|---|---|---|---|---|
+| **Assignment Agent** | daemon | watch WITS/Jira(REST/websocket;可由 Jenkins/人驅動) | 依 keyword/CR 分類(新 feature / SQC / HQA / 客戶)→ 開 Jira 票、指派 agent、fork 呼叫、監控卡住/資訊更新/重啟/異常、收 session log | **= 平台本體**:poller/routing/triage/dispatcher/triggers 已實作此角色 |
+| **Security Scan Agent** | 排程 scan | 排程掃 codebase | 掃 coding quality bug → 發 WITS CR | **不重複掃、不重複發**(去重) |
+| **Quality Scan Agent** | 排程 scan | 同上 | 同上 | 同上 |
+| **Memslim Scan Agent** | 排程 scan | 排程掃 memory size | 發 WITS CR | 同上 |
+| **Fuzz fix Agent** | fix | ticket/CR 編號 | analysis report + code patch + UT/IT report | 實驗:x86、wut;CI/CD |
+| **Cov fix Agent** | fix | ticket/CR 編號 | 同上 | 實驗:x86、local scan;CI/CD;preflight 可 trigger Coverity |
+| **Memslim fix Agent** | fix | ticket/CR 編號 | 同上 | 實驗:x86、build;CI/CD |
+| **Phy regression fix Agent** | fix | ticket/CR 編號 | 同上 | **夾版本**;控制實體設備(快車/autout/connsysplant) |
+| **Performance fix Agent** | fix | ticket/CR 編號 | 同上 | 同上 |
+| **專業 Dev Agent** | dev(無標準答案) | system requirement / spec / standard / HW SRS·SDS | FRD、SW SRS/SDS、code patch、analysis/UT/IT report | 設計 test case;需人審批與評分把關 |
+| **Evolution Agent** | L4(遠期) | ticket/CR status、session log、gerrit | 找出做不完/中斷的問題 → 計畫修改/增加/實驗,強化 scan/fix/dev 的 skills | 依賴平台留存的人類介入紀錄(§1.5 第 7 點) |
+
+agent 分三類心智模型:**scan**(找問題,發 CR)、**fix**(有標準答案地解問題)、
+**dev**(沒有清楚標準答案,人把關比重高)。各專業領域 agent 自行安裝不同 skills
+(拆成 flow skill + 共用 skill;工作量大時傾向開 **sub-agent** 而非跨 agent——
+跨 agent overhead 高,sub-agent 才能共享 context)。
+
+**共通需求 → 平台能力對照**(每個 agent 都要,平台一次提供):
+
+| 每個 agent 都需要 | 平台能力(FR) |
+|---|---|
+| 吃 ticket/CR 編號、關聯來源、用 CR 號查回票 | FR-05(crid 契約 + 三合一查詢) |
+| scan 類「不重複掃/不重複發」 | FR-05 crid 去重 + FR-02 watermark |
+| 產出三件套(analysis/patch/report)且可驗收 | FR-11 verify(證據型停止)+ FR-22 交付物駕駛艙 |
+| 進 CI/CD / preflight 的長等待與監控 | FR-15 timeout/stall + cross-agent loop(下述定案) |
+| 中途要人:補 log/需求、決策、review+submit | FR-19–24 HIL 表單(Normal flow=場景 S1/S6;Except flow=S3) |
+| 人下完指示切回機器人、從原 context 續跑 | FR-14 native resume(context id 存 Jira/DB) |
+| 做不動換人/換方法 | FR-25 交接(=cross-agent loop 的「轉給 Assignment 再派」) |
+| 每次執行的 session/sub-session log 留存 | FR-32 四層 trace + FR-35 transcript |
+| 花費不失控 | FR-30 六層預算 |
+| 各自的專業 skills、設備控制工具 | FR-08 workspace(common_skills 選子集、install 腳本) |
+
+**Loop engineering 定案**(原始需求中的兩案抉擇,已被平台實驗定讞):監控 CI/CD 這類
+長流程,(a)agent 行程內開 timer(internal-agent loop)vs(b)由 WITS/Jira 監控
+engine 定期喚醒(cross-agent loop)。**定案 (b)**——與原始需求的偏好一致,且有硬
+證據:headless 行程內建立的排程「回報成功,但行程一退出就靜默失效、永不執行」
+(研究報告實驗 3),行程內 timer 在非互動模式**根本不成立**。正確形狀=平台喚醒 →
+agent 檢查 → 更新/留言 ticket → resume。行程內只允許**前景等待**(實驗 4:codex
+前景等 5 分鐘 build 可行)與 **sub-agent fan-out**(實驗 1:claude 會等全部完成)。
 
 > 每個場景:**Before**(沒有系統時人怎麼受苦)→ **After**(系統行為,含關鍵事件)→ 涉及的 Epic。
 
@@ -469,7 +584,8 @@ hash 稽核——全是為把 Jira 維持成**可信可稽核的日誌**而非 f
 | 項 | 內容 | 前置/阻塞 |
 |---|---|---|
 | **I1** close→CQ 回寫(所有 close;`cq_writeback` 擴充點已留) | ⛔ CQ base_url+欄位名 |
-| **R9** ClearQuest 觸發源(掃 CR 命中→建資料夾+開票+記 crid;類比 Jira poller) | CQ API 存取 |
+| **R9** WITS/ClearQuest 觸發源(掃 CR 命中 title/人名/keyword→開票+記 crid;類比 Jira poller) | CQ/WITS API 存取 |
+| **L4 Evolution Agent** 讀 ticket/CR status+session log+gerrit,找出做不完/中斷問題,計畫修改/增加/實驗,強化 scan/fix/dev agents 的 skills(自主閉環) | 平台留存的人類介入紀錄與四層 trace(先上平台是前置) |
 | **A1** SQLite→Postgres+leased queue(lease/heartbeat/reaper,參考 qm) | 多機生產需求成立時 |
 | **B1** 真 Jira Server/DC 站首驗(checklist 已備;mention 通知最關鍵) | 公司環境 |
 | **B2** Agent Status/Link 自訂欄位+transition condition | Jira admin 權限 |
@@ -485,6 +601,7 @@ hash 稽核——全是為把 Jira 維持成**可信可稽核的日誌**而非 f
 
 | 本書章節 | 正本文件 |
 |---|---|
+| §1.1–1.2 階梯與斷層/§6.0 艦隊 | 原始需求口述稿(2026-08,L2→L3 Agent Architecture)+ 手繪資訊圖卡 [`docs/l2-l3-infographic.html`](l2-l3-infographic.html) |
 | §1 世界觀/§5 約束 | `docs/decisions.md`(D1–D14)、`docs/requirements.md` §0 |
 | §6 場景 | `docs/walkthrough-cr-to-agent.md`、`docs/user-guide.md`、`docs/operator-guide.md` |
 | §7 Epic A–M | `docs/requirements.md` §1–15 + `docs/design/`(lifecycle/architecture/interaction/workspace/selection/budget/identity-gate/agent-output/observability/database/hotreload/kpi/security-scan/jira-dc/provenance/idempotency/isolation/transcript) |
