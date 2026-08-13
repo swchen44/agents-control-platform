@@ -58,7 +58,9 @@ def main() -> int:
             sandbox=job.get("sandbox", "workspace-write"),    # codex --sandbox
             stall_seconds=float(job.get("stall_seconds", 0)),  # N13 watchdog
             evict_file=job.get("evict_file"),                # E3 實時 killpg
-            output_schema=job.get("output_schema"))            # G1 契約(dict|None)
+            output_schema=job.get("output_schema"),            # G1 契約(dict|None)
+            # per-profile 工具白名單(B 案:browser 驗收放行 agent-browser)
+            allowed_tools=job.get("allowed_tools"))
         agent.run(job["prompt"], os.path.abspath(job["ws"]), capture)
         # completed = terminal event seen (not just process ended); a crash
         # kills the child before the terminal event → completed False

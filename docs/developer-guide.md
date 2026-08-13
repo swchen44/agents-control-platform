@@ -171,7 +171,9 @@ uv run python scripts/detail_server.py --config config.test.yaml \
 #    T5 安全掃描需 scanner 已裝、T6 審批門放行全程 → 手動指定)
 uv run python tests/it_kp2.py            # 預設 T1–T4
 uv run python tests/it_kp2.py T5 T6 T9   # 進階測項(T9=插值+存證+結案回寫)
-# 4. browser E2E(看畫面,REST 驗不到的):照 tests/e2e_kp2_browser.md 逐項
+# 4. browser E2E(看畫面):有 Claude in Chrome 照 tests/e2e_kp2_browser.md;
+#    沒有(內網)→ agent 自驗:uv run python tests/it_kp2.py T15
+#    (kp2-browser profile+agent-browser CLI;依賴 npm i -g agent-browser)
 ```
 
 注意:

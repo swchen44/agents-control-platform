@@ -69,6 +69,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         # 舊寫法 os_sandbox: true == provider auto。runner 端欄位名不變。
         "os_sandbox": resolve_isolation(agent_cfg) == "seatbelt",
         "sandbox": agent_cfg.get("sandbox", "workspace-write"),  # codex 內建
+        # per-profile claude 工具白名單(list;未設=None→rawcli 預設)
+        "allowed_tools": agent_cfg.get("allowed_tools"),
         # rawcli N13 stall watchdog。預設 3600(2026-08-13 定案;原 0=停用):
         # 卡死一小時自動 killpg→下輪 resume。⚠️ 自訂必須 > 該 profile 最長
         # 單一前景命令時間——長 build 期間事件流完全靜默(R4 實測),設太短
