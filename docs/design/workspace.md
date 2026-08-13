@@ -134,6 +134,11 @@ agent prompt(dispatcher `BASE_PROMPT`)第一句就是「請先閱讀工作目錄
 | 安全審修訂 | 描述(整段取代) | 人(security_review 表單的可修文字框) |
 | 跨票交接(base) | `ws/BASE_<key>/`(前票 TICKET.md+envelope+HANDOFF.md)+ 人類指示段加一行指路 | harness(`inject_base_context`) |
 
+**變數插值(P 波,2026-08-13)**:goal/描述/人類指示與 ws 根的 CLAUDE.md/
+AGENTS.md 中的 `{crid}` `{email}` `{prompt}` `{key}` 渲染時代入實際值
+(`workspace.interpolate`;未知占位符保留原樣;**verify cmd 不代入**——注入
+防護)。詳 [provenance.md](provenance.md)。
+
 **M2 起不含「最新留言」段**——人類指示的正式通道是 HIL 表單(寫進 sidecar),
 留言不再餵給 agent(避免未經驗證的自由文字繞過安全掃描與稽核)。
 

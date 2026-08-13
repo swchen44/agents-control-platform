@@ -94,11 +94,13 @@ class ScoreGate:
     def __init__(self, source, store, base_url: str = "", mention: str = "",
                  interval_sec: float = REMIND_INTERVAL_SEC, ttl_sec: float = 0.0,
                  stall_after: int = STALL_REMINDERS, self_score_fn=None,
-                 profiles_fn=None, jira_base_url: str = ""):
+                 profiles_fn=None, jira_base_url: str = "",
+                 dashboard_url: str = ""):
         self.source = source
         self.store = store
         self.base_url = base_url                 # 表單服務 base(人開連結用)
         self.base_url_jira = jira_base_url       # Jira base(組 /browse/<key> 連結)
+        self.dashboard_url = dashboard_url       # Q 波:結案回寫 ticket 連結用
         self.mention = mention
         self.interval = interval_sec
         self.ttl = ttl_sec
@@ -127,6 +129,10 @@ class ScoreGate:
             evs.append(self.store.journal(
                 "closed", ticket.id, ticket.key, by="auto",
                 outcome=session.outcome, agent_score=ascore, human_score=ascore))
+            from .provenance import finalize_provenance  # Q 波:auto_close 同規格
+            evs.extend(finalize_provenance(
+                self.source, self.store, session, ticket.id, ticket.key,
+                dashboard_url=self.dashboard_url, now=now))
         self.source.add_comment(ticket.id, (
             f"[agent] auto_close:outcome={session.outcome}、human_score="
             f"agent 自評={ascore if ascore is not None else '—'}/10、"

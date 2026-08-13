@@ -125,7 +125,8 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
                   args: dict | None = None, by: str = "", *,
                   base_url: str = "", mention: str = "",
                   ip: str = "", user_map: dict | None = None,
-                  username_rule: str = "") -> tuple[bool, str, list]:
+                  username_rule: str = "",
+                  dashboard_url: str = "") -> tuple[bool, str, list]:
     """執行一個指令(人的表單 console 與自動化 REST API 共用的唯一核心)。
 
     回 (ok, 人看的結果訊息, events)。by=提交者身分(email,稽核)、ip=來源 IP(稽核)。
@@ -238,6 +239,9 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
     if cmd == "cancel":
         evs.append(store.journal("aborted", issue_id, key,
                                  reason="cancel", author=by))
+        from .provenance import finalize_provenance  # Q 波:cancel 也留結案存證
+        evs.extend(finalize_provenance(source, store, sess, issue_id, key,
+                                       dashboard_url=dashboard_url))
     return True, f"已執行:{cmd}。", evs
 
 

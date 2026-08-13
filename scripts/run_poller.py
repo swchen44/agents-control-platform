@@ -179,6 +179,8 @@ def main(argv: list[str] | None = None) -> int:
     disp.username_rule = source_cfg.get("username_rule") or ""  # L6:推導規則
     disp.security_scan = source_cfg.get("security_scan") or {}  # M3:TICKET.md 掃描
     disp.status_sync = source_cfg.get("status_sync") or {}      # N:Jira 狀態同步
+    dash_url = source_cfg.get("dashboard_url") or ""            # Q 波:結案回寫連結
+    disp.dashboard_url = dash_url
     src.issue_type_id = source_cfg.get("issue_type_id") or "10003"  # 開票 type
     # budget soft 破→發增額表單需 form base_url/mention(下方 fcfg 定義後補設)
     # W11:互動服務設定(一次性表單)。base_url 要「人瀏覽器連得到」的 URL;內網行動
@@ -217,7 +219,8 @@ def main(argv: list[str] | None = None) -> int:
         scoregate=ScoreGate(src, store, base_url=form_base,
                             mention=mention, self_score_fn=None,
                             profiles_fn=lambda: profiles,     # W10.3 handoff 下拉候選
-                            jira_base_url=getattr(src, "base_url", "")))
+                            jira_base_url=getattr(src, "base_url", ""),
+                            dashboard_url=dash_url))          # Q 波:結案回寫連結
     loop.poll_interval = interval                            # W9.1 control 顯示
 
     _reload = make_reload(loop, disp, ext, cfg_path)  # W13/W4.5 hot reload
@@ -228,7 +231,8 @@ def main(argv: list[str] | None = None) -> int:
         return apply_command(src, store, profiles, issue_id, cmd, args or {},
                              by, base_url=form_base, mention=mention, ip=ip,
                              user_map=disp.user_map,           # L6:reload 跟隨
-                             username_rule=disp.username_rule)
+                             username_rule=disp.username_rule,
+                             dashboard_url=dash_url)           # Q 波:cancel 結案回寫
 
     ctl = source_cfg.get("control") or {}
     api = ControlAPI(loop, store, reload_fn=_reload,
@@ -257,7 +261,8 @@ def main(argv: list[str] | None = None) -> int:
                       on_submit=lambda r: apply_submission(
                           src, store, r, profiles=profiles,   # W10.3 handoff 候選
                           status_sync=disp.status_sync,       # N:close 精確轉
-                          bot_account_id=bot_id),             # 審批放行收回 assignee
+                          bot_account_id=bot_id,              # 審批放行收回 assignee
+                          dashboard_url=dash_url),            # Q 波:close 結案回寫
                       command_fn=_command_fn,                 # 指令台(取代 comment)
                       profiles_fn=lambda: profiles,           # next 下拉候選
                       admin_emails_fn=lambda: disp.admin_emails)  # K:門禁豁免(可 reload)

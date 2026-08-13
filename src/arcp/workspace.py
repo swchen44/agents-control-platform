@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -76,12 +77,36 @@ def _render_acceptance(profile: Profile | None) -> str:
     return "\n".join(lines) or "(此 profile 無確定性驗收步驟)"
 
 
+_VAR_RE = re.compile(r"\{(crid|email|prompt|key)\}")
+
+
+def ticket_vars(t: Ticket) -> dict:
+    """{crid}/{email}/{prompt}/{key} 插值變數(P 波,2026-08-13 定案)。
+    值來自 description 頂部 yaml 三鍵 + 票 key;缺的鍵不代入(占位符保留)。"""
+    from .triggers import parse_ticket_meta  # lazy:避免 import 環
+    v = {k: val for k, val in parse_ticket_meta(t.description).items() if val}
+    if t.key:
+        v["key"] = t.key
+    return v
+
+
+def interpolate(text: str, tvars: dict) -> str:
+    """單 pass 代入 {crid} 等占位符;未知/缺值一律保留原樣(不炸、不遞歸)。
+    範圍限文本類(TICKET.md 各段、CLAUDE.md/AGENTS.md);verify cmd 不做
+    (值來自 description=任何人可寫,插進 shell 指令是注入面)。"""
+    if not text or "{" not in text:
+        return text
+    return _VAR_RE.sub(lambda m: tvars.get(m.group(1), m.group(0)), text)
+
+
 def render_ticket_md(t: Ticket, profile: Profile | None = None,
                      base_url: str | None = None, human_notes: str = "",
                      desc_override: str = "") -> str:
     """任務簡報(agent prompt 第一句叫它讀這個)。內容 = Jira 票 + profile + 人類指示。
     M2:不再含「最新留言」段——人類指示的正式通道是 HIL 表單(human sidecar),
-    Jira 留言多為 harness 稽核輸出,餵回 agent 沒價值且是注入面。"""
+    Jira 留言多為 harness 稽核輸出,餵回 agent 沒價值且是注入面。
+    P 波:goal/描述/人類指示皆過 interpolate(profile goal 寫「分析 {crid}」
+    → 渲染成實際 CR 號,同一 profile 泛用於不同票)。"""
     head = [f"# {t.key}: {t.summary}", "",
             f"- issue_id: {t.id}", f"- 狀態: {t.state}",
             f"- assignee: {t.assignee or '-'}",
@@ -89,15 +114,18 @@ def render_ticket_md(t: Ticket, profile: Profile | None = None,
     if base_url and t.key:
         head.append(f"- Jira: {base_url.rstrip('/')}/browse/{t.key}")
     parts = ["\n".join(head)]
+    tv = ticket_vars(t)
     if profile and profile.goal:
-        parts.append(f"## 目標\n\n{profile.goal}")
+        parts.append(f"## 目標\n\n{interpolate(profile.goal, tv)}")
     if desc_override:                  # M3:安全審人工修訂版取代(原文在 Jira)
         parts.append("## 描述(要做什麼;經人工安全審修訂,原文見 Jira)\n\n"
-                     + desc_override)
+                     + interpolate(desc_override, tv))
     else:
-        parts.append(f"## 描述(要做什麼)\n\n{t.description or '(無)'}")
+        parts.append("## 描述(要做什麼)\n\n"
+                     + interpolate(t.description or "(無)", tv))
     if human_notes:                    # Q10:人類在 HIL 表單補的指示(累加,最新在下)
-        parts.append("## 人類指示(累加,請一併遵循)\n\n" + human_notes)
+        parts.append("## 人類指示(累加,請一併遵循)\n\n"
+                     + interpolate(human_notes, tv))
     parts.append("## 驗收標準(通過才算 SUCCESS)\n\n" + _render_acceptance(profile))
     return "\n\n".join(parts) + "\n"
 
@@ -262,6 +290,19 @@ def provision(root: str, ticket: Ticket, profile: Profile,
                      ".claude/hooks", ".agents/hooks", "hook")     # 3c. hooks(Q8)
         if profile.inject_md:                           # 4. inject md
             _apply_inject(ws)
+        # 4b. P 波:ws 根的 CLAUDE.md/AGENTS.md 代入 {crid} 等變數(一次性;
+        # 代入後不再含占位符,重跑冪等)。skills 檔不動(共用資產,要用變數
+        # 就在說明裡教 agent 讀 TICKET.md)。
+        tv = ticket_vars(ticket)
+        if tv:
+            for fname in ("CLAUDE.md", "AGENTS.md"):
+                p = os.path.join(ws, fname)
+                if os.path.isfile(p):
+                    txt = open(p, encoding="utf-8").read()
+                    out = interpolate(txt, tv)
+                    if out != txt:
+                        with open(p, "w", encoding="utf-8") as f:
+                            f.write(out)
         with open(marker, "w") as f:                    # ← commit:全部成功才立 marker
             f.write("ok\n")
 

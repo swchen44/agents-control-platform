@@ -80,6 +80,7 @@ class Dispatcher:
         self.username_rule: str = ""            # L6:查無時推導(local/{local} 模板)
         self.security_scan: dict = {}           # M3:TICKET.md 掃描 config(可 reload)
         self.status_sync: dict = {}             # N:內部態→Jira 狀態同步(可 reload)
+        self.dashboard_url: str = ""            # Q 波:結案回寫 ticket 連結(選配)
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
                             events: list[dict]) -> list[dict]:
@@ -87,14 +88,19 @@ class Dispatcher:
         aborted(reason=untriageable)、留言、Jira 轉取消(cancel_status;沒有則優雅退回
         done-category)。不跑 agent。"""
         reason = meta.get("reason") or ""
-        self.store.upsert_session(TicketSession(
+        sess = TicketSession(
             issue_id=ticket.id, key=ticket.key, profile="notfound",
             workspace="(untriaged)", session_id=None, attempts=0,
             outcome="ABORTED", pending_reason=None, cost_usd=0.0,
-            abort_reason="untriageable"))
+            abort_reason="untriageable")
+        self.store.upsert_session(sess)
         events.append(self.store.journal(
             "aborted", ticket.id, ticket.key, reason="untriageable",
             detail=reason[:200]))
+        from .provenance import finalize_provenance  # Q 波:abort 也留結案存證
+        events.extend(finalize_provenance(
+            self.source, self.store, sess, ticket.id, ticket.key,
+            dashboard_url=self.dashboard_url))
         self.source.add_comment(ticket.id, (
             "[agent] triage 判不出適用的 agent profile → 中止(ABORTED,不派工)。"
             + (f"原因:{reason}" if reason else "")))
@@ -525,6 +531,12 @@ class Dispatcher:
         # 之後 resume 不再重注)。workspace 已於上方 provision/health 解析為實體目錄。
         if sess.base_ref and os.path.isdir(sess.workspace):
             self._inject_base(sess, ticket, profile, events)
+
+        # Q 波:TICKET.md 內容真變才上傳 Jira 附件存證(hash 比對,無變更零成本;
+        # 首建/安全審修訂/人類指示後各留一版——Jira 上可回放 agent 當時看到什麼)
+        from .provenance import attach_ticket_md_if_changed
+        events.extend(attach_ticket_md_if_changed(
+            self.source, self.store, ticket.id, ticket.key, sess.workspace))
 
         # M3:TICKET.md 安全掃描門(spawn 前最後一道;涵蓋 description /
         # agent-job prompt / 人類指示全部來源)。沒配=關;人審過不再擋。

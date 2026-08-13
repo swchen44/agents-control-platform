@@ -90,8 +90,10 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `owner_changed` | `author`, `ip`, `new`, `old`, `reissued`, `retagged` | `src/arcp/commands.py` |
 | `pending` | `cause`, `cost_usd`, `reason`, `scope`, `tokens` | `src/arcp/dispatcher.py` |
 | `profile_selected` | `chosen`, `method`, `original` | `src/arcp/dispatcher.py` |
+| `provenance_attached` | `attached`, `skipped` | `src/arcp/provenance.py` |
 | `queued` | `engine`, `profile` | `src/arcp/poller.py` |
 | `resolved` | `attempts`, `cost_usd`, `human_minutes_saved` | `src/arcp/dispatcher.py` |
+| `result_written` | `result` | `src/arcp/provenance.py` |
 | `route_matched` | `on_match`, `profile`, `route` | `src/arcp/poller.py` |
 | `score_reminded` | `reminders` | `src/arcp/scoring.py` |
 | `score_requested` | `request_id` | `src/arcp/scoring.py` |
@@ -103,13 +105,14 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `session_created` | `profile`, `workspace` | `src/arcp/dispatcher.py` |
 | `status_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `status_synced` | `state`, `to` | `src/arcp/dispatcher.py` |
+| `ticket_md_attached` | `filename`, `hash` | `src/arcp/provenance.py` |
 | `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py`, `src/arcp/dispatcher.py` |
 | `trigger_error` | `error` | `src/arcp/poller.py`, `src/arcp/triggers.py` |
 | `watcher_added` | `approver` | `src/arcp/dispatcher.py` |
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 50 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 53 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)

@@ -40,6 +40,9 @@ outer_loop:
     # N:內部態 → Jira 狀態同步(選配;沒設=不轉,現行為)。dispatcher 每輪
     # 收尾按推導態精確轉(名稱比對,轉不到只 log);close 裁決走 closed
     # (不可達→先 hil_end 再 closed 兩步)。queued/inactive 不動(定案)。
+    # Q 波(選配):dashboard base URL——結案回寫 description 結果區時附
+    # ticket 連結(如 http://192.168.x.x:8788);空=只列 server 路徑
+    # dashboard_url: http://127.0.0.1:8788
     status_sync:
       running: In Progress       # attempt 執行中
       hil_middle: Pending        # 等人(審批/表單/安全審/UNKNOWN 交人查)

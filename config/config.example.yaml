@@ -9,6 +9,7 @@ outer_loop:
     project: SCRUM
     poll_interval_sec: 30
     jql: 'project = SCRUM AND statusCategory != Done ORDER BY created ASC'
+    # dashboard_url: http://127.0.0.1:8788   # 選配:結案回寫附 ticket 連結
     # jira_base_url: https://your-org.atlassian.net   # 非機密;不設則用 ~/.env 的
     #                                # JIRA_BASE_URL(email/token 一律只在 ~/.env)
     write_retry: {max: 5, base_sec: 1}

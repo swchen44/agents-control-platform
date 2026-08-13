@@ -110,6 +110,9 @@ agent **不連 Jira**,只讀工作區裡系統渲染的任務簡報 **TICKET.md*
    你填的文字會累加進 TICKET.md 的「人類指示」段,agent 續跑時一定看到。
    ⚠️ 在票上**留言 agent 看不到**(M2 起留言不進 TICKET.md;正式通道是表單)。
 4. **驗收標準**由 profile 設定自動渲染進 TICKET.md,agent 對著證據做。
+5. **變數引用**:description、profile goal 或表單指示裡寫 `{crid}` `{key}`
+   等占位符,系統會代入實際值(例:goal 寫「分析 {crid} 的報告」→ agent 看到
+   實際 CR 號)。寫錯或用了不存在的變數不會炸——原樣保留。
 
 TICKET.md 完整組成見 [design/workspace.md](design/workspace.md);變數契約正本見
 [design/lifecycle.md §4.2/§5](design/lifecycle.md)。
@@ -158,6 +161,14 @@ TICKET.md 完整組成見 [design/workspace.md](design/workspace.md);變數契�
 - **有些票會自動關單**:若該 profile 設了 `auto_close`(無人值守用),票跑完不會發評分表單給你
   —— 系統直接把**人類評分 = agent 自評**、自動關單(comment 會標 `by=auto`)。`on_success` 只
   自動關成功的、失敗仍會找你;`all` 則全自動。要不要自動關由管理者在 profile 設定。
+
+### 票關掉之後,Jira 上留下什麼(存證)
+
+- **description 最上面**多一個結果區:完成度(SUCCESS/中止理由)、你的評分+
+  agent 自評、花費、執行/等人時長、存證附件清單、server 路徑與 dashboard 連結。
+- **附件**:每一版 TICKET.md(agent 當時看到什麼)、`timeline_….jsonl`(帶
+  時戳全程事件)、`SESSION_….md`(session 快照)、transcript(對話全文 HTML)。
+  離開 ARCP 只看 Jira 也能回放全程。取消(cancel/中止)的票同樣留存證。
 
 ## 8. 指令台(下指令的地方,取代留言)
 

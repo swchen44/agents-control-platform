@@ -109,6 +109,11 @@ main。設計見 [selection.md](design/selection.md)。
   `crid`/`prompt`/`email` 三鍵**,到空行止;寫入端 `_ticket_meta_yaml`)。消費:
   `crid`→`session.clearquest_id`(+`store.find_by_crid` 去重)、`email`→
   `owner_email_list`(門禁)、`prompt`→不特別消費(隨描述段整段給 agent)。
+- 插值:`workspace.interpolate`/`ticket_vars`(`{crid}` 等;文本類全做、
+  verify cmd 不做);存證+結案回寫:`provenance.py`
+  (`attach_ticket_md_if_changed` 在 dispatcher 刷新後;`finalize_provenance`
+  五個收尾點:hil 終局/auto_close/cancel/untriageable)——正本
+  [design/provenance.md](design/provenance.md)、測試 `test_provenance.py`。
 - 改 TICKET.md 組成 → 同步 [design/workspace.md](design/workspace.md)(組成正本)
   + `tests/test_workspace_provision.py`;⚠️ 驗收段會「教」agent(e2e 教訓
   lesson #17)——別把測試專用的檢查渲染給真 agent。

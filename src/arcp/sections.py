@@ -58,7 +58,10 @@ _KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _order_key(owner: str) -> tuple[int, str]:
-    """canonical 版面順序:human 最前 → control → agent:<名>(名字排序)。"""
+    """canonical 版面順序:result 最前(Q 波:結案結果一眼可見)→ human →
+    control → agent:<名>(名字排序)。"""
+    if owner == "result":
+        return (-1, "")
     if owner == "human":
         return (0, "")
     if owner == "control":

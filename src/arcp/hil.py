@@ -269,6 +269,7 @@ def apply_submission(source, store, req: InteractionRequest, *,
                      profiles: dict | None = None,
                      status_sync: dict | None = None,
                      bot_account_id: str = "",
+                     dashboard_url: str = "",
                      now: float | None = None) -> list[dict]:
     """提交後:回寫 human 段 + 稽核 comment + 觸發 resume/評分/關單/handoff。回事件。
 
@@ -346,6 +347,15 @@ def apply_submission(source, store, req: InteractionRequest, *,
                 request_id=req.request_id))
     evs.append(store.journal("hil_submitted", req.issue_id, req.key,
                              schema=req.schema_id, request_id=req.request_id))
+    # Q 波:本次提交導致終局(close 或 ABORTED,含 security abort / base 交接)
+    # → 結案回寫(description 結果區 + 存證附件)。best-effort 不擋提交。
+    sess = store.get_session(req.issue_id)
+    if sess and (sess.outcome == "ABORTED"
+                 or any(e.get("type") == "closed" for e in evs)):
+        from .provenance import finalize_provenance
+        evs.extend(finalize_provenance(source, store, sess, req.issue_id,
+                                       req.key, dashboard_url=dashboard_url,
+                                       now=now))
     log.info("hil applied ticket=%s schema=%s req=%s",
              req.key, req.schema_id, req.request_id)
     return evs

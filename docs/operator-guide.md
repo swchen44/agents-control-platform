@@ -291,6 +291,15 @@ Resolve 進的 workflow 也通)。queued(排隊)與交人類的票不動。沒�
 (豁免 owner 名單);改負責人用指令台 `set_email`(整組取代,留空=解除)。
 見 §2.2 與 [identity-gate.md](design/identity-gate.md)。
 
+### 7.55 結案存證(Q 波)
+
+close/cancel 時系統自動:description 置頂 `[ARCP owner=result]` 結果區 +
+附件(每版 TICKET.md/timeline.jsonl/SESSION.md/transcript)。**best-effort**
+——Jira 附件失敗只 log 不擋收尾(journal 查 `provenance_attached`/
+`result_written`)。config `source.dashboard_url`(選配)填了,結果區會附
+dashboard ticket 連結(填人瀏覽器連得到的 URL)。詳
+[design/provenance.md](design/provenance.md)。
+
 ### 7.6 「agent 為什麼沒看到 X?」——TICKET.md 資訊流速查
 
 agent 只讀工作區的 TICKET.md(不連 Jira)。資訊進得去的通道只有:
