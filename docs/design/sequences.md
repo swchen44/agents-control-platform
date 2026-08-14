@@ -75,7 +75,7 @@ sequenceDiagram
   P->>J: @mention approver + 表單連結(assign approver)
   H->>F: 開連結,看 plan,填 agent 名
   F->>P: 提交 = 放行(單一信號)
-  P->>J: assign 收回 bot;journal approval(proceed)
+  P->>J: assign 收回 bot、journal approval(proceed)
   P->>A: 開始派工(進場景 1 的 spawn)
   note over P,F: 表單遺失 → 下輪 poll 自癒補發
 ```
@@ -118,7 +118,7 @@ sequenceDiagram
   P->>J: pending:budget → Pending
   P->>F: 建 budget_increase 表單(已用量/soft/hard+進度)
   P->>J: @mention + 連結
-  H->>F: 自助調高 soft(≤hard;超過 hard 要管理者改 profile)
+  H->>F: 自助調高 soft(≤hard,超過 hard 要管理者改 profile)
   F->>P: 提交 → 清 pending
   P->>A: 下輪 native resume 續跑(attempt 不重來)
 ```
@@ -138,7 +138,7 @@ sequenceDiagram
   P->>J: pending:hold → Pending
   P->>F: 建 hold 表單
   H->>F: 填新指示
-  F->>P: 提交:指示→TICKET.md 人類指示段 + resume note;清 pending+EVICT
+  F->>P: 提交:指示→TICKET.md 人類指示段 + resume note、清 pending+EVICT
   P->>A: native resume(prompt 顯式帶「人類最新指示」)
   A->>A: 帶著新指示續做 → 完成
   note over P,A: 併發防護:spawn 前兩道 fresh-read 閘+evicted 分支欄位合併(lesson 18)
@@ -162,7 +162,7 @@ sequenceDiagram
     F->>P: human_score 入庫
     P->>J: 精確轉 Closed(status_sync 兩步保險)+ 結案存證(場景8)
   else continue(打回續作,可附指示)
-    F->>P: 解終態+attempts 歸零;指示→TICKET.md+resume note
+    F->>P: 解終態+attempts 歸零、指示→TICKET.md+resume note
     P->>A: resume 續做 → 回到終態再評
   else handoff next(同票換手)
     F->>P: reset session、鎖定新 profile、重佈建
