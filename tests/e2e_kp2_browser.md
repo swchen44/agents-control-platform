@@ -2,7 +2,7 @@
 
 > 搭配 `tests/it_kp2.py`(REST integration 主力)使用:REST 驗資料正確,
 > **這份驗人眼看到的**——看板欄位移動、comment 渲染、@mention、表單頁畫面。
-> 執行者:已登入 Jira 的瀏覽器(人或 agent browser skill)。
+> 執行者:已登入 Jira 的瀏覽器(人工瀏覽器)。
 > 前置:poller + detail_server 在跑;it_kp2.py 至少跑過一輪(有票可看)。
 
 ## B1. 看板欄位反映生命週期(主題 N 狀態同步)

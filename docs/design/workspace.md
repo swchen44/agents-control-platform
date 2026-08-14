@@ -178,5 +178,4 @@ AGENTS.md 中的 `{crid}` `{email}` `{prompt}` `{key}` 渲染時代入實際值
 - 生命週期(template=class → workspace=instance、resume-safe 命名)見
   [lifecycle](lifecycle.md);證據型停止見 [decisions D2](../decisions.md);
   三方描述分段(human/control/agent)見 [interaction](interaction.md)。
-- ⚠️ 本文為**目標設計**;實作(`workspace.py` 的 install-runner / common-skills /
-  inject / 目標解析,及 `config/` 佈局)隨 harness→config 重構一起落地。
+- 本文與 `workspace.py` 實作**已對齊**(install-runner/common-skills/inject/目標解析/插值皆已落地;W15 重構完成)。

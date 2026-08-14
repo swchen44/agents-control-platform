@@ -433,3 +433,7 @@ ClearQuest **不取代 Jira**(Jira 仍是票系統;CQ 是額外的觸發源 + �
   人看得懂的檔案/指令門檻)、「Jira 連結」(`<base_url>/browse/<key>`)。
 - **Why**:讓 agent **對著證據做**(loop on evidence,呼應 [D2](decisions.md)),而非自以為
   完成;人也能從 workspace 反查回 Jira。
+
+## 16. 2026-08-10 之後能力(需求正本改由 SRS 承接)
+
+身分門禁(K)/Jira DC(L)/安全掃描(M)/狀態同步(N)/KPI+A/B(C3/C6)/時間軸(C5)/插值+存證+結案回寫(P/Q)/headless 防線(R)/HIL 全路徑驗收——What/Why 收錄於 [`srs.md`](srs.md)(FR/NFR 總表),機制正本在 `design/` 各檔,逐波記錄在 `CHANGELOG.md`。本檔 §1–15 為早期需求史,不再逐波增補。

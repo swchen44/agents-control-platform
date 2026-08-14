@@ -32,8 +32,8 @@ agents-control-platform/
 | 輸入 | `jira_source.py` | Jira Cloud 讀寫封裝(唯一碰 Cloud 細節);`triggers.py` 排程觸發 |
 | 決策 | `poller.py`(OuterLoop 外圈輪詢)、`routing.py`(route 比對)、`gate.py`(F1 分層額度閘) |
 | 執行 | `dispatcher.py`(派工+證據迴路)、`inner_runner.py`、`workspace.py`+`isolation.py`、`contract.py`(envelope)、`grader.py`(確定性驗證) |
-| 人機協作 | `approval.py`(起點審批)、`scoring.py`(HIL(End) 評分)、`commands.py`(指令核心 `apply_command` + 離手政策)、`sections.py`(description 三方分段+hash)、`interaction.py`+`hil.py`+`form_server.py`(HIL 一次性表單 + 指令台) |
-| 狀態·觀測·控制 | `store.py`(SQLite + journal)、`control_api.py`(REST 控制面)、`transcript.py`、`retention.py` |
+| 人機協作 | `approval.py`(起點審批)、`scoring.py`(HIL(End) 評分)、`commands.py`(指令核心 `apply_command` + 離手政策)、`sections.py`(description 三方分段+hash)、`interaction.py`+`hil.py`+`form_server.py`(HIL 一次性表單 + 指令台)、`identity.py`(email 門禁/使用者解析)、`output.py`+`deliverables.py`+`adf.py`(agent 產出→票上交付物)、`provenance.py`(過程存證+結案回寫)、`secscan.py`(TICKET.md 安全掃描) |
+| 狀態·觀測·控制 | `store.py`(SQLite + journal)、`control_api.py`(REST 控制面)、`transcript.py`、`retention.py`、`kpi.py`(C3 KPI 純函式) |
 | 其他 | `rawcli/`(RawCLIAgent,純 stdlib 執行單元)、`config.py`、`logutil.py`、`profiles.py`、`ticket.py`、`sysinfo.py`、`server_manager.py` |
 
 模組間關係(trigger/輸入/輸出/上下游)見 [設計/架構](design/architecture.md)。

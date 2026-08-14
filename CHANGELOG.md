@@ -5,6 +5,49 @@
 
 ## [Unreleased]
 
+### Added(2026-08-10 → 08-14;逐波詳情見 HANDOFF/BACKLOG 與各設計正本)
+- **budget 六層上限(2026-08-10)**:token+usd × 單票 soft/hard+月/agent+全站;
+  soft 破→自助增額表單、其餘管理者 hot reload;每輪 attempt 前 precheck。[budget.md]
+- **指令台(2026-08-10)**:綁票表單+REST 共用 `apply_command`(run/retry/hold/
+  stop/cancel/next/set_email);依狀態動態選單;破壞性二次確認;棄 @agent 留言通道。
+- **身分門禁(主題 K,2026-08-12)**:description `email:`(可多位)→ owner 名單;
+  表單/指令提交門禁(owners/admin_emails/approver)+IP 稽核+set_email 整組取代。[identity-gate.md]
+- **Jira Data Center 相容(主題 L,2026-08-12)**:`jira_flavor: dc`(API v2/PAT/
+  純文字/user_map);內網首驗 checklist。[jira-dc.md]
+- **TICKET.md 安全掃描(M3,2026-08-12)**:spawn 前靜態掃描(skill-scanner),
+  fail-closed 交人審(security_review 表單:修訂放行/abort);abort 理由泛化。[security-scan.md]
+- **Jira 狀態同步(主題 N,2026-08-12)**:config `status_sync` 五鍵精確轉
+  (含快 agent 中繼、close 兩步保險);KP2 整測 project+`--config config.test.yaml`
+  整組隔離(runtime-test/測試 port)。
+- **KPI 框架(C3)+ A/B 對照(C6,2026-08-13)**:北極星 First-pass close rate
+  雙報+效率/制衡/coverage;dashboard 三窗+`GET /api/v1/kpi?days&profile`;
+  手選 profile 對照表(非隨機分流警語)。[kpi.md]
+- **時間軸視覺化(C5,2026-08-12)**:`/timeline` 全域粗看(狀態色帶+事件點+
+  側欄摘要)+`/ticket/<id>` 駕駛艙細看;兩頁「怎麼看」說明卡。
+- **E1/E2 真環境驗證(2026-08-13)**:codex 對照數據點補齊(compare_run 四格+
+  compare_abc 四路);大 context crash→resume 硬證據(`tests/it_e2_resume.py`
+  雙引擎:context 傳承+不重工);developer-guide「重跑 E 群」手冊。
+- **TICKET.md 插值+過程存證+結案回寫(P/Q 波,2026-08-13)**:`{crid}` 等
+  占位符文本類插值(verify cmd 不做);TICKET.md 真變才附版本到票;close/cancel
+  時 description 置頂 `[ARCP owner=result]` 結果區+timeline/SESSION/transcript
+  存證附件。[provenance.md]
+- **headless 風險五道防線(R 波,2026-08-13)**:rawcli 注入
+  `CLAUDE_CODE_DISABLE_CRON=1`;inject 守則禁背景/排程;`stall_seconds` 預設
+  0→3600+調參指引;CLI 版本基準(claude 2.1.206/codex 0.142.5)+升版冒煙;
+  部署衛生(乾淨 HOME+poller 啟動自檢)。[research/2026-08-headless-scheduling-subagents.md]
+- **HIL 全路徑真環境驗收(2026-08-13)**:it_kp2 T9–T14(插值存證/hold 全程/
+  budget 增額/continue 打回/auto_close/安全審修訂);修 6 個併發 bug(hold-spawn
+  race 兩道閘、score 表單補 human_prompt 欄、resume note 機制、auto_close 精確
+  關單、EVICT 生命週期、evicted 分支欄位合併)——lesson #18「單票並發寫」。
+- **稽核曝光(2026-08-14)**:一次性連結清單+表單唯讀頁顯示提交時間/email/IP。
+- **release 文件(2026-08-14)**:config-reference(全鍵+預設值)、
+  design/sequences(8 張統一角色時序圖)、architecture block diagram、
+  developer-guide 三層測試撰寫指南。
+
+### Reverted
+- agent-browser B 案(browser skill 驗收 web;b329e14→bad5c0b,2026-08-14)
+  ——歷史保留,需要時 revert-the-revert 撿回。
+
 ### Changed
 - **triage(select)結果模型 + 判不出即中止**:select script 的 **stdout 改嚴格 JSON**
   `{"profile":"<名>|notfound","reason":"..."}`(取代舊的「純文字最後一行」)。`profile ∈ 池`

@@ -32,7 +32,7 @@ coding agent 由 **Jira 事件驅動**、長時間可靠執行、可觀測(trace
 - **[除錯 runbook](troubleshooting.md)** — 症狀導向:票沒被處理、卡住、假完成、runner
   失敗、resume/冪等、Jira 降級、指令、花費、dashboard。
 - **[可觀測性](design/observability.md)** — 證據地圖(journal/db/transcript/dashboard)、
-  怎麼讀 journal、**44 種事件字典**、典型事件序列。
+  怎麼讀 journal、**54 種事件字典**、典型事件序列。
 - **[LESSONS](lessons.md)** — 歷史踩坑全紀錄(症狀 → 根因 → 對策)。
 - **[V1 付費複驗 checklist](v1-reverify-checklist.md)** — 有真 agent + 充電時,一步步驗
   「真派工」路徑(runner spawn / select / install / hold / 自評 / human-prompt / handoff)。
@@ -81,3 +81,5 @@ dashboard/transcript = 完整飛行記錄器),Jira 只承載策展後的摘要/�
 
 - [`config-reference.md`](config-reference.md) — Config 全參數參考
 - [`design/sequences.md`](design/sequences.md) — Sequence charts(開票+HIL 全場景)
+- [`design/provenance.md`](design/provenance.md) — 過程存證+結案回寫+{crid} 插值(P/Q 正本,含候選變數表)
+- [`design/agent-output.md`](design/agent-output.md) — agent 產出契約(OUTPUT.json 兩層+附件/連結門檻)

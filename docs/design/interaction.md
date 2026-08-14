@@ -3,7 +3,7 @@
 > 2026-08-08 討論定案(使用者主導 + 修正一份無背景 AI 草案)。取代「人直接編 Jira
 > description free-text」的人機介面。與 [lifecycle.md](lifecycle.md)、
 > [architecture.md](architecture.md) 的 HIL 模型銜接。
-> **屬 runtime 行為,本文件先只寫設計,程式待實作(W11)。**
+> W11 已實作(一次性表單+group A);後續增修(審批表單化/security_review/budget_increase/hold/human_prompt 通用欄)皆已落地——§3.1 現役 7 種 schema 為準。
 
 ## 0. 動機 + Jira 的角色
 
@@ -200,7 +200,7 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
 - **欄位**:`close_decision`(End)/`next_step`(Middle)多一個 `handoff` 選項;選了才填
   `handoff_kind`(value 仍是 `next`/`base`,表單顯示中文「同票換手(同一張票,換 profile)」/
   「跨票換手(系統另開新票,帶脈絡)」)+ `next_profile`(下拉,`options_from=profiles`,
-  由 ScoreGate 注入 payload)+ `handoff_prompt`(交接指示)。schema 一律非必填,實際校驗在
+  由 ScoreGate 注入 payload)+ `handoff_prompt`(交接指示);另有通用 `human_prompt` 欄(2026-08-13:打回/續跑給 agent 的指示→TICKET.md 人類指示段+resume note 隨 prompt 帶上)。schema 一律非必填,實際校驗在
   `hil._do_handoff`:kind/profile 不完整 → **fail-safe 降級為續跑原 agent**(不硬失敗)。
 - **同票換手(next)**:reset session、鎖定 `next_profile`、`workspace="(handoff)"` 哨值 → 下輪重
   provision 由新 profile 接手同一票。`handoff_prompt` 隨表單寫進 description human 段 → 新

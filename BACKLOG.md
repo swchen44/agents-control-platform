@@ -85,6 +85,7 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 | D2 codex sandbox | ⏳ 真環境 | 需 codex quota;`--sandbox` 欄位已在 |
 | R7a | 追蹤官方 `skillOverrides`/permission `Skill(...)` deny 能否 pattern 式隱藏 user-level skills | 若成真,「乾淨 HOME」從紀律升級硬開關 | 低(等 CLI 新版釋出相關設定) | ⏳ |
 | R7b | 若改 API key 計費:重測 `CLAUDE_CONFIG_DIR` 受控隔離(研究推測可行)與 `--bare` | 全域漏入的技術解 | 低(觸發=計費模式改變) | ⏳ |
+| V1 | 付費複驗 checklist | ◐ **部分已由 HIL 驗收覆蓋**(hold→resume/human-prompt/自評=T10/T12/T13 真環境過);其餘項照 v1-reverify-checklist | 低 | ◐ |
 | B1/A1 | ⏳ 真環境 | 真 Jira Server / Postgres —— 需真環境,我不能替跑(E1/E2 已於 2026-08-13 完成;D1 docker 不做) |
 | V1 付費複驗 | ⏳ 真環境 | 免費部分已驗綠;付費(真派工)清單見 `scripts/reverify_v1.py` |
 
@@ -170,6 +171,10 @@ workspace(instance)、命名 resume-safe、起點審批門(description YAML 參�
 | C2 | **L0-L3 trace completeness CI**(v5 唯一 P1 硬 KPI) | 每個結束的 attempt 四層檔齊全,缺任一層告警 | 低-中 | v5 說唯一該 P1 就設 100% 硬目標;稽核基礎 |
 | C3 | **KPI 框架**(first-pass Close rate + Goodhart 防護,v5 §10) | ✅ **完成(2026-08-13)**:`kpi.py` 純函式——北極星雙報(嚴格=÷closed 決策用/進行=÷終態趨勢;一次到位=無 retry/打回/換手)+效率(cycle/attempts/$ per close med+p90/週吞吐)+**制衡**(打回率/人評/UNKNOWN/放棄+abort 原因)+coverage;Dashboard 首頁三窗 KPI 表+作弊警語+`GET /api/v1/kpi?days=N`;只建基線不設目標(v5 原則);正本 docs/design/kpi.md | ✅ |
 | C4 | **聚合 dashboard**(cost/state/失敗率) | detail page 加彙總頁 or Grafana;讀 journal/store | 中 | v3 生產就緒清單缺的「監控」 |
+| HIL-V | **HIL 全路徑真環境驗收** | ✅ **完成(2026-08-13)**:it_kp2 T9–T14 全過;修 6 個併發 bug(race 兩道閘/score human_prompt 欄/resume note/auto_close 精確關單/EVICT 生命週期/evicted 欄位合併)= lesson #18 | — | ✅ |
+| R | **headless 防線五道** | ✅ **完成(2026-08-13)**:DISABLE_CRON 注入/inject 禁令/stall 3600+指引/CLI 版本基準+冒煙/部署衛生+自檢(R7a/R7b 追蹤項另列) | — | ✅ |
+| AUD | **稽核三欄曝光** | ✅ 完成(2026-08-14):連結清單+表單唯讀頁顯示提交時間/email/IP | — | ✅ |
+| ABR | agent-browser B 案 | ⏪ **已 revert**(b329e14→bad5c0b,2026-08-14;歷史保留,內網需要時撿回) | — | ⏪ |
 | P/Q | **TICKET.md 插值 + 存證/結案回寫** | ✅ **完成(2026-08-13)**:{crid}{email}{prompt}{key} 插值(verify cmd 不做);TICKET.md 版本附件(hash 比對);close/cancel 時 description 置頂 result 段+timeline/SESSION/transcript 附件;候選變數表(profile/base/repo…)在 design/provenance.md **看到需求才做** | — | ✅ |
 | C6 | **A/B 對照(手選)** | ✅ **完成(2026-08-13,使用者定案簡單版)**:Dashboard 首頁勾 2+ profile → C3 全指標對照表(`/api/v1/kpi?profile=X`);附「非隨機分流僅供參考」警語(真 A/B=select random 分流,家族自動分組未做) | — | ✅ |
 | C5 | **時間軸視覺化:粗看+細看**(使用者 2026-08-12:「分出粗看和細看」「網頁旁必須寫說明,解釋代表的事情和如何觀看」) | **粗看**=`/timeline` 全域跨票:每票一列狀態色帶(沿用六態色票)+關鍵事件點+✔✘ 終點;時間窗 24h/7d/30d/all+關鍵字過濾;點列開側欄摘要(狀態/負責人/用量/執行時間/可操作表單連結)→「完整詳情」進細看。**細看**=單票頁新增 Session 駕駛艙卡(DB 全欄位+執行/等人時間+TICKET.md 摺疊)+事件時間軸抽屜疊同色系色帶。**兩頁都有「怎麼看這張圖」說明卡**(圖例・操作・判讀範例,可摺疊記憶) | 中 | ✅ **完成(2026-08-12,`c8c928d`+後續)** |

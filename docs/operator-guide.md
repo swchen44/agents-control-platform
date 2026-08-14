@@ -295,6 +295,13 @@ Resolve 進的 workflow 也通)。queued(排隊)與交人類的票不動。沒�
 (豁免 owner 名單);改負責人用指令台 `set_email`(整組取代,留空=解除)。
 見 §2.2 與 [identity-gate.md](design/identity-gate.md)。
 
+### 7.54 headless 防線(R 波,預設已生效,通常不用動)
+
+- rawcli 對 claude 自動注入 `CLAUDE_CODE_DISABLE_CRON=1`(session 排程整類禁用)。
+- `stall_seconds` 預設 3600(卡死一小時自動 killpg→resume);要自訂見
+  [config-reference §5.4](config-reference.md)——必須 > 最長單一前景命令。
+- 稽核三欄(提交時間/email/IP)在 ticket 頁「一次性連結」表與表單唯讀頁可直接看。
+
 ### 7.55 結案存證(Q 波)
 
 close/cancel 時系統自動:description 置頂 `[ARCP owner=result]` 結果區 +

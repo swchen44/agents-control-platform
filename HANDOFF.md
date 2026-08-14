@@ -1,6 +1,6 @@
 # HANDOFF — headless agent 自動化 / ARCP
 
-> 給「在此目錄開的新 session」的接手文件,零上下文也能無縫接上。最後更新:**2026-08-12**。
+> 給「在此目錄開的新 session」的接手文件,零上下文也能無縫接上。最後更新:**2026-08-14**。
 > 本檔是**地圖**:逐波實作詳情 → `CHANGELOG.md` + `docs/history/PLAN_*.md`;
 > 待辦/決策全景 → `BACKLOG.md`;設計正本 → `docs/design/`;文件總覽 → `docs/index.md`。
 
@@ -11,7 +11,7 @@
 issue 符合條件 → 建工作資料夾 → 裝 skills → headless 啟動 agent → 監控/回寫。
 專案名 **ARCP**(Agent Runtime / Control Plane)。**OpenHands 只是候選方法之一,不是前提。**
 
-## 1. 現況地圖(2026-08-12,全部已實作、CI 綠)
+## 1. 現況地圖(2026-08-14,全部已實作、CI 綠)
 
 **結構**:`src/arcp/`(套件)+ `scripts/`(入口:`run_poller.py` 主迴圈、
 `detail_server.py` dashboard、`run_trigger.py`…)+ `tests/`(離線免 token)+
@@ -56,6 +56,8 @@ label 全庫 `arcp.` 前綴規範、select 軸 B/遞歸、全文件+web `/concep
   核心判讀:長黃段=卡在等人、藍/灰反覆=重試、多列同時藍=並行度高。
   區間推導=`lane_segments`(journal→狀態段,純函式);實測已在真資料驗證
   (SCRUM-22/23 等人 6 天的卡點一眼可見)。
+
+**P/Q/R 波+HIL 驗收(2026-08-13/14)**:TICKET.md `{crid}` 插值+過程存證(版本附件)+結案回寫(result 段+timeline/SESSION/transcript);headless 五道防線(DISABLE_CRON/stall 3600/CLI 基準/部署衛生);HIL 全路徑 T1–T14 雙層覆蓋(修 6 併發 bug,lesson #18);稽核三欄(提交時間/email/IP)曝光到連結清單與表單唯讀頁。agent-browser B 案已 revert(bad5c0b,歷史保留)。
 
 **觀測**:dashboard 七頁(Dashboard/DB Browser/**Timeline**/Control/Agent Detail/
 Server/Introduction,明暗雙主題、離線零 CDN);L0–L3 四層 trace;transcript 打包/
