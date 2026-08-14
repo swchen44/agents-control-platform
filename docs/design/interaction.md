@@ -65,6 +65,8 @@ Agent 以**員工**身分接單 → 做事(後台)→ 更新進度 → 回報成
 `score_and_close` 呈現三訊號供對照:**grader**(SUCCESS/FAILURE/UNKNOWN,證據型)、
 **agent 自評 0–10**、**人類 0–10**;並含**關票裁決**(見 §8)。
 
+> 各狀況的**時序圖**(角色統一)見 [sequences.md](sequences.md)。
+
 ### 3.2 HIL 狀況全表(權威;`session.pending_reason` 值域)
 
 「等人」= session 記 `pending_reason`(推導態 HIL(Middle),Jira 同步 Pending)

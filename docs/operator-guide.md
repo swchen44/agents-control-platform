@@ -149,6 +149,10 @@ soft 上限、評分、workspace 路徑、驅逐次數…新欄位也不漏)+ **
 
 ## 4. 調設定(不重啟)
 
+> **全部參數的作用與預設值** → [Config 參數參考](config-reference.md)
+> (source/routes/triggers/profiles/budget/status_sync/security_scan 逐鍵表
+> + 「想做什麼→改哪個鍵」速查)。
+
 - 設定在 `config/config.yaml`(+ 拆檔的 `config/profiles/<名>.yaml`)。改完 `POST /reload`。
 - **新增一個 agent(profile)**:在 `config/profiles/<名>.yaml` 建一個(檔名=profile 名,
   範例見 [設計/workspace](design/workspace.md)),`config.yaml` 的 `outer_loop.routes` 加比對

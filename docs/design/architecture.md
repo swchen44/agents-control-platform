@@ -19,6 +19,64 @@
 └─ 狀態·觀測·控制層  store · control_api · detail_server · transcript · retention
 ```
 
+### 1.1 Block diagram(模組互動;Mermaid)
+
+```mermaid
+flowchart TB
+  HU([人]):::ext
+  J[(Jira)]:::ext
+  CQ[(WITS/CQ)]:::ext
+
+  subgraph 輸入
+    src[jira_source]
+    trg[triggers job]
+  end
+  subgraph 決策
+    pol[poller OuterLoop]
+    rt[routing / select triage]
+    gate[gate 併發閘]
+  end
+  subgraph 執行
+    disp[dispatcher 證據迴路]
+    ws[workspace 佈建+TICKET.md]
+    run[inner_runner → rawcli]
+    A([claude -p / codex exec]):::ext
+    gr[grader verify]
+  end
+  subgraph HIL[人機協作]
+    apr[approval]
+    sc[scoring HIL-End]
+    cmd[commands 指令台]
+    hil[hil + form_server 一次性表單]
+    dlv[deliverables / provenance 存證]
+  end
+  subgraph 狀態觀測
+    st[(store SQLite+journal)]
+    dash[detail_server dashboard]
+    ctl[control_api]
+  end
+
+  CQ -. scan script .-> trg -->|開票| J
+  J <--> src --> pol --> rt --> gate --> disp
+  disp --> ws --> run --> A
+  A -->|envelope| run --> gr --> disp
+  disp -->|狀態同步/comment/附件| J
+  disp --> dlv -->|result 段+存證附件| J
+  HU -->|開票/看板| J
+  HU -->|填表單| hil --> disp
+  HU -->|指令| cmd --> disp
+  apr & sc --> hil
+  pol & disp & hil & cmd --> st
+  st --> dash
+  HU --> dash
+  ctl --> pol
+
+  classDef ext fill:#f5f0e0,stroke:#8a7,stroke-width:1px;
+```
+
+**逐場景時序**(開票/scan/triage + 全部 HIL,角色統一)→
+[sequences.md](sequences.md)。
+
 **store 是狀態主幹**:幾乎所有模組都讀寫它(SQLite `ticket_watch`/`ticket_session`
 + append-only journal `events.jsonl`)。上圖只表達分層與資料流方向;逐模組的
 trigger/輸入/輸出/上下游見下表(與 `/concepts` 頁的職責表同內容)。

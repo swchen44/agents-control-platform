@@ -78,3 +78,6 @@ dashboard/transcript = 完整飛行記錄器),Jira 只承載策展後的摘要/�
 
 - [`l2-l3-infographic.html`](l2-l3-infographic.html) — 兩張 16:9 手繪筆記本風資訊圖卡(①L0–L4 背景/Why/What/Key ②How:一張票的旅程+領域 agents+護欄/觀測/兩種迴圈/Normal+Except flow);對外溝通 L2→L3 用,瀏覽器直開。
 
+
+- [`config-reference.md`](config-reference.md) — Config 全參數參考
+- [`design/sequences.md`](design/sequences.md) — Sequence charts(開票+HIL 全場景)

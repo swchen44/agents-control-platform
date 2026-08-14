@@ -120,6 +120,51 @@ main。設計見 [selection.md](design/selection.md)。
 
 ## 測試
 
+三層測試,職責與寫法不同(**新功能 = 三層都問一次「這層要不要驗」**):
+
+| 層 | 驗什麼 | 依賴 | 何時跑 |
+|---|---|---|---|
+| **Unit**(`test_*.py`) | 單模組邏輯/狀態機/契約(FakeSource 免網) | 零(CI 跑) | 每次改碼 |
+| **Integration**(`it_kp2.py`) | 真 Jira+真 agent+跑中 poller 的**全鏈**與併發行為 | KP2+token(~$0.1-0.5) | 動核心鏈路後 |
+| **E2E**(`e2e_*.py` / browser) | 端點/頁面/服務行為(spawn 真 HTTP server) | 多數離線;browser 類要真環境 | 動 UI/API 後 |
+
+### 怎麼寫 unit test
+
+照 `tests/test_provenance.py` 的樣板:
+1. **自訂 runner 慣例**(亦 pytest 相容):模組級直跑,`check(名稱, 條件, detail)`
+   計數,結尾 `print(f"test-x: PASS ({ok}/{ok+fail})")` + `sys.exit(1 if fail else 0)`。
+2. **免網原則**:Jira 用 `FakeSource`(只實作被測路徑用到的方法:add_comment/
+   set_description/get_ticket/add_attachment…);store 用 `Store(tempfile.mkdtemp())`
+   真 SQLite(便宜且驗到 schema);絕不打真網路/真 agent。
+3. **測行為不測實作**:斷言 journal 事件/DB 欄位/檔案系統副作用,不斷言內部呼叫。
+4. 新 journal 事件 → 跑 `gen_event_dict.py` 更新 observability.md(pre-commit 擋 drift)。
+5. 掛進 CI 免費:檔名 `test_*.py` 即自動被離線集撈到。
+
+### 怎麼寫 integration 測項(it_kp2)
+
+照 `tests/it_kp2.py` 的 T1–T15 模式:
+1. **共用 helpers**:`src.create_ticket`(建真票,標題帶 `[it]`)、`arcp(iid)`
+   (dashboard REST 讀狀態)、`wait(desc, fn, timeout)`(輪詢)、
+   `form_token_from_comments`(從留言撈一次性表單)、`_post`(提交表單)、
+   `_post_json`(指令 REST)、`jira_state`。
+2. **每測項自足**:自己建票、自己等、自己收尾(cancel/close);不依賴前一測項
+   的票(要共用就傳回值,如 T2→T3)。
+3. **確定性優先**(lesson #17):要「必失敗」用 `verify cmd ['false']`,別靠
+   「agent 做不到」(驗收段會渲染進 TICKET.md 教會 agent);要「必跑很久」讓
+   任務先 `sleep 60`,別賭 haiku 速度(T10 六輪教訓)。
+4. **時序斷言要 wait 不要 sleep 猜**;跨執行緒行為(hold/cancel)注意 lesson #18。
+5. 掛進 `main()` 的 picks + 檔頭 docstring 測項清單;預設集(T1–T4)保持便宜。
+
+### 怎麼寫 e2e
+
+- **服務級**(照 `e2e_dashboard.py` / `e2e_form.py`):subprocess spawn 真
+  server(隨機 port)→ urllib 打端點斷言 JSON/HTML 內容 → 結束 kill。免網
+  可進 CI;dashboard 靠 fixture runtime、form 靠 FakeSource+真 HTTP。
+- **真環境級**(`e2e_fault.py`/`e2e_commands.py`/`e2e_server_restart.py`):
+  真 Jira+真 agent 驗故障注入/重啟/指令;跑法同 integration(先起隔離實例)。
+- **browser 級**:`tests/e2e_kp2_browser.md` checklist(有 Claude in Chrome
+  照做;REST 驗得到的別放這裡——只放「要看畫面」的)。
+
 測試在 `tests/`(自訂 runner,亦 pytest-相容),從 repo root 執行:
 
 ```bash
