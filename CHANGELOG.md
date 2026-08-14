@@ -5,7 +5,13 @@
 
 ## [Unreleased]
 
-(無)
+### Added
+- **rawcli agent 三參數(內網包裝支援)**:`agent.command` 執行檔覆寫
+  (別名/絕對路徑如 `/tools/bin/claudeoss`;只換 argv[0],協議仍依 engine)、
+  `agent.extra_args`(原樣接 command line 尾)。
+### Changed
+- **`agent.model` 未設=不帶 `--model`**(用 CLI 帳號預設;原 claude 隱含
+  fallback haiku 移除——要省錢請顯式設 model)。
 
 ## [0.1.0] - 2026-08-14
 

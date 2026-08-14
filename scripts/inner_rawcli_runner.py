@@ -43,12 +43,13 @@ def main() -> int:
                                 .replace(".events.jsonl", ".raw.jsonl"))
         resume_sid = job.get("resume_session_id")
         engine = job.get("acp_server_engine", "claude")
-        # model 預設是 engine 相依的:haiku 是 claude 的;codex 不給 model
-        # (None → 不帶 --model,用帳號預設),避免 claude model 名塞給 codex
+        # model:未設=不帶 --model(用 CLI 帳號預設)——2026-08-14 起不再
+        # fallback haiku;要省錢請在 profile 顯式設 model
         agent = RawCLIAgent(
             engine=engine,
-            model=job.get("acp_model") or ("haiku" if engine == "claude"
-                                           else None),
+            model=job.get("acp_model"),
+            command=job.get("command"),          # 執行檔覆寫(別名/絕對路徑)
+            extra_args=job.get("extra_args"),    # 附加參數(接 command line 尾)
             # W5.1(W29):resume 優先;否則用 harness 預派的 sid(claude
             # --session-id)——crash 後 harness 憑已持久化的 sid resume
             session_id=resume_sid or job.get("preassigned_session_id"),

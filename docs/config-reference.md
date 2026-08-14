@@ -123,12 +123,14 @@
 | 鍵 | 作用 | 預設 |
 |---|---|---|
 | `backend` | `rawcli`(主線,純 stdlib)/ `openhands-acp` / `openhands-server` | `openhands-acp`(建議明填 rawcli) |
-| `engine` | `claude` \| `codex`(rawcli) | `claude` |
-| `model` | 模型(claude:haiku/sonnet/opus;codex 不設=帳號預設)。**測試一律便宜 model**(差 ~8×) | rawcli:claude=haiku |
+| `engine` | `claude` \| `codex`(rawcli;決定事件協議與 resume 方式) | `claude` |
+| `command` | **執行檔覆寫**:程式名或絕對路徑(如 `/tools/bin/claudeoss`)——內網把 CLI 包裝成別名時用;只換 argv[0],協議仍依 engine | 未設(用 `claude`/`codex`) |
+| `model` | 模型。**未設=不帶 `--model`(CLI 帳號預設,可能較貴)**;測試一律顯式設便宜 model(差 ~8×) | 未設(不帶參數) |
 | `os_sandbox` | claude 的 macOS seatbelt 隔離(寫檔限 workspace) | `false` |
 | `sandbox` | codex 內建 `--sandbox`(read-only/workspace-write) | `workspace-write` |
 | `timeout_sec` | 單 attempt 硬逾時 | `300` |
 | `stall_seconds` | 卡死偵測:此秒數內事件流零輸出→killpg→下輪 resume(不耗 attempt)。**自訂必須 > 最長單一前景命令**(長 build 期間事件流完全靜默,實測);`0`=停用 | `3600` |
+| `extra_args` | 彈性附加參數(list),**原樣接在 command line 最後面** | `[]` |
 | `output_schema` | G1 結構化自評契約(agent 回 status/score/next;auto_close 自評來源) | `false` |
 | `venv` | backend 的 venv 路徑(rawcli 免;openhands 系必填) | 未設(系統 python) |
 | `acp_server` / `acp_model` | openhands-acp 的 adapter 與模型 | `claude-code` / 未設 |

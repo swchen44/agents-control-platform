@@ -56,9 +56,16 @@ class RawCLIAgent:
                  raw_events_path: str | None = None, os_sandbox: bool = False,
                  fault_kill_on_file: str | None = None, fault_delay: float = 1.0,
                  evict_file: str | None = None, stall_seconds: float = 0.0,
-                 output_schema: dict | None = None):
+                 output_schema: dict | None = None,
+                 command: str | None = None,
+                 extra_args: list[str] | None = None):
         self.engine = engine                   # claude | codex
         self.model = model
+        # 執行檔覆寫(內網把 CLI 包裝成別名/別路徑,如 /tools/bin/claudeoss);
+        # 只換 argv[0],事件協議仍依 engine(wrapper 須相容該引擎的 stream 格式)
+        self.command = command
+        # 彈性附加參數:原樣接在整條 command line 最後面
+        self.extra_args = list(extra_args or [])
         self.permission_mode = permission_mode
         self.sandbox = sandbox                 # codex
         self.allowed_tools = (allowed_tools if allowed_tools is not None
@@ -98,20 +105,23 @@ class RawCLIAgent:
         sid = self.session_id or str(uuid.uuid4())
         self.session_id = sid              # remember for the envelope
         if self.engine == "codex":
-            base = ["codex", "exec", "--json", "--sandbox", self.sandbox,
+            exe = self.command or "codex"
+            base = [exe, "exec", "--json", "--sandbox", self.sandbox,
                     "--skip-git-repo-check"]
-            if self.model:
+            if self.model:                 # 未設=不帶 --model(用帳號預設)
                 base += ["--model", self.model]
             if self.output_schema:                       # G1:codex 要檔案路徑
                 base += ["--output-schema", self._schema_file()]
             if self.resume:
-                return ["codex", "exec", "resume", sid, "--json",
+                return [exe, "exec", "resume", sid, "--json",
                         "--skip-git-repo-check",
-                        "-c", f'sandbox_mode="{self.sandbox}"', prompt]
-            return base + [prompt]
-        cmd = ["claude", "-p", prompt, "--output-format", "stream-json",
+                        "-c", f'sandbox_mode="{self.sandbox}"', prompt,
+                        *self.extra_args]
+            return base + [prompt, *self.extra_args]
+        cmd = [self.command or "claude", "-p", prompt,
+               "--output-format", "stream-json",
                "--verbose", "--include-partial-messages"]
-        if self.model:
+        if self.model:                     # 未設=不帶 --model(用帳號預設)
             cmd += ["--model", self.model]
         cmd += (["--resume", sid] if self.resume else ["--session-id", sid])
         cmd += ["--permission-mode", self.permission_mode]
@@ -119,7 +129,7 @@ class RawCLIAgent:
             cmd += ["--json-schema", json.dumps(self.output_schema)]
         if self.allowed_tools:
             cmd += ["--allowedTools", *self.allowed_tools]
-        return cmd
+        return cmd + self.extra_args
 
     def _schema_file(self) -> str:
         """Write output_schema to a temp file for codex --output-schema <FILE>."""

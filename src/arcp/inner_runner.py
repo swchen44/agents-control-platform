@@ -65,6 +65,10 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         "acp_server": agent_cfg.get("acp_server", "claude-code"),
         "acp_server_engine": agent_cfg.get("engine", "claude"),  # rawcli
         "acp_model": agent_cfg.get("acp_model") or agent_cfg.get("model"),
+        # 執行檔覆寫(內網包裝別名/絕對路徑,如 /tools/bin/claudeoss)+
+        # 彈性附加參數(原樣接在 command line 最後)——rawcli
+        "command": agent_cfg.get("command"),
+        "extra_args": list(agent_cfg.get("extra_args") or []),
         # W3.6(D1):isolation.provider 解析(auto→依 OS;未實作→none+警告);
         # 舊寫法 os_sandbox: true == provider auto。runner 端欄位名不變。
         "os_sandbox": resolve_isolation(agent_cfg) == "seatbelt",

@@ -75,7 +75,11 @@ inner_loop:
       agent:
         backend: rawcli              # 純 stdlib,無需 openhands venv
         engine: claude               # claude | codex
-        model: haiku                 # 測試省成本;真實任務可改 sonnet/opus
+        # command: /tools/bin/claudeoss  # 執行檔覆寫(內網包裝別名/絕對路徑);
+        #                              # 只換程式,事件協議仍依 engine
+        model: haiku                 # 測試省成本;真實任務可改 sonnet/opus。
+        #                            # ⚠️ 不設=不帶 --model(CLI 帳號預設,可能較貴)
+        # extra_args: ['--flag', 'v']  # 彈性附加參數,原樣接在 command line 最後
         os_sandbox: true
         sandbox: workspace-write
         timeout_sec: 300
