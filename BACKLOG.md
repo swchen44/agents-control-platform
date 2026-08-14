@@ -82,7 +82,7 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 | B3 Resolve 轉狀態 | ⤳ 改設計 | 不做「grader 過即自動轉 Done」;改由 **HIL(End) 人關單** → `transition("done")`(W11) |
 | B4 常駐服務化 | ◐ 部分 | run_poller 時間盒 + control API;systemd/daemon 化未做(operator 手冊有跑法) |
 | A2 冪等 ledger | ✅ 結論不建 | native resume + at-most-once + 一次性 token 已達目標(見 idempotency.md) |
-| D2 codex sandbox | ⏳ 真環境 | 需 codex quota;`--sandbox` 欄位已在 |
+| D2 | codex `--sandbox` 端到端驗證 | ✅ **完成(2026-08-15 實測)**:read-only 下寫檔被擋(agent 回 WRITE_BLOCKED、檔案不存在);workspace-write 下 cwd 內可寫、cwd 外被擋(IN=ok OUT=fail) | — | ✅ |
 | R7a | 追蹤官方 `skillOverrides`/permission `Skill(...)` deny 能否 pattern 式隱藏 user-level skills | 若成真,「乾淨 HOME」從紀律升級硬開關 | 低(等 CLI 新版釋出相關設定) | ⏳ |
 | R7b | 若改 API key 計費:重測 `CLAUDE_CONFIG_DIR` 受控隔離(研究推測可行)與 `--bare` | 全域漏入的技術解 | 低(觸發=計費模式改變) | ⏳ |
 | V1 | 付費複驗 checklist | ◐ **部分已由 HIL 驗收覆蓋**(hold→resume/human-prompt/自評=T10/T12/T13 真環境過);其餘項照 v1-reverify-checklist | 低 | ◐ |

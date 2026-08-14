@@ -432,7 +432,7 @@ agent 檢查 → 更新/留言 ticket → resume。行程內只允許**前景等
 
 - **US-L1** ✅ Jira Cloud/DC 一鍵切換(`jira_flavor: dc`):端點(api/3↔api/2)、認證(API token↔PAT/Basic)、識別(accountId↔username)、mention(`[~accountid:x]`↔`[~username]`)、格式(ADF↔wiki)全自動;email→識別碼四步查序(user_map→快取→user search→username_rule);**差異顯式建模**(DC 下 accountid mention 是安靜失敗——不通知)。⏳ 真 DC 站首驗照 checklist(mention 真觸發通知最關鍵)。
 - **US-L2** ✅ 狀態同步(選配):`status_sync` 五鍵映射(running→In Progress/hil_middle→Pending/hil_end→Resolve/close→Closed/abort→Cancelled);**精確按名稱轉**(不 fallback category——多 done 狀態挑錯教訓);close 兩步保險;queued/inactive 不動;未設=不轉。
-- **US-L3** 🔮 CR/ClearQuest 閉環:掃 CQ 命中(title/人名/keyword)→ 開票貼 label 帶 crid(PoC 的 agent-job+task_script 已可承載);close → 回寫 CQ(Jira 連結+結果,**所有** close 含取消失敗;擴充點 `cq_writeback` 已預留,⛔ 等 CQ base_url+欄位名)。
+- **US-L3** ◐ CR/ClearQuest 閉環:掃 CQ 命中(title/人名/keyword)→ 開票貼 label 帶 crid(PoC 的 agent-job+task_script 已可承載);close → 回寫 CQ(Jira 連結+結果,**所有** close 含取消失敗;擴充點 `cq_writeback` 已預留,⛔ 等 CQ base_url+欄位名)。
 - **US-L4** ✅ Jira 寫入退避(write_retry 指數退避);錯誤 body 必浮出(前 400 字)。
 
 ### Epic M — 部署與維運
@@ -484,20 +484,20 @@ agent 檢查 → 更新/留言 ticket → resume。行程內只允許**前景等
 | FR-30 | 預算六層+spawn 前預檢+自助增額 | I | ✅ |
 | FR-31 | 身分門禁(owner_email_list;豁免;IP 稽核;set_email) | J | ✅ |
 | FR-32 | 四層 trace+trace_lint 100% | K | ✅ |
-| FR-33 | journal 事件字典自動防漂移(53 種) | K | ✅ |
+| FR-33 | journal 事件字典自動防漂移(gen_event_dict --check 入 CI;種數隨事件成長) | K | ✅ |
 | FR-34 | dashboard 七頁+Swagger(全 vendored) | K | ✅ |
 | FR-35 | transcript HTML(claude/codex/sub-agent;事件驅動+按需) | K | ✅ |
 | FR-36 | KPI 框架(北極星雙報+制衡;中位數;不設目標) | K | ✅ |
 | FR-37 | 唯讀監控 API(/api/v1;ref 三合一) | K | ✅ |
 | FR-38 | Jira DC 相容(flavor 切換;識別/格式/認證) | L | ✅(真站待首驗) |
 | FR-39 | 狀態同步(五鍵;精確名稱;兩步保險) | L | ✅ |
-| FR-40 | CQ 閉環(掃 CR 開票+close 回寫) | L | 🔮(I1 ⛔ 等 CQ 資訊) |
+| FR-40 | CQ 閉環(掃 CR 開票+close 回寫) | L | ◐(掃 CR→開票+CRID 去重**已可用**;close 回寫 ⛔ 等 CQ base_url+欄位名) |
 | FR-41 | 多實例/備份還原/離線自足 | M | ✅ |
-| FR-46 | **rerun 乾淨重跑**:資訊更新(description/CRID/欄位)後同票同 profile 從頭重來——reset session+刪舊工作區+重渲染 TICKET.md;**ABORTED 票的復活路徑**;選填補充指示進人類指示段 | M | ✅(2026-08-15) |
 | FR-42 | Postgres+leased queue(多機) | M | 🔮(A1) |
 | FR-43 | systemd/daemon 化 | M | 🔮(B4) |
 | FR-44 | Agent Status/Link 自訂欄位+transition condition | L | 🔮(B2,需 Jira admin) |
-| FR-45 | codex `--sandbox` 端到端驗證 | C | 🔮(D2,待 quota) |
+| FR-45 | codex `--sandbox` 端到端驗證 | C | ✅(2026-08-15 實測:read-only 擋寫入、workspace-write 擋工作區外) |
+| FR-46 | **rerun 乾淨重跑**:資訊更新(description/CRID/欄位)後同票同 profile 從頭重來——reset session+刪舊工作區+重渲染 TICKET.md;**ABORTED 票的復活路徑**;選填補充指示進人類指示段 | M | ✅(2026-08-15) |
 
 ---
 
@@ -550,8 +550,8 @@ agent 檢查 → 更新/留言 ticket → resume。行程內只允許**前景等
 | 層級 | 內容 | 成本 |
 |---|---|---|
 | **L1 離線集(CI,每 commit)** | ruff、全部單元測試、harness_selftest、e2e_dashboard、e2e_form(fake Jira+真 HTTP)、`gen_event_dict.py --check`、trace_lint 合成六情境 | 免費 |
-| **L2 整測(隔離環境)** | KP2 流程:T1 完成流/T2 job 分流/T3 cancel/T4 審批 Pending/T5 安全掃描/T6 審批門/T9 插值+存證+結案回寫;browser E2E;獨立 config.test.yaml+runtime-test+獨立 port | ~$0.1–0.2 |
-| **L3 付費複驗(升級後)** | v1-reverify-checklist 十步:基本派工/佈建原子性/select/hold/人類指示/自評/next/base/retry 計數/交付物 | ~$0.1–0.3 |
+| **L2 整測(隔離環境)** | KP2 流程 **T1–T14**:完成流/job 分流/cancel/審批 Pending/安全掃描(abort+修訂放行)/審批門/同票 next/跨票 base/插值+存證+結案回寫/hold 全程/budget 增額/continue 打回/auto_close;browser E2E;獨立 config.test.yaml+runtime-test+獨立 port | ~$0.1–0.5 |
+| **L3 付費複驗(升級後)** | v1-reverify-checklist 十步(其中 hold/人類指示/自評/next/base 已由 L2 的 T10–T14 真環境覆蓋,可略) | ~$0.1–0.3 |
 | **L4 真環境對照** | E1(A/B/C×claude/codex 四格同 grader 對照)、E2(crash→resume 硬證據:context 傳承/不重工/完成) | 低 |
 
 **驗收判定原則**:每一步以 **journal 事件**為證(「做什麼→預期事件→在哪看」);任何驗收不得以 UI 目視或 agent 自稱替代事件與檔案證據。
