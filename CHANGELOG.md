@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+(無)
+
+## [0.1.0] - 2026-08-14
+
 ### Added(2026-08-10 → 08-14;逐波詳情見 HANDOFF/BACKLOG 與各設計正本)
 - **budget 六層上限(2026-08-10)**:token+usd × 單票 soft/hard+月/agent+全站;
   soft 破→自助增額表單、其餘管理者 hot reload;每輪 attempt 前 precheck。[budget.md]
