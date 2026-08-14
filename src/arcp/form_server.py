@@ -399,14 +399,23 @@ def render_command_console(req, sess, profiles, jira_up: bool = True,
             "placeholder='a@company.com, b@company.com'>"
             "<div class='hint'>整組取代:逗號分隔多個;"
             "留空=清空(解除門禁)。</div>")
+    note_fld = ""
+    if "rerun" in avail:
+        note_fld = (
+            "<div class='hint' style='margin-top:8px'>rerun(乾淨重跑)用:"
+            "先把新資訊更新到 Jira description,再送出;下欄選填補充指示"
+            "(會寫進 TICKET.md 人類指示段)。</div>"
+            "<textarea name='note' rows='2' "
+            "placeholder='(選填)rerun 補充指示'></textarea>")
     confirm = ""
     if any(c in DESTRUCTIVE for c in avail):
         confirm = ("<label style='font-weight:400;margin-top:10px'>"
                    "<input type='checkbox' name='confirm' value='yes'> "
-                   "我確認要執行破壞性指令(cancel / stop / set_email 用)</label>")
+                   "我確認要執行破壞性指令(cancel / stop / set_email / rerun 用)"
+                   "</label>")
     form = (f"<form method='POST' class='card'><h2>下指令</h2>{email}"
             f"<div style='margin-top:10px'>{opts}</div>"
-            f"{prof_sel}{email_sel}{confirm}"
+            f"{prof_sel}{email_sel}{note_fld}{confirm}"
             "<button type='submit'>送出指令</button></form>")
     return _page(f"指令台 {req.key}", head + warn + err + form
                  + _command_reference())
@@ -656,7 +665,8 @@ class FormServer:
         ok, msg, _ = self.command_fn(
             req.issue_id, cmd,
             {"profile": data.get("profile", ""),      # next 用
-             "email": data.get("email", "")},         # K:set_email 用
+             "email": data.get("email", ""),           # K:set_email 用
+             "note": data.get("note", "")},            # rerun 補充指示
             by, ip)
         return 200, render_command_result(req, cmd, ok, msg)
 

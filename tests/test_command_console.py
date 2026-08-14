@@ -82,7 +82,7 @@ calls2 = []
 srv2 = _server(st2, calls2)
 code, html = srv2._command_submit(tok2, {"cmd": "run", "by": "a@x.tw"})
 check("POST:有效 run → 呼叫 command_fn + 結果頁",
-      calls2 == [(1, "run", {"profile": "", "email": ""}, "a@x.tw")]
+      calls2 == [(1, "run", {"profile": "", "email": "", "note": ""}, "a@x.tw")]
       and "已送出" in html)
 
 # 破壞性 cancel 未勾確認 → 擋
@@ -92,7 +92,7 @@ check("POST:cancel 未確認 → 擋、不呼叫", "破壞性" in html and calls
 code, html = srv._command_submit(
     tok, {"cmd": "cancel", "by": "a@x.tw", "confirm": "yes"})
 check("POST:cancel 已確認 → 執行",
-      calls == [(1, "cancel", {"profile": "", "email": ""}, "a@x.tw")])
+      calls == [(1, "cancel", {"profile": "", "email": "", "note": ""}, "a@x.tw")])
 
 # 不可用指令(running 下 run)→ 擋
 code, html = srv._command_submit(tok, {"cmd": "run", "by": "a@x.tw"})
@@ -103,7 +103,7 @@ calls.clear()
 code, html = srv._command_submit(
     tok, {"cmd": "next", "by": "a@x.tw", "profile": "alt"})
 check("POST:next 帶 profile",
-      calls == [(1, "next", {"profile": "alt", "email": ""}, "a@x.tw")])
+      calls == [(1, "next", {"profile": "alt", "email": "", "note": ""}, "a@x.tw")])
 
 
 # ── close 失效:INVALIDATED → 410 唯讀 ──────────────────────────────────── #

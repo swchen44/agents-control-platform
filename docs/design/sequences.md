@@ -215,6 +215,34 @@ sequenceDiagram
   end
 ```
 
+## 9. rerun:資訊更新後同票乾淨重跑(含 ABORTED 復活)
+
+```mermaid
+sequenceDiagram
+  participant H as 人
+  participant CQ as CQ(WITS)
+  participant J as Jira
+  participant P as ARCP
+  participant A as Agent
+
+  note over H,J: 票已停在 ABORTED / FAILURE / 等評分,結果不對
+  CQ-->>H: (可選)CR 上有更新的資訊
+  H->>J: 更新 description(把新資訊/正確參數寫進去)
+  H->>P: 指令台 rerun(需確認,可選填補充指示)
+  P->>P: reset session(忘掉舊對話)+ 刪舊工作區
+  opt 有補充指示
+    P->>J: 指示寫入 description human 段
+  end
+  P->>P: 重佈建 + 重渲染 TICKET.md(新描述、{crid} 插值)
+  P->>A: 同 profile 全新 spawn
+  A->>A: 帶更新後的資訊從頭做
+  A-->>P: 完成 → verify → 回到正常流程(場景 1/6)
+```
+
+與相鄰路徑分工:`retry`=同 session resume(帶舊對話)、HIL(End)
+`continue`=打回+指示(帶舊對話)、`next`=換 profile、
+**`rerun`=不換人但砍掉重練(ABORTED 唯一復活路)**。
+
 ---
 
 **對照**:HIL 全表(reason×處理)= [interaction §3.2](interaction.md);

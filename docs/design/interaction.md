@@ -228,6 +228,15 @@ HIL(End) `score_and_close` 與 HIL(Middle) `decision` 表單內嵌 handoff 欄�
 
 ## 16. 指令台(command console;取代 @agent comment 指令通道)
 
+> 2026-08-15 新增 `rerun`(乾淨重跑):**「資訊更新後同票重跑」use case**——
+> 人先把新資訊改進 Jira description(或 CQ 有新內容),按 rerun → reset
+> session(忘掉舊對話)+刪舊工作區(殘檔不騙 verify)+重佈建重渲染
+> TICKET.md(吃到新描述與 {crid} 插值)→ 同 profile 從頭來。
+> **ABORTED 票也開放(唯一復活路徑)**;選填補充指示→description human 段
+> →新 TICKET.md。與相鄰指令的分工:`retry`=同 session resume 重試(帶舊
+> 對話)、HIL(End) `continue`=打回續作(帶舊對話+指示)、`next`=換
+> profile、**`rerun`=不換人但砍掉重練**。時序見 [sequences §9](sequences.md)。
+
 人下指令(run/retry/hold/stop/cancel/next)改走一個**綁票、可重複用**的表單,取代「在 Jira
 打 `@agent` 留言」——因為「沒人敢在 Jira 打指令」。與 HIL 表單**本質不同**:
 

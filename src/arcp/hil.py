@@ -301,7 +301,8 @@ def apply_submission(source, store, req: InteractionRequest, *,
                 pass
         # Q10:人類補充指示 → 累加寫進 workspace 人類指示段(agent resume 後重讀)
         hp = (data.get("human_prompt") or "").strip()
-        if hp and sess.workspace and sess.workspace not in ("(adopted)", "(handoff)"):
+        if (hp and sess.workspace
+                and sess.workspace not in ("(adopted)", "(handoff)", "(rerun)")):
             try:
                 append_human_instruction(sess.workspace, hp, now=now)
                 # T10/T12 修:同時落 resume note——下輪 attempt 的 prompt 顯式

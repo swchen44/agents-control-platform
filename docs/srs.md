@@ -493,6 +493,7 @@ agent 檢查 → 更新/留言 ticket → resume。行程內只允許**前景等
 | FR-39 | 狀態同步(五鍵;精確名稱;兩步保險) | L | ✅ |
 | FR-40 | CQ 閉環(掃 CR 開票+close 回寫) | L | 🔮(I1 ⛔ 等 CQ 資訊) |
 | FR-41 | 多實例/備份還原/離線自足 | M | ✅ |
+| FR-46 | **rerun 乾淨重跑**:資訊更新(description/CRID/欄位)後同票同 profile 從頭重來——reset session+刪舊工作區+重渲染 TICKET.md;**ABORTED 票的復活路徑**;選填補充指示進人類指示段 | M | ✅(2026-08-15) |
 | FR-42 | Postgres+leased queue(多機) | M | 🔮(A1) |
 | FR-43 | systemd/daemon 化 | M | 🔮(B4) |
 | FR-44 | Agent Status/Link 自訂欄位+transition condition | L | 🔮(B2,需 Jira admin) |

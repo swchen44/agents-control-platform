@@ -184,6 +184,7 @@ TICKET.md 完整組成見 [design/workspace.md](design/workspace.md);變數契�
 | `stop` | 交還人工(暫不再派 agent) |
 | `cancel` | 取消本票(破壞性,需勾選確認) |
 | `next <profile>` | 同票換手:換一個 agent profile 接手 |
+| `rerun` | **乾淨重跑**:你更新了 description/CRID 資訊後,同 profile 忘掉舊對話、刪舊工作區、從頭來(**ABORTED 的票也能用**;選填補充指示) |
 
 - **填 email**:送出前要填你的 email(供稽核;瀏覽器會記住,不用每次重打)。
 - **破壞性指令**(cancel / stop)要**勾選確認**才會送出。
@@ -192,6 +193,17 @@ TICKET.md 完整組成見 [design/workspace.md](design/workspace.md);變數契�
 
 > 自動化 / 程式要下指令走 **REST API**:`POST /ticket/<id>/command`(見管理者手冊),
 > 與指令台同一套核心。
+
+### 常見情境:結果不對,我把資訊改好了,怎麼重跑?
+
+1. 先把新資訊更新到位:改 Jira **description**(或 CQ/CRID 那邊的內容——
+   記得把要 agent 知道的部分寫進 description)。
+2. 依票的狀態選一條:
+   - **等評分中(Resolve)**:評分表單選「續跑」+填指示——**帶舊對話**打回
+     (改小方向適用)。
+   - **想完全重來(含 ABORTED 的票)**:指令台 **`rerun`**——忘掉舊對話、
+     刪舊工作區、重讀新 description 從頭做(資訊大改/參數錯了適用)。
+   - 只是卡住沒要改資訊:`run`/`retry` 即可。
 
 ## 8.5 碰到 token / 花費上限(自助增額)
 

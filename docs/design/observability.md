@@ -93,6 +93,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `profile_selected` | `chosen`, `method`, `original` | `src/arcp/dispatcher.py` |
 | `provenance_attached` | `attached`, `skipped` | `src/arcp/provenance.py` |
 | `queued` | `engine`, `profile` | `src/arcp/poller.py` |
+| `rerun` | `author`, `ip`, `note` | `src/arcp/commands.py` |
 | `resolved` | `attempts`, `cost_usd`, `human_minutes_saved` | `src/arcp/dispatcher.py` |
 | `result_written` | `result` | `src/arcp/provenance.py` |
 | `route_matched` | `on_match`, `profile`, `route` | `src/arcp/poller.py` |
@@ -113,7 +114,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 54 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 55 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)

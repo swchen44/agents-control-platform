@@ -57,17 +57,18 @@ check("avail:todo(無 session)→ 空", available_commands(None) == [])
 check("avail:running → hold/stop/cancel/next/set_email",
       available_commands(_sess())
       == ["hold", "stop", "cancel", "next", "set_email"])
-check("avail:queued → stop/cancel/next/set_email",
+check("avail:queued → stop/cancel/next/rerun/set_email",
       available_commands(_sess(queued=True))
-      == ["stop", "cancel", "next", "set_email"])
-check("avail:hil_middle(pending)→ run/retry/cancel/next/set_email",
+      == ["stop", "cancel", "next", "rerun", "set_email"])
+check("avail:hil_middle(pending)→ run/retry/cancel/next/rerun/set_email",
       available_commands(_sess(pending_reason="approval"))
-      == ["run", "retry", "cancel", "next", "set_email"])
-check("avail:hil_end(終態)→ retry/cancel/next/set_email",
+      == ["run", "retry", "cancel", "next", "rerun", "set_email"])
+check("avail:hil_end(終態)→ retry/cancel/next/rerun/set_email",
       available_commands(_sess(outcome="SUCCESS"))
-      == ["retry", "cancel", "next", "set_email"])
-check("avail:aborted → 空(不再接指令)",
-      available_commands(_sess(outcome="ABORTED")) == [])
+      == ["retry", "cancel", "next", "rerun", "set_email"])
+check("avail:aborted → rerun/set_email(乾淨復活路徑,2026-08-15)",
+      available_commands(_sess(outcome="ABORTED"))
+      == ["rerun", "set_email"])
 
 
 # ── apply_command:效果 + 稽核 comment + journal ────────────────────────── #

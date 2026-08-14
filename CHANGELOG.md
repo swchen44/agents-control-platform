@@ -6,6 +6,12 @@
 ## [Unreleased]
 
 ### Added
+- **`rerun` 指令(乾淨重跑 use case,2026-08-15)**:資訊更新
+  (description/CRID/欄位)後同票同 profile 從頭重來——reset session+
+  刪舊工作區(殘檔不騙 verify)+重渲染 TICKET.md;**ABORTED 票的唯一
+  復活路徑**;選填補充指示→human 段;指令台/REST 同步、破壞性需確認。
+  與 retry(帶舊對話 resume)/continue(打回+指示)/next(換 profile)
+  分工明確。journal 新事件 `rerun`。
 - **rawcli agent 三參數(內網包裝支援)**:`agent.command` 執行檔覆寫
   (別名/絕對路徑如 `/tools/bin/claudeoss`;只換 argv[0],協議仍依 engine)、
   `agent.extra_args`(原樣接 command line 尾)。

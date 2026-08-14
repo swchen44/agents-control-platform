@@ -50,7 +50,7 @@ def _finalize_leaving(sess, profiles: dict | None, reason: str) -> None:
 def _write_evict(sess) -> None:
     """寫 EVICT 檔 → agent 看門狗 killpg(同 control /evict);無 workspace 則略。"""
     ws = getattr(sess, "workspace", "") or ""
-    if ws in ("", "(adopted)", "(handoff)"):
+    if ws in ("", "(adopted)", "(handoff)", "(rerun)"):
         return
     artifacts = os.path.join(os.path.dirname(ws), "attempts")
     try:
@@ -94,6 +94,14 @@ COMMAND_INFO: dict[str, dict] = {
         "when": "想換 profile / 引擎繼續同一件事",
         "side_effect": "重置 session(session_id/attempts 歸零)、重建 workspace",
         "effect": "下輪由新 profile 接手同一張票(目標若需放行則重走審批門)"},
+    "rerun": {
+        "label": "乾淨重跑(rerun)",
+        "purpose": "資訊已更新(description/CRID/欄位)後,同 profile 從頭重來",
+        "when": "先把新資訊改進 Jira description(或 CQ),再按 rerun;"
+                "ABORTED 的票也能用(=復活路徑)",
+        "side_effect": "重置 session(忘掉舊對話)、**刪除舊工作區**重佈建、"
+                       "重渲染 TICKET.md(吃到新描述/插值);破壞性、需二次確認",
+        "effect": "下輪同 profile 全新開始;可選填補充指示(寫進人類指示段)"},
     "set_email": {
         "label": "改負責人(set_email)",
         "purpose": "整組更改本票負責人 email(逗號分隔多個;門禁比對 + @mention 對象)",
@@ -104,19 +112,22 @@ COMMAND_INFO: dict[str, dict] = {
                   "(或管理者/審批者)能操作本票"},
 }
 # 破壞性指令:console 要二次確認(set_email 改負責人也算敏感)
-DESTRUCTIVE = ("cancel", "stop", "set_email")
+DESTRUCTIVE = ("cancel", "stop", "set_email", "rerun")
 
 
 def available_commands(sess) -> list[str]:
     """依當前推導狀態列出此刻適用的指令(console 動態選單 + apply 再驗共用)。"""
     st = canonical_state(sess)
-    if st in ("todo", "aborted"):
-        return []                                  # 無 session / 已終態:不接指令
+    if st == "todo":
+        return []                                  # 無 session:不接指令
+    if st == "aborted":
+        # rerun use case(2026-08-15):中止票在人工更新資訊後可乾淨復活
+        return ["rerun", "set_email"]
     base = {
         "running": ["hold", "stop", "cancel", "next"],
-        "queued": ["stop", "cancel", "next"],
-        "hil_middle": ["run", "retry", "cancel", "next"],   # pending/交人:等人推進
-        "hil_end": ["retry", "cancel", "next"],   # 終態評分中(關單/續跑走 HIL 表單)
+        "queued": ["stop", "cancel", "next", "rerun"],
+        "hil_middle": ["run", "retry", "cancel", "next", "rerun"],
+        "hil_end": ["retry", "cancel", "next", "rerun"],  # 關單/續跑走 HIL 表單
     }.get(st, ["cancel"])
     return [*base, "set_email"]                    # K:改負責人在任何活著狀態都可下
 
@@ -168,6 +179,48 @@ def apply_command(source, store, profiles, issue_id: int, cmd: str,
         return (True, f"已換手 → {target};下輪重新排隊接手。",
                 [store.journal("handoff", issue_id, key, kind="command",
                                to=target, author=by, ip=ip)])
+
+    if cmd == "rerun":
+        # 乾淨重跑(2026-08-15 use case):人已更新資訊(description/CRID/欄位)
+        # → 忘掉舊對話、刪舊工作區、同 profile 從頭來。ABORTED 也可用(復活)。
+        note = str(args.get("note") or "").strip()
+        old_ws = sess.workspace or ""
+        if os.path.isdir(old_ws) and f"{os.sep}tickets{os.sep}" in old_ws:
+            try:                     # 刪舊產出——否則殘檔會直接騙過 verify
+                import shutil
+                shutil.rmtree(old_ws)
+            except OSError as e:     # 刪不掉不擋(重佈建仍會刷 TICKET.md)
+                log.warning("rerun 清舊 workspace 失敗 %s: %s", key, e)
+        if note:                     # 補充指示 → description human 段(rmtree 後
+            try:                     # sidecar 已不在;human 段會渲染進新 TICKET.md)
+                from .sections import Section, parse, render
+                t = source.get_ticket(issue_id)
+                before, secs, after = parse(t.description or "")
+                by_owner = {s.owner: s for s in secs}
+                hb = by_owner.get("human")
+                line = f"- [rerun] {note}"
+                if hb:
+                    hb.body = (hb.body + "\n" + line).strip()
+                else:
+                    secs.append(Section(owner="human", body=line))
+                source.set_description(issue_id,
+                                       render(before, secs, after))
+            except Exception as e:  # noqa: BLE001 — 指示寫不進不擋重跑
+                log.warning("rerun note 回寫失敗 %s: %s", key, e)
+        sess.session_id = None
+        sess.attempts = 0
+        sess.outcome, sess.pending_reason = None, None
+        sess.abort_reason = None
+        sess.inactive, sess.queued, sess.queued_at = False, False, 0.0
+        sess.approval_revisions = 0
+        sess.workspace = "(rerun)"       # 哨值:health_check 不健康→重佈建
+        store.upsert_session(sess)
+        _audit(" (rerun)" + (f" note={note[:40]}" if note else ""))
+        log.info("%s rerun by %s(乾淨重跑)", key, by)
+        return (True, "已排入乾淨重跑:舊對話/工作區已捨棄,"
+                "下輪以更新後的資訊重新開始。",
+                [store.journal("rerun", issue_id, key, author=by, ip=ip,
+                               note=bool(note))])
 
     if cmd == "set_email":
         from .hil import form_link  # lazy:避免 import 期耦合
