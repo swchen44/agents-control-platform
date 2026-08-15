@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+(無)
+
+## [0.2.0] - 2026-08-15
+
 ### Added
 - **systemd 化(FR-43,2026-08-15)**:`deploy/systemd/` poller+dashboard
   unit 範本——poller `-m 0` 常駐、`Restart=on-failure` crash 自愈(冪等

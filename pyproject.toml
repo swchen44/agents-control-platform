@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agents-control-platform"
-version = "0.1.0"
+version = "0.2.0"
 description = "Jira 事件驅動的 headless coding-agent harness(claude -p / codex exec):長時間可靠執行、可 trace、可 control。"
 readme = "README.md"
 requires-python = ">=3.10"
