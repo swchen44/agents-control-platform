@@ -171,6 +171,7 @@ workspace(instance)、命名 resume-safe、起點審批門(description YAML 參�
 | C2 | **L0-L3 trace completeness CI**(v5 唯一 P1 硬 KPI) | 每個結束的 attempt 四層檔齊全,缺任一層告警 | 低-中 | v5 說唯一該 P1 就設 100% 硬目標;稽核基礎 |
 | C3 | **KPI 框架**(first-pass Close rate + Goodhart 防護,v5 §10) | ✅ **完成(2026-08-13)**:`kpi.py` 純函式——北極星雙報(嚴格=÷closed 決策用/進行=÷終態趨勢;一次到位=無 retry/打回/換手)+效率(cycle/attempts/$ per close med+p90/週吞吐)+**制衡**(打回率/人評/UNKNOWN/放棄+abort 原因)+coverage;Dashboard 首頁三窗 KPI 表+作弊警語+`GET /api/v1/kpi?days=N`;只建基線不設目標(v5 原則);正本 docs/design/kpi.md | ✅ |
 | C4 | **聚合 dashboard**(cost/state/失敗率) | detail page 加彙總頁 or Grafana;讀 journal/store | 中 | v3 生產就緒清單缺的「監控」 |
+| VIZ | **Timeline 可視化升級(抄 DeepSeek Trajectory 排版)** | 📐 研究完成(docs/research/2026-08-trajectory-viz-comparison.md):八項可學清單(TTFT/decoding 漸層、opacity 聚焦、sequence 投影、3 語意泳道、token 化配色、拖選聯動、右側頁籤 details、hover 紀律);戰場=detail_server ticket 頁(自有碼)或自寫 trajectory.html 與 cclog 並存(zero-diff 不動 vendor) | 中 | 📐 |
 | HIL-V | **HIL 全路徑真環境驗收** | ✅ **完成(2026-08-13)**:it_kp2 T9–T14 全過;修 6 個併發 bug(race 兩道閘/score human_prompt 欄/resume note/auto_close 精確關單/EVICT 生命週期/evicted 欄位合併)= lesson #18 | — | ✅ |
 | R | **headless 防線五道** | ✅ **完成(2026-08-13)**:DISABLE_CRON 注入/inject 禁令/stall 3600+指引/CLI 版本基準+冒煙/部署衛生+自檢(R7a/R7b 追蹤項另列) | — | ✅ |
 | AUD | **稽核三欄曝光** | ✅ 完成(2026-08-14):連結清單+表單唯讀頁顯示提交時間/email/IP | — | ✅ |

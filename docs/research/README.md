@@ -39,3 +39,5 @@
 
 > 想看「怎麼除錯」而非「怎麼設計」→ 見 [troubleshooting](../troubleshooting.md) 與
 > [observability](../design/observability.md);想看子系統機制 → 見 [docs/design/](../index.md)。
+
+- [`2026-08-trajectory-viz-comparison.md`](2026-08-trajectory-viz-comparison.md) — DeepSeek Trajectory/claude-code-log/ARCP 三方可視化比較+可學清單(timeline 升級 backlog)
