@@ -170,6 +170,34 @@ soft 上限、評分、workspace 路徑、驅逐次數…新欄位也不漏)+ **
   n_attachments、skipped);設計見 [design/agent-output.md](design/agent-output.md)。
 - 除錯用 journal:見 [可觀測性](design/observability.md) + [troubleshooting](troubleshooting.md)。
 
+## 3.5 log 地圖(所有 log 在哪、怎麼看、會不會長大)
+
+| log | 路徑 | 看法 | 長大/回收 |
+|---|---|---|---|
+| **服務 log**(poller/dashboard 的執行訊息) | 前景=stdout;設 `ARCP_LOG_FILE=/path` 同時寫檔;**systemd 下進 journald** | 終端 / `journalctl -u arcp-poller -f` | journald 自帶輪替;`ARCP_LOG_FILE` **無輪替**(要就配 logrotate) |
+| **journal(事件流,證據主幹)** | `<runtime>/events.jsonl` | dashboard 各頁 / trace / `grep issue_id` | **只增不減**;Server 頁 >200MB 紅燈(見下方歸檔法) |
+| **狀態 DB** | `<runtime>/harness.db` | dashboard /db;備份見 §5 | 小;絕不 wipe |
+| **每票 attempt log** | `<runtime>/tickets/<票資料夾>/attempts/aN.events.jsonl`(蒸餾)+ `aN.raw.jsonl`(原生全保真)+ `aN.envelope.json` | ticket 頁 Trace(L0–L3)| 隨 workspace 由 retention 回收(預設 270 天) |
+| **transcript(對話 HTML)** | `<runtime>/tickets/<票資料夾>/transcript/`(latest/final*.html + run.tgz) | ticket 頁下載;結案也附到 Jira | 同上 |
+| **job(scan 等排程)log** | `<runtime>/runs/<job>__<run>__<ts>/transcript/stdout.log` | dashboard 可見可下載 | 同 retention |
+
+**journal 歸檔法**(>200MB 紅燈時;無自動輪替是刻意——單檔好稽核):
+停 poller → `mv events.jsonl events-YYYYMM.jsonl.bak`(收著別刪,凍結稽核用)
+→ 重啟(自動開新檔)。⚠️ 代價:KPI 的 coverage/全歷史窗少掉歸檔前的數據;
+dashboard 時間軸也只看得到新檔——**量不大就別歸檔**。
+
+## 3.6 長駐維護 checklist(週期巡檢)
+
+- **每天掃一眼** Server 頁 8+1 個燈(紅燈=熱點,§3 心法)與 Timeline 長黃段(卡等人)。
+- **每週**:`sqlite3 harness.db ".backup ..."` 備份(§5);看月預算燈;
+  KP2/測試票堆積要不要收(評分關掉即可,見 user-guide)。
+- **升級前**:CLI 版本冒煙(developer-guide「升 CLI 版前的冒煙」)、
+  `reverify_v1.py --offline`;改 config 後 `POST /reload`(壞值自動擋)。
+- **筆電/會睡眠的機器**:時間線出現超長空白先查 `pmset -g log`(睡眠凍結
+  計時器的假 stall);**不用 caffeinate**——生產請用不睡的伺服器+systemd(§1.5)。
+- **磁碟**:retention 自動回收終態 workspace(profile `retention_days`,0=不收);
+  journal 見上方歸檔法;journald 空間 `journalctl --disk-usage`。
+
 ## 4. 調設定(不重啟)
 
 > **全部參數的作用與預設值** → [Config 參數參考](config-reference.md)
