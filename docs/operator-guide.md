@@ -48,6 +48,29 @@ uv run python scripts/detail_server.py --host 127.0.0.1   # 另開:dashboard(鎖
 - poller 是**時間盒**:到時自動退,靠外部(cron / 迭代)重起;重起不重跑(冪等靠 `runtime/`)。
   要 24h+ 常駐請用 `-m 0`。
 
+## 1.5 內網伺服器常駐(systemd,FR-43;2026-08-15)
+
+Linux 生產機不靠人肉終端——用 `deploy/systemd/` 的兩個 unit 範本:
+
+```bash
+# 1. 準備:建 bot 帳號(~/.claude 保持乾淨,R7)、repo 放定位、
+#    ~/.env 放憑證、uv sync
+# 2. 改 unit 檔三處(User / WorkingDirectory / uv 路徑)後安裝:
+sudo cp deploy/systemd/arcp-{poller,dashboard}.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now arcp-poller arcp-dashboard
+# 3. 運維:
+systemctl status arcp-poller          # 狀態
+journalctl -u arcp-poller -f          # 日誌(journald)
+sudo systemctl stop arcp-poller       # 優雅停:先 POST /shutdown(跑完當前輪),
+                                      # 逾時 300s 才 SIGINT
+```
+
+設計要點:**poller 用 `-m 0` 無限常駐**(使用者定案);`Restart=on-failure`
+crash 自愈——冪等設計保證重啟**不重工、不重複寫 Jira**(NFR-R1);
+`Environment=HOME` 必須指到 bot 家目錄(憑證 `~/.env` 與 R7 乾淨 HOME 都靠它)。
+macOS 開發機不適用(對應物是 launchd;開發用時間盒即可)。
+
 ## 2. 日常控制(control API,或 dashboard Control 頁)
 
 | 動作 | 指令 | 說明 |

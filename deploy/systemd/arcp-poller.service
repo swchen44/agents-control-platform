@@ -1,0 +1,30 @@
+# ARCP poller — systemd unit 範本(FR-43;2026-08-15)
+# 安裝:改下方三處路徑/使用者 → cp 到 /etc/systemd/system/ →
+#   systemctl daemon-reload && systemctl enable --now arcp-poller
+# 日誌:journalctl -u arcp-poller -f
+[Unit]
+Description=ARCP poller (Jira -> headless agent dispatch)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# ↓↓↓ 按環境改:執行帳號(R7 部署衛生:此帳號的 ~/.claude 必須乾淨)
+User=arcp
+# ↓↓↓ 按環境改:repo 位置
+WorkingDirectory=/opt/arcp/agents-control-platform
+# ↓↓↓ 按環境改:uv 絕對路徑(which uv)。-m 0 = 無限常駐(2026-08-15 定案)
+ExecStart=/usr/local/bin/uv run python scripts/run_poller.py -m 0
+# 憑證:poller 讀「執行帳號家目錄」的 ~/.env(JIRA_BASE_URL/EMAIL/API_TOKEN
+# 或 DC 的 JIRA_PAT)——HOME 必須指對
+Environment=HOME=/home/arcp
+# 優雅停:請 poller 跑完當前輪再退(control API);逾時才 SIGINT(等價 Ctrl-C)
+ExecStop=/usr/bin/curl -sf -X POST http://127.0.0.1:8787/shutdown
+KillSignal=SIGINT
+TimeoutStopSec=300
+# crash 自愈(冪等設計:重啟不重工、不重複寫 Jira)
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

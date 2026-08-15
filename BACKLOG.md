@@ -80,7 +80,7 @@ Q9–Q13 逐題定案並落地(`tests/test_group_a.py` 12 檢查;設計見
 | C3 KPI + 人力估算 | ✅ | `resolved` 事件帶 `human_minutes_saved`(profile.est_minutes)+ dashboard |
 | C4 總覽 dashboard | ✅ | `/`(cost/狀態/失敗率)+ `/server`(8 燈效能) |
 | B3 Resolve 轉狀態 | ⤳ 改設計 | 不做「grader 過即自動轉 Done」;改由 **HIL(End) 人關單** → `transition("done")`(W11) |
-| B4 常駐服務化 | ◐ 部分 | run_poller 時間盒 + control API;systemd/daemon 化未做(operator 手冊有跑法) |
+| B4 常駐服務化 | ✅ 完成(2026-08-15) | deploy/systemd/ 兩 unit(poller -m 0 常駐/Restart=on-failure/ExecStop→/shutdown 優雅停/HOME=bot 帳號)+operator-guide §1.5;detail page Jira 深連結早已有 |
 | A2 冪等 ledger | ✅ 結論不建 | native resume + at-most-once + 一次性 token 已達目標(見 idempotency.md) |
 | D2 | codex `--sandbox` 端到端驗證 | ✅ **完成(2026-08-15 實測)**:read-only 下寫檔被擋(agent 回 WRITE_BLOCKED、檔案不存在);workspace-write 下 cwd 內可寫、cwd 外被擋(IN=ok OUT=fail) | — | ✅ |
 | R7a | 追蹤官方 `skillOverrides`/permission `Skill(...)` deny 能否 pattern 式隱藏 user-level skills | 若成真,「乾淨 HOME」從紀律升級硬開關 | 低(等 CLI 新版釋出相關設定) | ⏳ |

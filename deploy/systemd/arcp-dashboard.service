@@ -1,0 +1,17 @@
+# ARCP dashboard — systemd unit 範本(唯讀觀測;FR-43)
+[Unit]
+Description=ARCP dashboard (read-only observability)
+After=network-online.target
+
+[Service]
+Type=simple
+User=arcp
+WorkingDirectory=/opt/arcp/agents-control-platform
+# --host 0.0.0.0 對內網開放前先讀 operator-guide §8 安全(capability URL 會列出)
+ExecStart=/usr/local/bin/uv run python scripts/detail_server.py --host 127.0.0.1 --port 8788
+Environment=HOME=/home/arcp
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

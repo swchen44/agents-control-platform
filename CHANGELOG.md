@@ -6,6 +6,10 @@
 ## [Unreleased]
 
 ### Added
+- **systemd 化(FR-43,2026-08-15)**:`deploy/systemd/` poller+dashboard
+  unit 範本——poller `-m 0` 常駐、`Restart=on-failure` crash 自愈(冪等
+  不重工)、`systemctl stop`=先 POST /shutdown 跑完當前輪、`HOME` 指 bot
+  帳號(憑證+R7 乾淨 HOME);operator-guide §1.5 安裝/運維步驟。
 - **`rerun` 指令(乾淨重跑 use case,2026-08-15)**:資訊更新
   (description/CRID/欄位)後同票同 profile 從頭重來——reset session+
   刪舊工作區(殘檔不騙 verify)+重渲染 TICKET.md;**ABORTED 票的唯一

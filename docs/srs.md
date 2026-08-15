@@ -438,7 +438,7 @@ agent 檢查 → 更新/留言 ticket → resume。行程內只允許**前景等
 ### Epic M — 部署與維運
 
 - **US-M1** ✅ 安裝:Python ≥3.10、uv sync 即裝(rawcli 主線純 stdlib 免 venv);憑證只在 `~/.env` 絕不進版控;dashboard 只顯示金鑰有無/到期,**絕不顯示值**。
-- **US-M2** ✅ 三進程:poller(+control :8787+form :8790)、dashboard(:8788);poller timebox 迭代(`-m 0` 常駐);🔮 systemd/daemon 化(B4 殘留)。
+- **US-M2** ✅ 三進程:poller(+control :8787+form :8790)、dashboard(:8788);poller timebox 迭代(`-m 0` 常駐);✅ systemd 化(deploy/systemd/,poller -m 0 常駐+Restart=on-failure+優雅停)。
 - **US-M3** ✅ 備份=三樣(config git、harness.db 用 `.backup`、events.jsonl+runs 複製);還原後續跑不重派;**絕不 wipe runtime/**。
 - **US-M4** ✅ 多實例:複製資料夾,分 name/project·jql(不可重疊,否則互搶)/port/控制指向;預算 per-instance 不合計。
 - **US-M5** ✅ 離線內網:凍結 snapshot 自足(文件+vendored 資產+事件字典);不連外、不裝新套件。
@@ -494,7 +494,7 @@ agent 檢查 → 更新/留言 ticket → resume。行程內只允許**前景等
 | FR-40 | CQ 閉環(掃 CR 開票+close 回寫) | L | ◐(掃 CR→開票+CRID 去重**已可用**;close 回寫 ⛔ 等 CQ base_url+欄位名) |
 | FR-41 | 多實例/備份還原/離線自足 | M | ✅ |
 | FR-42 | Postgres+leased queue(多機) | M | 🔮(A1) |
-| FR-43 | systemd/daemon 化 | M | 🔮(B4) |
+| FR-43 | systemd/daemon 化 | M | ✅(2026-08-15:deploy/systemd/ 兩 unit 範本+operator-guide §1.5;poller -m 0 常駐、crash 自愈、優雅停 via /shutdown) |
 | FR-44 | Agent Status/Link 自訂欄位+transition condition | L | 🔮(B2,需 Jira admin) |
 | FR-45 | codex `--sandbox` 端到端驗證 | C | ✅(2026-08-15 實測:read-only 擋寫入、workspace-write 擋工作區外) |
 | FR-46 | **rerun 乾淨重跑**:資訊更新(description/CRID/欄位)後同票同 profile 從頭重來——reset session+刪舊工作區+重渲染 TICKET.md;**ABORTED 票的復活路徑**;選填補充指示進人類指示段 | M | ✅(2026-08-15) |
