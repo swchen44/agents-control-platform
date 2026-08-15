@@ -272,7 +272,6 @@ function renderOv(){
     if(range&&!inRange(r))el.classList.add('dim');
     if(!matches(r))el.classList.add('searchdim');
     if(cur===r.i)el.classList.add('cur');if(hov===r.i)el.classList.add('hov');
-    el.onclick=ev=>{ev.stopPropagation();select(r.i,true)};
     el.onmouseenter=ev=>{hov=r.i;el.classList.add('hov');showTip(ev,r)};
     el.onmouseleave=()=>{hov=null;el.classList.remove('hov');hideTip()};
     track.appendChild(el);});
@@ -334,19 +333,42 @@ let drag=null;
 track.addEventListener('pointerdown',ev=>{
   const v=vw(),x=v.s+((ev.clientX-track.getBoundingClientRect().left)/Math.max(1,track.clientWidth))*(v.e-v.s);
   if(ev.button===2){if(range){range=null;renderAll()}else if(view)drag={pan:true,x0:ev.clientX,v0:{...view}};return}
-  drag={x0:x,x1:x};track.setPointerCapture(ev.pointerId);});
+  drag={x0:x,x1:x,ly:ev.clientY-track.getBoundingClientRect().top,
+        hadRange:!!range};
+  track.setPointerCapture(ev.pointerId);});
 track.addEventListener('pointermove',ev=>{
   const rect=track.getBoundingClientRect(),W=Math.max(1,track.clientWidth);
   const v=vw(),x=v.s+((ev.clientX-rect.left)/W)*(v.e-v.s);
   if(drag&&drag.pan){const d=(drag.x0-ev.clientX)/W*(drag.v0.e-drag.v0.s);
     let ns=Math.min(Math.max(drag.v0.s+d,D0()),D1()-(drag.v0.e-drag.v0.s));
     view={s:ns,e:ns+(drag.v0.e-drag.v0.s)};track.classList.add('pan');renderOv();return}
-  if(drag){drag.x1=x;range={s:Math.min(drag.x0,drag.x1),e:Math.max(drag.x0,drag.x1)};renderOv();return}
+  if(drag){drag.x1=x;
+    if(Math.abs(frac(drag.x1)-frac(drag.x0))>0.005){   // 過閾值才算拖選
+      range={s:Math.min(drag.x0,drag.x1),e:Math.max(drag.x0,drag.x1)};renderOv()}
+    return}
   const h=$('hline');h.style.display='block';
   h.style.left=`calc(${((ev.clientX-rect.left)/W)*100}% - 1px)`;});
+function jumpTo(x){          // 無選取時點擊時間帶:跳到該時刻最近的事件
+  let best=null,bd=Infinity;
+  R.forEach(r=>{const d=dom(r);
+    const dist=(x>=d.s&&x<=d.e)?0:Math.min(Math.abs(d.s-x),Math.abs(d.e-x));
+    if(dist<bd){bd=dist;best=r.i}});
+  if(best!==null)select(best,true);}   // select=高亮+ledger 捲動+右側 details
+function hitSpan(x,ly){      // 點中某泳道的 span?(pointer capture 下 target
+  const lane=Math.round((ly-13)/14);   //  永遠是 track,改用座標命中測試)
+  let best=null;
+  R.forEach(r=>{if(r.lane!==lane)return;const d=dom(r);
+    if(x>=d.s&&x<=d.e)best=r.i;});
+  return best;}
 track.addEventListener('pointerup',ev=>{
-  if(drag&&!drag.pan&&Math.abs(frac(drag.x1)-frac(drag.x0))>0.005)renderAll();
-  else if(drag&&!drag.pan){range=null;renderAll()}
+  if(drag&&!drag.pan){
+    const clicked=Math.abs(frac(drag.x1)-frac(drag.x0))<=0.005;
+    if(!clicked)renderAll();                       // 拖選成立→聯動
+    else if(drag.hadRange){range=null;renderAll()}  // 原有選取→點擊=清除
+    else{range=null;                                // 點擊:點中色塊=選它;
+      const hit=hitSpan(drag.x0,drag.ly);           // 空白=跳到該時間
+      hit!==null?select(hit,true):jumpTo(drag.x0)}
+  }
   track.classList.remove('pan');drag=null;});
 track.addEventListener('pointerleave',()=>{$('hline').style.display='none'});
 track.addEventListener('contextmenu',ev=>ev.preventDefault());
