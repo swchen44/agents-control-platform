@@ -5,7 +5,14 @@
 
 ## [Unreleased]
 
-(無)
+### Added
+- **trajectory.html(VIZ,抄 DeepSeek harness Trajectory 排版)**:
+  `trajectory_html.py` 自足單檔產生器——3 語意泳道 Overview(user/agent/
+  tool)+ledger+右側 Content/Timing 頁籤 details;token 化明暗配色、
+  sequence/time 投影切換、wheel 錨點縮放、拖選區間→ledger 聯動、opacity
+  聚焦、hover 500ms tooltip、末事件最小寬不捏造時長。finalize 自動產出,
+  與 vendored cclog 的 final.html 並存(zero-diff 不動);蒸餾事件加
+  `category` 欄。三方比較研究:research/2026-08-trajectory-viz-comparison.md
 
 ## [0.2.0] - 2026-08-15
 

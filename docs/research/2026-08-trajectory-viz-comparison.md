@@ -40,7 +40,16 @@ React/虛擬滾動/分頁/串流跟尾(事件量級用不到、離線零依賴�
 cclog 的 15 組泳道與糖果色(過碎、light-only)。保留我們獨有的跨票全域
 視角與狀態色帶語意。
 
-## 4. 落地路線(定案後寫入 BACKLOG)
+## 4. 落地(2026-08-15 定案 B 並完成)
+
+`src/arcp/trajectory_html.py`:從 `attempts/a*.events.jsonl` 渲染自足單檔
+`transcript/trajectory.html`(finalize 自動產,與 cclog final.html 並存;
+dashboard transcript 卡動態列檔自動出現)。八項全落地;蒸餾事件新增
+`category` 欄(text/tool/tool_result/thinking/user;舊檔 emoji fallback)。
+測試 `tests/test_trajectory_html.py`;KP2-41 真資料 browser 驗證
+(sequence 投影/拖選聯動/縮放/details 頁籤)。
+
+## 4b. 原始落地路線(供追溯)
 
 cclog 是 **zero-diff vendor**(NOTICE.md 約束)——不改它的模板。戰場:
 - **A. detail_server ticket 頁**(自有碼):conversation+事件時間軸改

@@ -49,3 +49,5 @@ known-first-party = ["arcp"]
 # 核心套件 src/arcp/ 維持嚴格;測試/e2e/舊頂層腳本 print-heavy,放寬行長/分號/命名
 "tests/**" = ["E501", "E702", "E741"]
 "scripts/**" = ["E501", "E702", "E741"]
+# trajectory_html:內嵌 CSS/JS 模板字串(自足單檔產生器),行長不適用
+"src/arcp/trajectory_html.py" = ["E501"]

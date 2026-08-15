@@ -152,6 +152,20 @@ def finalize(session_id: str | None, engine: str, workspace: str,
     except Exception as e:  # noqa: BLE001
         log.warning("finalize 渲染失敗(%s):%s", session_id, e)
         outs = []
+    # VIZ(2026-08-15):同場產 trajectory.html(抄 DeepSeek Trajectory 排版;
+    # 從 attempts/a*.events.jsonl 渲染,與 cclog 的 final.html 並存)。best-effort。
+    try:
+        from .trajectory_html import render_trajectory
+        base = (os.path.dirname(workspace)
+                if workspace.rstrip("/").endswith("ws") else workspace)
+        tj = render_trajectory(
+            os.path.join(base, "attempts"),
+            os.path.join(out_dir, "trajectory.html"),
+            title=os.path.basename(base) or "session")
+        if tj:
+            outs.append(tj)
+    except Exception as e:  # noqa: BLE001 — 附加視圖失敗不擋定格
+        log.warning("trajectory.html 產生失敗(%s):%s", session_id, e)
     if outs:                                # 有產出才記 metadata
         _write_meta(out_dir, session_id, reason or "unknown", outs)
     if not pack:

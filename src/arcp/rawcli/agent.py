@@ -20,14 +20,17 @@ import time
 import uuid
 
 
-def _msg_event(text: str, source: str) -> dict:
+def _msg_event(text: str, source: str, category: str = "text") -> dict:
     """細粒度事件(舊 SDK MessageEvent 的 JSONL 子集;dashboard 只讀
-    kind/source/llm_message.content,故保留這三者即可)。"""
+    kind/source/llm_message.content)。category(VIZ 2026-08-15):
+    text|tool|tool_result|thinking|user——trajectory.html 泳道分類用;
+    舊檔無此欄由渲染端 fallback emoji 前綴判斷。"""
     return {
         "kind": "MessageEvent",
         "id": str(uuid.uuid4()),
         "timestamp": datetime.datetime.now().isoformat(),
         "source": source,
+        "category": category if source == "agent" else "user",
         "parent_id": None,
         "llm_message": {"role": "assistant" if source == "agent" else "user",
                         "content": [{"type": "text", "text": text}]},
@@ -267,11 +270,11 @@ class RawCLIAgent:
             time.sleep(0.1)
 
     # -- helpers ----------------------------------------------------------- #
-    def _emit(self, on_event, text: str) -> None:
+    def _emit(self, on_event, text: str, category: str = "text") -> None:
         if not text.strip():
             return
         self._event_count += 1
-        on_event(_msg_event(text, "agent"))
+        on_event(_msg_event(text, "agent", category))
 
     # -- fine-grained stream-json → OpenHands events (C.2) ----------------- #
     def _ingest_claude(self, o: dict, on_event) -> None:
@@ -288,9 +291,11 @@ class RawCLIAgent:
                     inp = b.get("input") or {}
                     hint = inp.get("file_path") or inp.get("command") or ""
                     self._emit(on_event,
-                               f"🔧 {b.get('name')} {str(hint)[:80]}")
+                               f"🔧 {b.get('name')} {str(hint)[:80]}",
+                               category="tool")
                 elif b.get("type") == "thinking" and b.get("thinking"):
-                    self._emit(on_event, f"💭 {b['thinking'][:200]}")
+                    self._emit(on_event, f"💭 {b['thinking'][:200]}",
+                               category="thinking")
         elif t == "user":
             for b in (o.get("message") or {}).get("content") or []:
                 if isinstance(b, dict) and b.get("type") == "tool_result":
@@ -298,7 +303,8 @@ class RawCLIAgent:
                     if isinstance(c, list):
                         c = " ".join(x.get("text", "") for x in c
                                      if isinstance(x, dict))
-                    self._emit(on_event, f"📋 {str(c or '')[:120]}")
+                    self._emit(on_event, f"📋 {str(c or '')[:120]}",
+                               category="tool_result")
         elif t == "result":
             self._got_terminal = True
             self._cost_usd = o.get("total_cost_usd")
@@ -317,7 +323,8 @@ class RawCLIAgent:
             if item.get("type") in ("command_execution", "tool_call",
                                     "mcp_tool_call"):
                 self._emit(on_event,
-                           f"🔧 {str(item.get('command') or item.get('type'))[:80]}")
+                           f"🔧 {str(item.get('command') or item.get('type'))[:80]}",
+                           category="tool")
         elif t == "item.completed":
             item = o.get("item") or {}
             if item.get("type") == "agent_message":
