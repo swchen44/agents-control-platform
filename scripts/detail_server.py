@@ -4505,8 +4505,12 @@ if __name__ == "__main__":
     CONTROL = _a.control_url or CONTROL
     HOST = _a.host or HOST
     _apply_control()                 # CONTROL 可能被覆寫 → 重算 CSP(_CONTROL_JS 於 render 代入)
-    where = "所有介面(內網開放)" if HOST == "0.0.0.0" else HOST
-    print(f"[detail] serving {ROOT} on {HOST}:{PORT} — {where}", flush=True)
+    # 帶 http:// 完整 URL——終端會渲染成可點連結,直接開 browser。
+    # 0.0.0.0 綁所有介面,可點的入口用 localhost 呈現。
+    click_host = "localhost" if HOST == "0.0.0.0" else HOST
+    where = "(綁 0.0.0.0,內網開放)" if HOST == "0.0.0.0" else ""
+    print(f"[detail] serving {ROOT} on http://{click_host}:{PORT}{where}",
+          flush=True)
     if HOST == "0.0.0.0":
         print("[detail] ⚠️ 內網開放:dashboard 唯讀但會顯示系統/程序資訊;"
               "control API(寫入端點)風險見 /docs。鎖本機:--host 127.0.0.1", flush=True)
