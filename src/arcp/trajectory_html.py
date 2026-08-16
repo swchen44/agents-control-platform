@@ -143,14 +143,22 @@ header input[type=search]{margin-left:auto;padding:4px 8px;border:1px solid
   padding:3px 10px;font:inherit;font-size:11px;cursor:pointer}
 .modes button[data-on=true]{background:var(--tj-user);color:#fff}
 /* ── Overview(50px 三泳道;抄 Trajectory)── */
-#ov{flex:none;position:relative;display:grid;grid-template-columns:52px 1fr;
-  height:56px;border-bottom:1px solid var(--tj-border-2);background:var(--tj-bg-2);
+/* ── filter bar:多選分類 chip(抄 fork 7d2c7cc)── */
+#filters{flex:none;display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+  padding:4px 12px;border-bottom:1px solid var(--tj-border-1);
+  background:var(--tj-bg-2)}
+#filters .fhint{font-size:10px;color:var(--tj-label-3);margin-right:2px}
+.fchip{border:1px solid transparent;cursor:pointer;font:inherit}
+.fchip:not([data-on]){background:transparent !important;
+  color:var(--tj-label-3) !important;border-color:var(--tj-border-2)}
+/* ── Overview:每分類一條泳道(依 present/選取壓縮)── */
+#ov{flex:none;position:relative;display:grid;grid-template-columns:84px 1fr;
+  border-bottom:1px solid var(--tj-border-2);background:var(--tj-bg-2);
   user-select:none}
 #ovLabels{position:relative;border-right:1px solid var(--tj-border-1);
   font-size:9px;color:var(--tj-label-3);line-height:1}
-#ovLabels span{position:absolute;right:4px;height:8px;display:flex;align-items:center}
-#ovLabels span:nth-child(1){top:9px}#ovLabels span:nth-child(2){top:23px}
-#ovLabels span:nth-child(3){top:37px}
+#ovLabels span{position:absolute;right:4px;height:8px;display:flex;
+  align-items:center;white-space:nowrap}
 #track{position:relative;overflow:hidden;cursor:crosshair;touch-action:none}
 #track.pan{cursor:grabbing}
 .span{position:absolute;height:8px;min-width:2px;border-radius:1.5px;
@@ -161,6 +169,9 @@ header input[type=search]{margin-left:auto;padding:4px 8px;border:1px solid
 .span[data-cat=tool]{background:var(--tj-tool)}
 .span[data-cat=tool_result]{background:var(--tj-ok)}
 .span[data-cat=system]{background:color-mix(in srgb,var(--tj-tool) 35%,var(--tj-bg-2))}
+.span[data-cat=async]{background:color-mix(in srgb,var(--tj-user) 50%,var(--tj-bg-2))}
+.span[data-cat=subassistant]{background:var(--tj-label-3)}
+.span[data-cat=memory]{background:color-mix(in srgb,var(--tj-assist) 60%,var(--tj-user))}
 .span[data-ttft=true]{background:linear-gradient(to right,
   color-mix(in srgb,var(--tj-assist) 40%,var(--tj-bg-2)) 0 100%)}
 .span.dim{opacity:.2}.span.searchdim{opacity:.14}
@@ -205,6 +216,10 @@ tr.turnhead td{border-top:2px solid var(--tj-border-2);background:var(--tj-bg-2)
 .chip[data-cat=tool_result]{background:var(--tj-ok)}
 .chip[data-cat=system]{background:color-mix(in srgb,var(--tj-tool) 35%,var(--tj-bg-1));
   color:var(--tj-label-1)}
+.chip[data-cat=async]{background:color-mix(in srgb,var(--tj-user) 50%,var(--tj-bg-1));
+  color:var(--tj-label-1)}
+.chip[data-cat=subassistant]{background:var(--tj-label-3)}
+.chip[data-cat=memory]{background:color-mix(in srgb,var(--tj-assist) 60%,var(--tj-user))}
 .prev{color:var(--tj-label-2);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;display:block}
 #details{flex:none;position:relative;width:clamp(300px,36%,440px);
@@ -231,7 +246,8 @@ tr.turnhead td{border-top:2px solid var(--tj-border-2);background:var(--tj-bg-2)
   <span class="hint">滾輪=縮放 · 左鍵拖=選區間(ledger 聯動)· 右鍵=清除/平移 · 點色塊/列=詳情</span>
   <input id="q" type="search" placeholder="搜尋事件內容…">
 </header>
-<div id="ov"><div id="ovLabels"><span>user</span><span>agent</span><span>tool</span></div>
+<div id="filters"><span class="fhint">show:</span></div>
+<div id="ov"><div id="ovLabels"></div>
   <div id="track"><div id="sel"></div><div id="hline"></div></div></div>
 <div id="main">
   <div id="ledger"><table><thead><tr><th style="width:44px">#</th>
@@ -245,9 +261,20 @@ tr.turnhead td{border-top:2px solid var(--tj-border-2);background:var(--tj-bg-2)
 <div id="tip"></div>
 <script>
 const D=__DATA__;const R=D.records;
-const LBL={user:'user',system:'system',text:'assistant',thinking:'thinking',
-  tool:'tool use',tool_result:'tool result'};
+const LBL={user:'user',async:'async result',system:'system',text:'assistant',
+  thinking:'thinking',subassistant:'sub-assistant',tool:'tool use',
+  tool_result:'tool result',memory:'memory'};
 const lbl=c=>LBL[c]||c;
+// 每分類一條泳道(canonical 順序);只有資料裡出現的分類有泳道,
+// 多選過濾再把泳道壓縮到選取的那些(抄 fork 7d2c7cc)。
+const CATS=['user','async','system','text','thinking','subassistant',
+  'tool','tool_result','memory'];
+const counts={};R.forEach(r=>{counts[r.cat]=(counts[r.cat]||0)+1});
+const present=CATS.filter(c=>counts[c]);
+const active=new Set(present);
+const laneOf=()=>{const sel=present.filter(c=>active.has(c));
+  return Object.fromEntries(sel.map((c,i)=>[c,i]))};
+const LANE_TOP=9,LANE_H=14;
 const t0=Math.min(...R.map(r=>r.start)),t1=Math.max(...R.map(r=>r.end));
 const turns=[...new Set(R.map(r=>r.attempt))].sort((a,b)=>a-b);
 const turnStart={};R.forEach(r=>{if(!(r.attempt in turnStart)||r.start<turnStart[r.attempt])turnStart[r.attempt]=r.start});
@@ -268,15 +295,22 @@ function matches(r){return !query||r.text.toLowerCase().includes(query)}
 function inRange(r){if(!range)return true;const d=dom(r);return d.e>=range.s&&d.s<=range.e}
 function renderOv(){
   track.querySelectorAll('.span,.turnline,.turntag').forEach(n=>n.remove());
+  const L=laneOf(),laneCount=Math.max(1,Object.keys(L).length);
+  document.getElementById('ov').style.height=(LANE_TOP*2+laneCount*LANE_H-6)+'px';
+  const labels=document.getElementById('ovLabels');labels.innerHTML='';
+  Object.entries(L).forEach(([c,i])=>{const sp=document.createElement('span');
+    sp.textContent=lbl(c);sp.style.top=(LANE_TOP+i*LANE_H)+'px';
+    labels.appendChild(sp);});
   const v=vw(),W=track.clientWidth;
   turns.forEach(a=>{const x=mode==='time'?turnStart[a]:R.find(r=>r.attempt===a).i;
     const f=frac(x);if(f<0||f>1)return;
     const l=document.createElement('div');l.className='turnline';l.style.left=(f*100)+'%';track.appendChild(l);
     const g=document.createElement('div');g.className='turntag';g.style.left=`calc(${f*100}% + 3px)`;g.textContent='a'+a;track.appendChild(g);});
-  R.forEach(r=>{const d=dom(r),fs=frac(d.s),fe=frac(d.e);
+  R.forEach(r=>{if(!active.has(r.cat))return;   // 多選分類過濾
+    const d=dom(r),fs=frac(d.s),fe=frac(d.e);
     if(fe<0||fs>1)return;
     const el=document.createElement('div');el.className='span';
-    el.dataset.cat=r.cat;el.style.setProperty('--lane',r.lane);
+    el.dataset.cat=r.cat;el.style.setProperty('--lane',L[r.cat]);
     el.style.left=Math.max(0,fs*100)+'%';
     el.style.width=Math.max(2,(Math.min(1,fe)-Math.max(0,fs))*W-1)+'px';
     if(range&&!inRange(r))el.classList.add('dim');
@@ -302,6 +336,7 @@ const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
 function renderLedger(){
   rows.innerHTML='';let lastTurn=null;
   R.forEach(r=>{
+    if(!active.has(r.cat))return;              // 多選分類過濾
     if(range&&!inRange(r))return;              // 拖選聯動:只顯示區間內
     if(r.attempt!==lastTurn){lastTurn=r.attempt;
       const tr=document.createElement('tr');tr.className='turnhead';
@@ -323,8 +358,7 @@ function renderDetails(){
   else b.innerHTML='<dl><dt>category</dt><dd>'+lbl(r.cat)+'</dd>'
     +'<dt>attempt</dt><dd>a'+r.attempt+'</dd>'
     +'<dt>start</dt><dd>'+fmtT(r.start)+'</dd>'
-    +'<dt>duration</dt><dd>'+fmtD(r.end-r.start)+' <span class="idx">(到下一事件;末事件為最小寬)</span></dd>'
-    +'<dt>lane</dt><dd>'+['user','agent','tool'][r.lane]+'</dd></dl>';
+    +'<dt>duration</dt><dd>'+fmtD(r.end-r.start)+' <span class="idx">(到下一事件;末事件為最小寬)</span></dd></dl>';
 }
 function select(i,scroll){cur=i;renderOv();renderLedger();renderDetails();
   if(scroll){const el=$('r'+i);el&&el.scrollIntoView({block:'center'})}}
@@ -360,14 +394,15 @@ track.addEventListener('pointermove',ev=>{
   h.style.left=`calc(${((ev.clientX-rect.left)/W)*100}% - 1px)`;});
 function jumpTo(x){          // 無選取時點擊時間帶:跳到該時刻最近的事件
   let best=null,bd=Infinity;
-  R.forEach(r=>{const d=dom(r);
+  R.forEach(r=>{if(!active.has(r.cat))return;const d=dom(r);
     const dist=(x>=d.s&&x<=d.e)?0:Math.min(Math.abs(d.s-x),Math.abs(d.e-x));
     if(dist<bd){bd=dist;best=r.i}});
   if(best!==null)select(best,true);}   // select=高亮+ledger 捲動+右側 details
 function hitSpan(x,ly){      // 點中某泳道的 span?(pointer capture 下 target
-  const lane=Math.round((ly-13)/14);   //  永遠是 track,改用座標命中測試)
+  const L=laneOf();          //  永遠是 track,改用座標命中測試)
+  const lane=Math.round((ly-LANE_TOP-4)/LANE_H);
   let best=null;
-  R.forEach(r=>{if(r.lane!==lane)return;const d=dom(r);
+  R.forEach(r=>{if(!active.has(r.cat)||L[r.cat]!==lane)return;const d=dom(r);
     if(x>=d.s&&x<=d.e)best=r.i;});
   return best;}
 track.addEventListener('pointerup',ev=>{
@@ -392,6 +427,15 @@ $('tT').onclick=()=>{dtab='T';$('tT').dataset.on=true;$('tC').dataset.on=false;r
 h.addEventListener('pointerdown',ev=>{rs={x0:ev.clientX,w0:d.getBoundingClientRect().width};h.setPointerCapture(ev.pointerId)});
 h.addEventListener('pointermove',ev=>{if(!rs)return;d.style.width=Math.max(260,Math.min(innerWidth*.6,rs.w0+(rs.x0-ev.clientX)))+'px'});
 h.addEventListener('pointerup',()=>{rs=null});})();
+// 多選分類 chip(預設全開;點擊切換,Overview+ledger 同步、泳道重壓縮)
+(()=>{const bar=document.getElementById('filters');
+present.forEach(c=>{const b=document.createElement('button');
+  b.className='chip fchip';b.dataset.cat=c;b.dataset.on='true';
+  b.textContent=lbl(c)+' ('+counts[c]+')';
+  b.onclick=()=>{if(active.has(c)){active.delete(c);delete b.dataset.on}
+    else{active.add(c);b.dataset.on='true'}
+    renderAll()};
+  bar.appendChild(b);});})();
 addEventListener('resize',()=>renderOv());
 renderAll();
 </script></body></html>
