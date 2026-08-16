@@ -84,5 +84,26 @@ check("mode:無檔 → none", attach_mode(0, 0) == "none")
 check("mode:<6MB → attach", attach_mode(ATTACH_TOTAL_LIMIT - 1, 2) == "attach")
 check("mode:≥6MB → link(下載頁)", attach_mode(ATTACH_TOTAL_LIMIT, 1) == "link")
 
+# ── 洞察四欄(2026-08-16:decisions/conventions/lessons/open_questions)──
+import tempfile as _tf
+
+_ws = _tf.mkdtemp(prefix="arcp-test-ins-")
+json.dump({
+    "summary_md": "ok",
+    "decisions": [{"question": "A或B", "chosen": "A", "reasoning": "快",
+                   "impact": "少一依賴", "junk": 123},
+                  "壞項(非dict)", {"question": 42}],
+    "lessons": [{"lesson": "x 會炸", "recommendation": "先檢查 y"}],
+    "open_questions": ["z 未驗", "", 42],
+}, open(os.path.join(_ws, "OUTPUT.json"), "w"))
+_o = load_output(_ws)
+check("洞察:decisions 讀取+壞項/非字串鍵過濾",
+      len(_o.decisions) == 1 and _o.decisions[0]["chosen"] == "A"
+      and "junk" not in _o.decisions[0])
+check("洞察:lessons 部分鍵也收", _o.lessons == [
+      {"lesson": "x 會炸", "recommendation": "先檢查 y"}])
+check("洞察:open_questions 濾空/非字串", _o.open_questions == ["z 未驗"])
+check("洞察:未提供=空陣列(選填相容)", _o.conventions == [])
+
 print(f"test-output: {'PASS' if fail == 0 else 'FAIL'} ({ok}/{ok+fail})")
 sys.exit(1 if fail else 0)

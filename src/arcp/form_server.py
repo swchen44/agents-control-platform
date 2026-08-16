@@ -188,6 +188,31 @@ def _deliverables_html(req) -> str:
     if d.get("summary_md"):
         parts.append("<h3>成果敘事</h3><div class='md'>"
                      + _md_to_html(d["summary_md"]) + "</div>")
+    # 洞察四小節(2026-08-16;選填,有才顯示——給評分的人看決策脈絡與教訓)
+    _INSIGHTS = (
+        ("decisions", "關鍵決策", ("question", "chosen", "reasoning", "impact"),
+         ("問題", "選擇", "理由", "影響")),
+        ("conventions", "慣例(後續應沿用)", ("pattern", "rationale", "scope"),
+         ("做法", "理由", "適用範圍")),
+        ("lessons", "教訓", ("lesson", "context", "recommendation"),
+         ("教訓", "脈絡", "建議")),
+    )
+    for key, title, fields, labels in _INSIGHTS:
+        items = d.get(key) or []
+        if not items:
+            continue
+        parts.append(f"<h3>{title}</h3><ul>")
+        for it in items:
+            bits = [f"<b>{_esc(it[f])}</b>" if i == 0 else
+                    f"<span class='ctx'>{_esc(lb)}:{_esc(it[f])}</span>"
+                    for i, (f, lb) in enumerate(zip(fields, labels))
+                    if it.get(f)]
+            parts.append("<li>" + " · ".join(bits) + "</li>")
+        parts.append("</ul>")
+    if d.get("open_questions"):
+        parts.append("<h3>未解問題</h3><ul>"
+                     + "".join(f"<li>{_esc(q)}</li>"
+                               for q in d["open_questions"]) + "</ul>")
     if d.get("code"):
         parts.append("<h3>程式碼(Gerrit)</h3><ul>")
         for c in d["code"]:

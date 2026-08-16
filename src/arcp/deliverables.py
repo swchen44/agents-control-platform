@@ -35,6 +35,10 @@ def snapshot_for_form(ws: str) -> dict | None:
         "summary_md": output.summary_md,
         "code": output.code,
         "references": output.references,
+        "decisions": output.decisions,          # 洞察四欄(表單頁小節)
+        "conventions": output.conventions,
+        "lessons": output.lessons,
+        "open_questions": output.open_questions,
         "attachments": [{"name": a.name, "rel": a.rel, "size": a.size}
                         for a in atts],
         "total_bytes": total,
@@ -43,6 +47,7 @@ def snapshot_for_form(ws: str) -> dict | None:
 
 
 def build_comment_adf(*, outcome: str, attempt: int, cost_usd: float,
+                      insights_line: str = "",
                       self_summary: str, output: Output | None,
                       attach_names: list[str], mode: str,
                       download_url: str | None, base_url: str | None,
@@ -52,6 +57,8 @@ def build_comment_adf(*, outcome: str, attempt: int, cost_usd: float,
         f"[agent] outcome={outcome}(attempt {attempt},累計 ${cost_usd:.4f})", 3)]
     if self_summary.strip():
         blocks.append(adf.paragraph(adf.strong("自報:"), " " + self_summary.strip()))
+    if insights_line:
+        blocks.append(adf.paragraph(insights_line))
 
     if output and output.code:
         blocks.append(adf.heading("程式碼(Gerrit)", 4))
@@ -96,6 +103,7 @@ def build_comment_adf(*, outcome: str, attempt: int, cost_usd: float,
 
 
 def build_comment_wiki(*, outcome: str, attempt: int, cost_usd: float,
+                       insights_line: str = "",
                        self_summary: str, output: Output | None,
                        attach_names: list[str], mode: str,
                        download_url: str | None, base_url: str | None,
@@ -107,6 +115,8 @@ def build_comment_wiki(*, outcome: str, attempt: int, cost_usd: float,
              f"(attempt {attempt},累計 ${cost_usd:.4f})"]
     if self_summary.strip():
         lines.append(f"*自報:* {self_summary.strip()}")
+    if insights_line:
+        lines.append(insights_line)
     if output and output.code:
         lines.append("h4. 程式碼(Gerrit)")
         for c in output.code:
@@ -165,8 +175,17 @@ def post_deliverables(source, store, ticket, sess, *, outcome: str,
     # comment 的自報已足夠,不製造噪音(降級只 journal has_output=false)。
     if output is not None:
         try:
+            ins = []
+            for label, v in (("決策", output.decisions),
+                             ("慣例", output.conventions),
+                             ("教訓", output.lessons),
+                             ("未解", output.open_questions)):
+                if v:
+                    ins.append(f"{label} {len(v)}")
             kw = dict(
                 outcome=outcome, attempt=sess.attempts, cost_usd=sess.cost_usd,
+                insights_line=("洞察:" + "・".join(ins) + "(詳評分表單頁)"
+                               if ins else ""),
                 self_summary=self_summary, output=output, attach_names=names,
                 mode=mode, download_url=download_url, base_url=base_url,
                 key=ticket.key)

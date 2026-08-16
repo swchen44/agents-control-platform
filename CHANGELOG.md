@@ -6,6 +6,11 @@
 ## [Unreleased]
 
 ### Added
+- **summary 洞察四欄(2026-08-16,學 trajectories 專案)**:OUTPUT.json
+  選填 `decisions/conventions/lessons/open_questions`(空=合法禁湊數);
+  inject 守則改寫=technical analyst 鐵律(引實際路徑/符號/密度優先/誠實
+  記失敗);評分表單頁渲染四小節、Jira comment 帶計數行;結構化教訓=
+  L4 糧食。
 - **trajectory.html(VIZ,抄 DeepSeek harness Trajectory 排版)**:
   `trajectory_html.py` 自足單檔產生器——3 語意泳道 Overview(user/agent/
   tool)+ledger+右側 Content/Timing 頁籤 details;token 化明暗配色、

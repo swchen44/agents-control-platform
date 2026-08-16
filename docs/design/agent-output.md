@@ -5,6 +5,16 @@
 > 這是 G1 結構化契約([contract.py](../../src/arcp/contract.py))的延伸 + 人機介面
 > ([interaction.md](interaction.md))的強化。
 
+## 洞察四欄(2026-08-16;學 trajectories summary 指導)
+
+`OUTPUT.json` 選填欄:`decisions[]`(question/chosen/reasoning/impact)、
+`conventions[]`(pattern/rationale/scope)、`lessons[]`(lesson/context/
+recommendation)、`open_questions[]`——**空=合法、守則禁湊數**。渲染:
+評分表單頁四小節(有才顯示)+Jira comment 一行計數;結構化存查=未來 L4
+(Evolution Agent 讀 lessons 自我進化)的直接糧食。summary 鐵律(inject
+守則):technical analyst 心態、引實際路徑/符號/命令、密度優先、誠實
+記失敗——取代原始資料。
+
 ## 0. 為什麼
 
 原本 agent 完成只回一行 `TASK_DONE` + structured `{reason,status,next}`;Jira comment

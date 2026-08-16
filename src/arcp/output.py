@@ -37,6 +37,14 @@ class Output:
     code: list[dict] = field(default_factory=list)
     attachments: list[str] = field(default_factory=list)   # 原始宣告(相對路徑)
     references: list[dict] = field(default_factory=list)
+    # 洞察四欄(2026-08-16,學 trajectories 專案的 summary 指導;全部選填、
+    # 空=合法;守則明令禁湊數)。給人讀(表單頁)+給 L4 讀(結構化教訓)。
+    # 鍵:question/chosen/reasoning/impact
+    decisions: list[dict] = field(default_factory=list)
+    conventions: list[dict] = field(default_factory=list)   # pattern/rationale/scope
+    # 鍵:lesson/context/recommendation
+    lessons: list[dict] = field(default_factory=list)
+    open_questions: list[str] = field(default_factory=list)
     raw: dict = field(default_factory=dict)                 # 原始 JSON(存查)
 
 
@@ -63,12 +71,30 @@ def load_output(ws: str) -> Output | None:
         return [x for x in v if isinstance(x, str) and x.strip()] \
             if isinstance(v, list) else []
 
+    def _insight(v, keys):
+        """list[dict] 且只留字串鍵值(壞項丟棄降級,不炸)。"""
+        out = []
+        for x in (v if isinstance(v, list) else []):
+            if isinstance(x, dict):
+                d = {k: x[k] for k in keys
+                     if isinstance(x.get(k), str) and x[k].strip()}
+                if d:
+                    out.append(d)
+        return out
+
     return Output(
         summary_md=data.get("summary_md") if isinstance(
             data.get("summary_md"), str) else "",
         code=_list_of_dict(data.get("code")),
         attachments=_list_of_str(data.get("attachments")),
         references=_list_of_dict(data.get("references")),
+        decisions=_insight(data.get("decisions"),
+                           ("question", "chosen", "reasoning", "impact")),
+        conventions=_insight(data.get("conventions"),
+                             ("pattern", "rationale", "scope")),
+        lessons=_insight(data.get("lessons"),
+                         ("lesson", "context", "recommendation")),
+        open_questions=_list_of_str(data.get("open_questions")),
         raw=data)
 
 

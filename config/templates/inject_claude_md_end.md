@@ -21,25 +21,43 @@
 
 ## 產出回傳(讓人看得到你做了什麼)
 
-**(A) 結構化輸出的 `summary` 欄**(每次結束都要填):100–200 字,寫**完成了哪些 item、
-還沒完成哪些**。這會貼到 Jira 給人第一眼看。
+你是自己這輪工作的 technical analyst:summary 的任務是**取代原始資料**——
+讓沒看過程的人只讀它就知道發生了什麼。鐵律:
 
-**(B) 完整交付物 → 在 workspace 根寫 `OUTPUT.json`**(有產出就寫;格式如下):
+- **具體**:引用實際檔案路徑、函式/符號名、命令、數值;禁止空泛詞
+  (「優化了程式」「完成了任務」這種寫了等於沒寫)。
+- **密度優先於長度**:每句都要有訊號,不要 filler。
+- **誠實**:沒做完的、失敗的、放棄的,照實寫。
+
+**(A) 結構化輸出的 `summary` 欄**(每次結束都要填):100–200 字,
+**完成了哪些 item、還沒完成哪些**(貼到 Jira 給人第一眼看)。
+
+**(B) 完整交付物 → 在 workspace 根寫 `OUTPUT.json`**(有產出就寫):
 
 ```json
 {
-  "summary_md": "過程與成果的完整 markdown 敘事(給人讀,可用標題/清單/連結)",
+  "summary_md": "2-3 段緊湊敘事:嘗試/完成/放棄了什麼、怎麼做的(markdown)",
+  "decisions":  [{"question": "面對什麼選擇", "chosen": "選了什麼",
+                  "reasoning": "為什麼", "impact": "影響了什麼"}],
+  "conventions": [{"pattern": "建立的做法/慣例", "rationale": "理由",
+                   "scope": "適用範圍"}],
+  "lessons":    [{"lesson": "學到什麼(壞掉的/走通的)", "context": "脈絡",
+                  "recommendation": "下次該怎麼做"}],
+  "open_questions": ["尚未解決的問題或不確定處"],
   "code":        [{"system": "gerrit", "url": "https://…/c/proj/+/1234",
                    "ref": "refs/changes/…", "note": "這個 change 改了什麼"}],
-  "attachments": ["report.md", "diagram.png", "spec.docx"],
+  "attachments": ["report.md", "diagram.png"],
   "references":  [{"label": "完整資料集", "path_or_url": "/abs/path 或 https://…",
                    "note": "說明"}]
 }
 ```
 
-- `attachments` = **要交到人手上的檔**(填 workspace 內相對路徑;ARCP 會附到 Jira 或出下載連結)。
-- `references` = **只給指標、不上傳**的東西(大檔、外部系統、內部絕對路徑)。
-- 程式碼請放 `code`(給 Gerrit 連結),不要把整包 code 塞進 attachments。
+- `decisions`/`conventions`/`lessons`/`open_questions`:**真的有才填,
+  沒有就省略或空陣列——嚴禁為了填滿而湊數**(小任務通常是空的,這很正常)。
+  這些會給評分的人看,也是系統長期學習的材料,品質重於數量。
+- `attachments` = **要交到人手上的檔**(workspace 內相對路徑;ARCP 附到 Jira
+  或出下載連結)。`references` = **只給指標、不上傳**(大檔/外部系統/絕對路徑)。
+- 程式碼放 `code`(Gerrit 連結),不要塞進 attachments。
 - 沒有某類就省略該欄;`OUTPUT.json` 必須是合法 JSON。
 
 > 這段是 `config/templates/inject_claude_md_end.md` 自動貼到 CLAUDE.md / AGENTS.md 尾。
