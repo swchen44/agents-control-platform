@@ -24,8 +24,10 @@ import re
 
 _EMOJI_CAT = (("🔧", "tool"), ("📋", "tool_result"), ("💭", "thinking"),
               ("⚙️", "system"))
-_LANE = {"user": 0, "system": 0, "text": 1, "thinking": 1,
-         "tool": 2, "tool_result": 2}
+# canonical 泳道序(對齊 fork golden;模板端 laneOf 依實際出現壓縮,
+# 這裡的值是 canonical 順位不是螢幕列)
+_LANE = {"user": 0, "async": 1, "system": 2, "text": 3, "thinking": 4,
+         "subassistant": 5, "tool": 6, "tool_result": 7, "memory": 8}
 _MIN_SPAN_S = 0.35        # 末事件/零時長的最小視覺寬(不捏造長時長)
 
 
@@ -81,7 +83,7 @@ def collect(attempts_dir: str) -> list[dict]:
             end = evs[i + 1]["t"] if i + 1 < len(evs) else e["t"] + _MIN_SPAN_S
             records.append({
                 "i": len(records), "attempt": attempt,
-                "cat": e["cat"], "lane": _LANE.get(e["cat"], 1),
+                "cat": e["cat"], "lane": _LANE.get(e["cat"], 3),
                 "start": e["t"], "end": max(end, e["t"] + _MIN_SPAN_S),
                 "text": e["text"],
                 # TTFT:attempt 首個 agent 事件之前的 user prompt 段(js 端算)

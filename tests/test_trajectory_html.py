@@ -56,10 +56,10 @@ with open(os.path.join(att, "a2.events.jsonl"), "w") as f:
 rs = collect(att)
 check("collect:9 事件、兩 attempt", len(rs) == 9
       and {r["attempt"] for r in rs} == {1, 2})
-check("泳道:user=0 / text·thinking=1 / tool·result=2",
-      rs[0]["lane"] == 0 and rs[1]["lane"] == 1 and rs[2]["lane"] == 2)
-check("category fallback:舊檔 ⚙️→system(lane0)、🔧→tool、📋→tool_result",
-      rs[4]["cat"] == "system" and rs[4]["lane"] == 0
+check("泳道:canonical 順位 user=0/thinking=4/tool=6(模板端再壓縮)",
+      rs[0]["lane"] == 0 and rs[1]["lane"] == 4 and rs[2]["lane"] == 6)
+check("category fallback:舊檔 ⚙️→system(lane2)、🔧→tool、📋→tool_result",
+      rs[4]["cat"] == "system" and rs[4]["lane"] == 2
       and rs[6]["cat"] == "tool" and rs[7]["cat"] == "tool_result")
 check("時長=到下一事件;末事件=最小寬(不捏造)",
       abs((rs[0]["end"] - rs[0]["start"]) - 2.0) < 0.01

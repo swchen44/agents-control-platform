@@ -13,24 +13,35 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import signal
 import subprocess
 import threading
 import time
 import uuid
 
+# memory 分類(對齊 fork golden):Read/Write/Edit 落在 auto-memory 目錄
+# = memory 互動;配對 tool_result 用 tool_use_id 傳染同分類。
+_MEMORY_PATH_RE = re.compile(r"/\.claude/projects/[^/]+/memory/")
+_MEMORY_TOOLS = frozenset({"Read", "Write", "Edit"})
 
-def _msg_event(text: str, source: str, category: str = "text") -> dict:
+
+def _msg_event(text: str, source: str, category: str | None = None) -> dict:
     """細粒度事件(舊 SDK MessageEvent 的 JSONL 子集;dashboard 只讀
-    kind/source/llm_message.content)。category(VIZ 2026-08-15):
-    text|tool|tool_result|thinking|user——trajectory.html 泳道分類用;
-    舊檔無此欄由渲染端 fallback emoji 前綴判斷。"""
+    kind/source/llm_message.content)。category(VIZ 2026-08-15/16):
+    user|async|system|text|thinking|subassistant|tool|tool_result|memory
+    ——trajectory.html 泳道分類,與 golden transcript 同一套(async/
+    subassistant/memory 是為未來 subagent/背景任務預留,判定已就緒);
+    None=依 source 預設(agent→text、user→user);舊檔無此欄由渲染端
+    fallback emoji 前綴判斷。"""
+    if category is None:
+        category = "text" if source == "agent" else "user"
     return {
         "kind": "MessageEvent",
         "id": str(uuid.uuid4()),
         "timestamp": datetime.datetime.now().isoformat(),
         "source": source,
-        "category": category if source == "agent" else "user",
+        "category": category,
         "parent_id": None,
         "llm_message": {"role": "assistant" if source == "agent" else "user",
                         "content": [{"type": "text", "text": text}]},
@@ -102,6 +113,8 @@ class RawCLIAgent:
         self._last_progress = 0.0
         self._raw_count = 0
         self._event_count = 0
+        # memory 分類傳染:memory tool_use 的 id → 其 tool_result 也標 memory
+        self._memory_tool_ids: set[str] = set()
 
     # -- command (ported from arcp_poc.drivers) ---------------------------- #
     def _build_command(self, prompt: str) -> list[str]:
@@ -270,11 +283,12 @@ class RawCLIAgent:
             time.sleep(0.1)
 
     # -- helpers ----------------------------------------------------------- #
-    def _emit(self, on_event, text: str, category: str = "text") -> None:
+    def _emit(self, on_event, text: str, category: str = "text",
+              source: str = "agent") -> None:
         if not text.strip():
             return
         self._event_count += 1
-        on_event(_msg_event(text, "agent", category))
+        on_event(_msg_event(text, source, category))
 
     # -- fine-grained stream-json → OpenHands events (C.2) ----------------- #
     def _ingest_claude(self, o: dict, on_event) -> None:
@@ -287,24 +301,42 @@ class RawCLIAgent:
             self._emit(on_event,
                        f"⚙️ init model={o.get('model')} "
                        f"mode={o.get('permissionMode')}", category="system")
+        # sidechain(subagent)訊號:headless stream-json 每個 assistant/user
+        # 事件都帶 parent_tool_use_id,subagent 內部訊息設為其 Task tool id。
+        # 分類優先序對齊 golden:memory > subassistant > 內層型別。
+        sidechain = bool(o.get("parent_tool_use_id"))
         if t == "assistant":
             for b in (o.get("message") or {}).get("content") or []:
                 if not isinstance(b, dict):
                     continue
                 if b.get("type") == "text" and b.get("text", "").strip():
-                    self._emit(on_event, b["text"])
+                    self._emit(on_event, b["text"],
+                               category="subassistant" if sidechain else "text")
                 elif b.get("type") == "tool_use":
                     inp = b.get("input") or {}
                     hint = inp.get("file_path") or inp.get("command") or ""
+                    fp = inp.get("file_path")
+                    if (b.get("name") in _MEMORY_TOOLS and isinstance(fp, str)
+                            and _MEMORY_PATH_RE.search(fp.replace("\\", "/"))):
+                        if b.get("id"):
+                            self._memory_tool_ids.add(b["id"])
+                        cat = "memory"
+                    elif sidechain:
+                        cat = "subassistant"
+                    else:
+                        cat = "tool"
                     self._emit(on_event,
                                f"🔧 {b.get('name')} {str(hint)[:80]}",
-                               category="tool")
+                               category=cat)
                 elif b.get("type") == "thinking" and b.get("thinking"):
                     self._emit(on_event, f"💭 {b['thinking'][:200]}",
-                               category="thinking")
+                               category="subassistant" if sidechain
+                               else "thinking")
         elif t == "user":
             for b in (o.get("message") or {}).get("content") or []:
-                if isinstance(b, dict) and b.get("type") == "tool_result":
+                if not isinstance(b, dict):
+                    continue
+                if b.get("type") == "tool_result":
                     c = b.get("content")
                     if isinstance(c, list):
                         # 圖片等非文字塊 → [image] 佔位(golden 規則:別讓
@@ -313,8 +345,21 @@ class RawCLIAgent:
                                  else "[image]"
                                  for x in c if isinstance(x, dict)]
                         c = " ".join(x for x in parts if x)
+                    if b.get("tool_use_id") in self._memory_tool_ids:
+                        cat = "memory"
+                    elif sidechain:
+                        cat = "subassistant"
+                    else:
+                        cat = "tool_result"
                     self._emit(on_event, f"📋 {str(c or '')[:120]}",
-                               category="tool_result")
+                               category=cat)
+                elif (b.get("type") == "text" and not sidechain
+                        and "<task-notification>" in b.get("text", "")):
+                    # 背景任務完成通知(harness 注入的 user 訊息)→ async;
+                    # 其他 user text(sidechain prompt 重複 Task 輸入/雜訊)
+                    # 維持不蒸餾。
+                    self._emit(on_event, b["text"][:200],
+                               category="async", source="user")
         elif t == "result":
             self._got_terminal = True
             self._cost_usd = o.get("total_cost_usd")
