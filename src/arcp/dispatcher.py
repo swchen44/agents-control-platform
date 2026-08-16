@@ -80,6 +80,9 @@ class Dispatcher:
         self.username_rule: str = ""            # L6:查無時推導(local/{local} 模板)
         self.security_scan: dict = {}           # M3:TICKET.md 掃描 config(可 reload)
         self.status_sync: dict = {}             # N:內部態→Jira 狀態同步(可 reload)
+        # timeout 重跑上限(global;profile agent.timeout_retry_max 覆蓋;
+        # 0=維持 v5 D3「timeout→UNKNOWN 交人」。可 reload)
+        self.timeout_retry_max: int = 0
         self.dashboard_url: str = ""            # Q 波:結案回寫 ticket 連結(選配)
 
     def _abort_untriageable(self, ticket: Ticket, meta: dict,
@@ -699,12 +702,43 @@ class Dispatcher:
                     cause="infra"))
                 return events
 
+            # timeout 重跑:harness 自己殺的(timeout_sec 到期)→ 原因可證,
+            # 使用者可設 timeout_retry_max 允許重跑(global,profile
+            # agent.timeout_retry_max 覆蓋;default 0=不重跑)。語意同
+            # evicted/infra:不消耗 attempt、session 留 active → 下輪 poll
+            # 憑 preassigned sid resume(W5.1)。計數 per-ticket 累計不歸零
+            # (防 timeout 迴圈);用完 → 落回 UNKNOWN pending 交人。
+            if res.raw_outcome == "unknown" and res.error_kind == "timeout":
+                retry_max = int(agent_cfg.get("timeout_retry_max",
+                                              self.timeout_retry_max) or 0)
+                if sess.timeout_retries < retry_max:
+                    sess.attempts -= 1
+                    sess.timeout_retries += 1
+                    self.store.upsert_session(sess)
+                    self.source.add_comment(ticket.id, (
+                        f"[agent] attempt 超時(timeout_sec 到期,harness 殺"
+                        f"行程);自動重跑 {sess.timeout_retries}/{retry_max},"
+                        f"下輪 resume 續跑。\n{_resume_hint(sess)}"))
+                    events.append(self.store.journal(
+                        "timeout_retry", ticket.id, ticket.key,
+                        used=sess.timeout_retries, max=retry_max))
+                    log.info("%s attempt timeout → 重跑 %d/%d(resume=%s)",
+                             ticket.key, sess.timeout_retries, retry_max,
+                             sess.session_id)
+                    return events
+
             if res.raw_outcome == "unknown":
                 sess.outcome, sess.pending_reason = "UNKNOWN", "unknown"
                 self.store.upsert_session(sess)
+                if res.error_kind == "timeout":
+                    cause = "attempt 超時" + (
+                        f"(timeout 重跑已用 {sess.timeout_retries} 次)"
+                        if sess.timeout_retries else "")
+                else:
+                    cause = "執行行程消失"
                 self.source.add_comment(ticket.id, (
                     f"[agent] outcome=UNKNOWN(attempt {sess.attempts}):"
-                    f"執行行程消失,無法證明副作用是否發生。不會自動重試,"
+                    f"{cause},無法證明副作用是否發生。不會自動重試,"
                     f"請人工檢查後下指令。\n{_resume_hint(sess)}"))
                 events.append(self.store.journal(
                     "pending", ticket.id, ticket.key, reason="unknown"))

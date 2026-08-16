@@ -93,6 +93,8 @@ def load_config(path: str) -> tuple[dict, list[Route]]:
     src["form"] = dict(outer.get("form") or {})          # W11 互動表單服務
     src["external_change"] = dict(outer.get("external_change") or {})
     src["budget"] = dict(outer.get("budget") or {})      # budget:全站月度上限
+    # timeout 重跑上限(global;profile agent.timeout_retry_max 覆蓋;0=關)
+    src["timeout_retry_max"] = int(outer.get("timeout_retry_max") or 0)
     return src, routes
 
 

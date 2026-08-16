@@ -53,6 +53,12 @@ outer_loop:
     # bot_account_id: '...'   # 可選(W12):機器人 accountId;不填→啟動 myself() 解析
     # W6.4:定時快照器已移除(耗資源)。transcript 改事件觸發+被動按鈕。
 
+  # timeout 重跑上限(global):attempt 超時(agent.timeout_sec 到期、harness
+  # 殺行程)時自動重跑的次數。0=關(維持 v5 D3:timeout→UNKNOWN 交人)。
+  # 不消耗 attempt、下輪 resume 續跑;per-ticket 累計、用完落回 UNKNOWN。
+  # profile 可用 agent.timeout_retry_max 覆蓋。可 hot reload。
+  timeout_retry_max: 0
+
   # 併發/分層資源閘門(F1,v5 D10):怕系統不夠用,管制同時跑的 agent 數
   concurrency:
     max_running: 4                     # 全局:一輪最多幾張票並行
@@ -219,6 +225,7 @@ inner_loop:
         model: haiku
         os_sandbox: true
         timeout_sec: 300
+        # timeout_retry_max: 2   # 選填:覆蓋 outer_loop.timeout_retry_max
       verify:
         - name: article
           files:

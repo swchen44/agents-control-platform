@@ -5,7 +5,10 @@ Three-state classification (v5 D3, measured basis in research v3 §9.3):
   error      runner wrote an envelope with an error (retryable — evidence of
              a clean failure, e.g. quota ConversationErrorEvent)
   unknown    runner died / timed out / left no envelope — side effects CANNOT
-             be proven either way; never auto-retried
+             be proven either way; never auto-retried. Exception: when the
+             harness itself killed the runner (timeout_sec) the cause IS
+             provable → error_kind="timeout", and the dispatcher may re-run
+             up to timeout_retry_max times (default 0 = keep v5 D3 behavior)
 
 Exit codes are deliberately ignored for classification: rc=0 proves nothing
 (codex SIGTERM lesson) and rc!=0 with a good envelope is still evidence.
@@ -108,12 +111,13 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
     venv_python = (os.path.abspath(os.path.join(HERE, venv, "bin", "python"))
                    if venv else sys.executable)
     timeout = float(agent_cfg.get("timeout_sec", 300)) + 60  # server startup
+    timed_out = False
     try:
         subprocess.run([venv_python, runner, job_path],
                        cwd=HERE, timeout=timeout,
                        stdin=subprocess.DEVNULL, capture_output=True)
     except subprocess.TimeoutExpired:
-        pass  # classification below is envelope-driven, not rc-driven
+        timed_out = True  # classification below is envelope-driven, not rc-driven
 
     envelope: dict = {}
     if os.path.exists(job["envelope_path"]):
@@ -127,6 +131,12 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         raw = "error"
     else:
         raw = "unknown"           # dead runner / no envelope → cannot prove
+    # timeout 是 harness 自己殺的(timeout_sec 到期),原因可證——與真 unknown
+    # (行程自己消失)不同,標 error_kind=timeout 讓 dispatcher 依
+    # timeout_retry_max 決定是否重跑(仍不能證明副作用,故 raw 維持 unknown)。
+    error_kind = envelope.get("error_kind")
+    if raw == "unknown" and timed_out and not error_kind:
+        error_kind = "timeout"
     return AttemptResult(
         raw_outcome=raw,
         session_id=envelope.get("session_id"),
@@ -135,6 +145,6 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         error=envelope.get("error"),
         events_path=job["events_path"],
         envelope_path=job["envelope_path"],
-        error_kind=envelope.get("error_kind"),
+        error_kind=error_kind,
         structured=envelope.get("structured"),
         tokens=envelope.get("tokens"))

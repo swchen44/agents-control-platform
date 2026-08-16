@@ -108,13 +108,14 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `status_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `status_synced` | `state`, `to` | `src/arcp/dispatcher.py` |
 | `ticket_md_attached` | `filename`, `hash` | `src/arcp/provenance.py` |
+| `timeout_retry` | `max`, `used` | `src/arcp/dispatcher.py` |
 | `transcript_packed` | `files`, `reason` | `src/arcp/control_api.py`, `src/arcp/dispatcher.py` |
 | `trigger_error` | `error` | `src/arcp/poller.py`, `src/arcp/triggers.py` |
 | `watcher_added` | `approver` | `src/arcp/dispatcher.py` |
 | `workspace_reclaimed` | `age_days`, `outcome`, `path` | `src/arcp/retention.py` |
 | `workspace_unhealthy` | `reason` | `src/arcp/dispatcher.py` |
 
-> 共 55 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
+> 共 56 種事件。本表由 `scripts/gen_event_dict.py` 掃 code 產生,勿手改。
 <!-- END gen_event_dict -->
 
 ### 語意分組(手寫)
@@ -159,6 +160,11 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 - ⚠️ `workspace_unhealthy`(`reason`):workspace 檢查不過。連看 `tickets/<id>/`。
 - ⚠️ `evicted`(`count`/`session`):被強制驅逐(killpg 釋放資源)。人為(按鈕/`POST
   /evict`)屬正常;非預期出現要查誰觸發。
+- ⚠️ `timeout_retry`(`used`/`max`):attempt 超時(`agent.timeout_sec` 到期、harness
+  殺行程)後自動重跑——不消耗 attempt、下輪 resume。上限 `timeout_retry_max`
+  (global 在 `outer_loop`,profile `agent.timeout_retry_max` 覆蓋;預設 0=關)。
+  per-ticket 累計不歸零;用完 → `pending(reason=unknown)` 交人。頻繁出現=
+  `timeout_sec` 設太短或任務真的太長,先看該票 events/envelope。
 
 **C. agent↔agent 交接(dispatcher/commands/hil)**:
 - `handoff`(`kind`/`to`/`from_profile`;`via=hil` 表人在 HIL 表單選的、`new_ticket`=跨票新票):

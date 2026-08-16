@@ -49,6 +49,8 @@ class TicketSession:
     approval_revisions: int = 0    # W2.3 審批退回重填次數
     finished_at: float = 0.0       # W3.3:進終態時間戳(retention 回收判定基準)
     evict_count: int = 0           # W6.3:強制驅逐次數(異常處理健康指標)
+    timeout_retries: int = 0       # timeout 重跑已用次數(上限 timeout_retry_max;
+    #                                 per-ticket 累計不歸零,防 timeout 迴圈)
     clearquest_id: str | None = None  # W7(R8/R9):ClearQuest CR id(現預留,CQ 監控 To-Do)
     human_score: int | None = None    # W7(R1):人類完成度評分 0-10(None=未評分)
     score_reminded_at: float = 0.0    # W7(R1):上次催評分時間(每票每 ~1h 一次)
@@ -116,7 +118,8 @@ class Store:
                 human_score    INTEGER,
                 score_reminded_at REAL NOT NULL DEFAULT 0,
                 base_ref       TEXT,
-                agent_score    INTEGER
+                agent_score    INTEGER,
+                timeout_retries INTEGER NOT NULL DEFAULT 0
             )""")
         # W3.4:內部觸發源(scheduled)的 last_run 水位
         self._db.execute("""
@@ -183,7 +186,9 @@ class Store:
                           ("abort_reason", "TEXT"),            # M2:中止理由泛化
                           ("sec_reviewed_at",
                            "REAL NOT NULL DEFAULT 0"),         # M3
-                          ("sec_scanned_hash", "TEXT")):       # M3
+                          ("sec_scanned_hash", "TEXT"),        # M3
+                          ("timeout_retries",
+                           "INTEGER NOT NULL DEFAULT 0")):     # timeout 重跑
             if name not in cols:
                 self._db.execute(
                     f"ALTER TABLE ticket_session ADD COLUMN {name} {ddl}")
@@ -338,7 +343,7 @@ class Store:
                      " clearquest_id, human_score, score_reminded_at, base_ref,"
                      " agent_score, tokens, soft_tokens, soft_usd,"
                      " owner_email_list, abort_reason, sec_reviewed_at,"
-                     " sec_scanned_hash")
+                     " sec_scanned_hash, timeout_retries")
 
     @staticmethod
     def _row_to_session(row) -> TicketSession:
@@ -354,7 +359,7 @@ class Store:
             tokens=row[20] or 0, soft_tokens=row[21], soft_usd=row[22],
             owner_email_list=row[23], abort_reason=row[24],
             sec_reviewed_at=row[25] or 0.0,
-            sec_scanned_hash=row[26])
+            sec_scanned_hash=row[26], timeout_retries=row[27] or 0)
 
     def get_session(self, issue_id: int) -> TicketSession | None:
         with self._lock:
@@ -400,8 +405,9 @@ class Store:
                      finished_at, evict_count, clearquest_id,
                      human_score, score_reminded_at, base_ref, agent_score,
                      tokens, soft_tokens, soft_usd, owner_email_list,
-                     abort_reason, sec_reviewed_at, sec_scanned_hash)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     abort_reason, sec_reviewed_at, sec_scanned_hash,
+                     timeout_retries)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(issue_id) DO UPDATE SET
                     key=excluded.key, profile=excluded.profile,
                     workspace=excluded.workspace,
@@ -423,7 +429,8 @@ class Store:
                     owner_email_list=excluded.owner_email_list,
                     abort_reason=excluded.abort_reason,
                     sec_reviewed_at=excluded.sec_reviewed_at,
-                    sec_scanned_hash=excluded.sec_scanned_hash
+                    sec_scanned_hash=excluded.sec_scanned_hash,
+                    timeout_retries=excluded.timeout_retries
             """, (s.issue_id, s.key, s.profile, s.workspace, s.session_id,
                   s.attempts, s.outcome, s.pending_reason, s.cost_usd,
                   int(s.queued), s.queued_at, int(s.inactive),
@@ -431,7 +438,8 @@ class Store:
                   s.clearquest_id, s.human_score, s.score_reminded_at,
                   s.base_ref, s.agent_score,
                   s.tokens, s.soft_tokens, s.soft_usd, s.owner_email_list,
-                  s.abort_reason, s.sec_reviewed_at, s.sec_scanned_hash))
+                  s.abort_reason, s.sec_reviewed_at, s.sec_scanned_hash,
+                  s.timeout_retries))
 
     # -- W3.4 trigger last_run 水位 ---------------------------------------- #
     def trigger_last_run(self, name: str) -> float:
