@@ -83,6 +83,8 @@ check("golden 對齊:LBL 命名(assistant/tool use/tool result)+system 顏色",
       or all(k in doc for k in ("tool use", "tool result", "LBL")))
 check("golden 對齊:tool_result 綠色、system lane 0",
       ".span[data-cat=tool_result]{background:var(--tj-ok)}" in doc)
+check("regex 搜尋 toggle(c325663):checkbox+buildQuery+非法標紅",
+      all(k in doc for k in ("qRegex", "buildQuery", "qbad")))
 check("無事件 → None(不產空檔)",
       render_trajectory(os.path.join(root, "nothing"),
                         os.path.join(root, "x.html")) is None)

@@ -140,6 +140,10 @@ header .hint{color:var(--tj-label-3);font-size:11px}
 header input[type=search]{margin-left:auto;padding:4px 8px;border:1px solid
   var(--tj-border-2);border-radius:6px;background:var(--tj-bg-1);
   color:var(--tj-label-1);font:inherit;width:180px}
+header input[type=search].qbad{border-color:var(--tj-err);outline:none}
+.rx{display:flex;align-items:center;gap:3px;font-size:11px;
+  color:var(--tj-label-2);white-space:nowrap;cursor:pointer;user-select:none}
+.rx input{margin:0}
 .modes{display:flex;border:1px solid var(--tj-border-2);border-radius:6px;overflow:hidden}
 .modes button{border:0;background:transparent;color:var(--tj-label-2);
   padding:3px 10px;font:inherit;font-size:11px;cursor:pointer}
@@ -247,6 +251,7 @@ tr.turnhead td{border-top:2px solid var(--tj-border-2);background:var(--tj-bg-2)
   <div class="modes"><button id="mTime" data-on="true">time</button><button id="mSeq">sequence</button></div>
   <span class="hint">滾輪=縮放 · 左鍵拖=選區間(ledger 聯動)· 右鍵=清除/平移 · 點色塊/列=詳情</span>
   <input id="q" type="search" placeholder="搜尋事件內容…">
+  <label class="rx"><input type="checkbox" id="qRegex">Regex</label>
 </header>
 <div id="filters"><span class="fhint">show:</span></div>
 <div id="ov"><div id="ovLabels"></div>
@@ -293,7 +298,20 @@ const dom=r=>mode==='time'?{s:r.start,e:r.end}:{s:r.i,e:r.i+1};
 const D0=()=>mode==='time'?t0:0, D1=()=>mode==='time'?t1:R.length;
 const vw=()=>view||{s:D0(),e:D1()};
 const frac=x=>{const v=vw();return (x-v.s)/Math.max(1e-9,v.e-v.s)};
-function matches(r){return !query||r.text.toLowerCase().includes(query)}
+// 搜尋:預設 literal substring(特殊字元 escape);Regex 勾選→不分大小寫
+// RegExp;非法 regex=比中零筆+輸入框標紅(抄 fork c325663)
+let useRegex=false,queryRe=null;
+function buildQuery(){
+  queryRe=null;
+  if(query){
+    try{
+      const src=useRegex?query:query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      queryRe=new RegExp(src,'i');
+    }catch(e){queryRe=null}
+  }
+  $('q').classList.toggle('qbad',useRegex&&!!query&&!queryRe);
+}
+function matches(r){return !query||(queryRe?queryRe.test(r.text):false)}
 function inRange(r){if(!range)return true;const d=dom(r);return d.e>=range.s&&d.s<=range.e}
 function renderOv(){
   track.querySelectorAll('.span,.turnline,.turntag').forEach(n=>n.remove());
@@ -420,7 +438,8 @@ track.addEventListener('pointerup',ev=>{
 track.addEventListener('pointerleave',()=>{$('hline').style.display='none'});
 track.addEventListener('contextmenu',ev=>ev.preventDefault());
 // 搜尋/投影/頁籤/拖寬
-$('q').addEventListener('input',ev=>{query=ev.target.value.trim().toLowerCase();renderAll()});
+$('q').addEventListener('input',ev=>{query=ev.target.value.trim();buildQuery();renderAll()});
+$('qRegex').addEventListener('change',ev=>{useRegex=ev.target.checked;buildQuery();renderAll()});
 $('mTime').onclick=()=>{mode='time';view=null;range=null;$('mTime').dataset.on=true;$('mSeq').dataset.on=false;renderAll()};
 $('mSeq').onclick=()=>{mode='sequence';view=null;range=null;$('mSeq').dataset.on=true;$('mTime').dataset.on=false;renderAll()};
 $('tC').onclick=()=>{dtab='C';$('tC').dataset.on=true;$('tT').dataset.on=false;renderDetails()};
