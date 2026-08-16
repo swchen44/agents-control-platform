@@ -281,6 +281,12 @@ class RawCLIAgent:
         t = o.get("type")
         if o.get("session_id"):
             self._final_session_id = o["session_id"]
+        if t == "system" and o.get("subtype") == "init":
+            # VIZ patch(2026-08-16,對齊 golden transcript 分類):system 事件
+            # 之前整條丟棄;init 有診斷價值(model/permission)→ 補進蒸餾流
+            self._emit(on_event,
+                       f"⚙️ init model={o.get('model')} "
+                       f"mode={o.get('permissionMode')}", category="system")
         if t == "assistant":
             for b in (o.get("message") or {}).get("content") or []:
                 if not isinstance(b, dict):
@@ -301,8 +307,12 @@ class RawCLIAgent:
                 if isinstance(b, dict) and b.get("type") == "tool_result":
                     c = b.get("content")
                     if isinstance(c, list):
-                        c = " ".join(x.get("text", "") for x in c
-                                     if isinstance(x, dict))
+                        # 圖片等非文字塊 → [image] 佔位(golden 規則:別讓
+                        # 該筆 tool result 消失成空白)
+                        parts = [x.get("text", "") if x.get("type") == "text"
+                                 else "[image]"
+                                 for x in c if isinstance(x, dict)]
+                        c = " ".join(x for x in parts if x)
                     self._emit(on_event, f"📋 {str(c or '')[:120]}",
                                category="tool_result")
         elif t == "result":

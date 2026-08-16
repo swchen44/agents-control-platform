@@ -22,8 +22,10 @@ import json
 import os
 import re
 
-_EMOJI_CAT = (("🔧", "tool"), ("📋", "tool_result"), ("💭", "thinking"))
-_LANE = {"user": 0, "text": 1, "thinking": 1, "tool": 2, "tool_result": 2}
+_EMOJI_CAT = (("🔧", "tool"), ("📋", "tool_result"), ("💭", "thinking"),
+              ("⚙️", "system"))
+_LANE = {"user": 0, "system": 0, "text": 1, "thinking": 1,
+         "tool": 2, "tool_result": 2}
 _MIN_SPAN_S = 0.35        # 末事件/零時長的最小視覺寬(不捏造長時長)
 
 
@@ -156,7 +158,9 @@ header input[type=search]{margin-left:auto;padding:4px 8px;border:1px solid
 .span[data-cat=user]{background:var(--tj-user)}
 .span[data-cat=text]{background:var(--tj-assist)}
 .span[data-cat=thinking]{background:color-mix(in srgb,var(--tj-assist) 55%,var(--tj-bg-2))}
-.span[data-cat=tool],.span[data-cat=tool_result]{background:var(--tj-tool)}
+.span[data-cat=tool]{background:var(--tj-tool)}
+.span[data-cat=tool_result]{background:var(--tj-ok)}
+.span[data-cat=system]{background:color-mix(in srgb,var(--tj-tool) 35%,var(--tj-bg-2))}
 .span[data-ttft=true]{background:linear-gradient(to right,
   color-mix(in srgb,var(--tj-assist) 40%,var(--tj-bg-2)) 0 100%)}
 .span.dim{opacity:.2}.span.searchdim{opacity:.14}
@@ -197,7 +201,10 @@ tr.turnhead td{border-top:2px solid var(--tj-border-2);background:var(--tj-bg-2)
 .chip[data-cat=text]{background:var(--tj-assist)}
 .chip[data-cat=thinking]{background:color-mix(in srgb,var(--tj-assist) 60%,var(--tj-bg-1));
   color:var(--tj-label-1)}
-.chip[data-cat=tool],.chip[data-cat=tool_result]{background:var(--tj-tool)}
+.chip[data-cat=tool]{background:var(--tj-tool)}
+.chip[data-cat=tool_result]{background:var(--tj-ok)}
+.chip[data-cat=system]{background:color-mix(in srgb,var(--tj-tool) 35%,var(--tj-bg-1));
+  color:var(--tj-label-1)}
 .prev{color:var(--tj-label-2);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;display:block}
 #details{flex:none;position:relative;width:clamp(300px,36%,440px);
@@ -238,6 +245,9 @@ tr.turnhead td{border-top:2px solid var(--tj-border-2);background:var(--tj-bg-2)
 <div id="tip"></div>
 <script>
 const D=__DATA__;const R=D.records;
+const LBL={user:'user',system:'system',text:'assistant',thinking:'thinking',
+  tool:'tool use',tool_result:'tool result'};
+const lbl=c=>LBL[c]||c;
 const t0=Math.min(...R.map(r=>r.start)),t1=Math.max(...R.map(r=>r.end));
 const turns=[...new Set(R.map(r=>r.attempt))].sort((a,b)=>a-b);
 const turnStart={};R.forEach(r=>{if(!(r.attempt in turnStart)||r.start<turnStart[r.attempt])turnStart[r.attempt]=r.start});
@@ -283,7 +293,7 @@ function renderOv(){
 let tipTimer=null;
 function showTip(ev,r){clearTimeout(tipTimer);
   tipTimer=setTimeout(()=>{tip.style.display='block';
-    tip.innerHTML='<b>'+r.cat+'</b> a'+r.attempt+' · '+fmtT(r.start)+' · '+fmtD(r.end-r.start)
+    tip.innerHTML='<b>'+lbl(r.cat)+'</b> a'+r.attempt+' · '+fmtT(r.start)+' · '+fmtD(r.end-r.start)
       +'<br>'+esc(r.text.slice(0,140));
     tip.style.left=Math.min(ev.clientX+12,innerWidth-330)+'px';
     tip.style.top=(ev.clientY+14)+'px';},500);}
@@ -300,7 +310,7 @@ function renderLedger(){
     if(!matches(r))tr.classList.add('searchdim');
     if(cur===r.i)tr.classList.add('cur');
     tr.innerHTML='<td class="idx">'+r.i+'</td>'
-      +'<td><span class="chip" data-cat="'+r.cat+'">'+r.cat+'</span></td>'
+      +'<td><span class="chip" data-cat="'+r.cat+'">'+lbl(r.cat)+'</span></td>'
       +'<td><span class="prev">'+esc(r.text.slice(0,160))+'</span></td>';
     tr.onclick=()=>select(r.i,false);rows.appendChild(tr);});
 }
@@ -310,7 +320,7 @@ function renderDetails(){
   if(cur===null){b.innerHTML='<div class="dempty">點 Overview 色塊或左側列查看詳情</div>';return}
   const r=R[cur];
   if(dtab==='C')b.innerHTML='<pre>'+esc(r.text||'(空)')+'</pre>';
-  else b.innerHTML='<dl><dt>category</dt><dd>'+r.cat+'</dd>'
+  else b.innerHTML='<dl><dt>category</dt><dd>'+lbl(r.cat)+'</dd>'
     +'<dt>attempt</dt><dd>a'+r.attempt+'</dd>'
     +'<dt>start</dt><dd>'+fmtT(r.start)+'</dd>'
     +'<dt>duration</dt><dd>'+fmtD(r.end-r.start)+' <span class="idx">(到下一事件;末事件為最小寬)</span></dd>'

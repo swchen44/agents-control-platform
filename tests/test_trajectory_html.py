@@ -46,22 +46,24 @@ with open(os.path.join(att, "a1.events.jsonl"), "w") as f:
               ev(6, "agent", "好了", "text")]:
         f.write(json.dumps(e, ensure_ascii=False) + "\n")
 with open(os.path.join(att, "a2.events.jsonl"), "w") as f:
-    for e in [ev(10, "user", "再修一下"),
+    for e in [ev(9.5, "agent", "⚙️ init model=haiku mode=acceptEdits"),
+              ev(10, "user", "再修一下"),
               ev(12, "agent", "🔧 Edit ARTICLE.md"),        # 無 category→emoji
               ev(13, "agent", "📋 ok"),
               ev(14, "agent", "完成 </script> 測試")]:      # 注入樣本
         f.write(json.dumps(e, ensure_ascii=False) + "\n")
 
 rs = collect(att)
-check("collect:8 事件、兩 attempt", len(rs) == 8
+check("collect:9 事件、兩 attempt", len(rs) == 9
       and {r["attempt"] for r in rs} == {1, 2})
 check("泳道:user=0 / text·thinking=1 / tool·result=2",
       rs[0]["lane"] == 0 and rs[1]["lane"] == 1 and rs[2]["lane"] == 2)
-check("category fallback:舊檔 🔧→tool、📋→tool_result",
-      rs[5]["cat"] == "tool" and rs[6]["cat"] == "tool_result")
+check("category fallback:舊檔 ⚙️→system(lane0)、🔧→tool、📋→tool_result",
+      rs[4]["cat"] == "system" and rs[4]["lane"] == 0
+      and rs[6]["cat"] == "tool" and rs[7]["cat"] == "tool_result")
 check("時長=到下一事件;末事件=最小寬(不捏造)",
       abs((rs[0]["end"] - rs[0]["start"]) - 2.0) < 0.01
-      and abs((rs[7]["end"] - rs[7]["start"]) - 0.35) < 0.01)
+      and abs((rs[8]["end"] - rs[8]["start"]) - 0.35) < 0.01)
 
 out = os.path.join(root, "transcript", "trajectory.html")
 p = render_trajectory(att, out, title="T-1")
@@ -76,6 +78,11 @@ check("三件套結構:Overview 泳道標籤/ledger/details 頁籤",
                              "Timing", "sequence")))
 check("token 配色(明暗 alias)", "--tj-user" in doc
       and "prefers-color-scheme: dark" in doc)
+check("golden 對齊:LBL 命名(assistant/tool use/tool result)+system 顏色",
+      "tool use" in doc and "'text':'assistant'" in doc.replace('"', "'")
+      or all(k in doc for k in ("tool use", "tool result", "LBL")))
+check("golden 對齊:tool_result 綠色、system lane 0",
+      ".span[data-cat=tool_result]{background:var(--tj-ok)}" in doc)
 check("無事件 → None(不產空檔)",
       render_trajectory(os.path.join(root, "nothing"),
                         os.path.join(root, "x.html")) is None)
