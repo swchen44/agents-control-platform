@@ -54,6 +54,7 @@
 | `concurrency.per_profile` | 各 profile 上限 | `{}` |
 | `budget.monthly_max_usd` | **全站**月 USD 上限(破→全站卡,只管理者能改,[budget](design/budget.md)) | 未設(不限) |
 | `budget.monthly_max_tokens` | 全站月 token 上限 | 未設(不限) |
+| `timeout_retry_max` | attempt 超時(`agent.timeout_sec` 到期、harness 殺行程)自動重跑上限(global):不耗 attempt、下輪 resume;per-ticket 累計不歸零、用完落 UNKNOWN 交人。profile 可用 `agent.timeout_retry_max` 覆蓋。可 hot reload | `0`(關=timeout 一律 UNKNOWN) |
 | `control.host` / `.port` | control API(pause/reload/evict/指令 REST) | `127.0.0.1:8787` |
 | `form.host` / `.port` | 一次性表單服務 | `127.0.0.1:8790` |
 | `form.base_url` | 表單連結 base(要「人瀏覽器連得到」;內網手機可及要填主機 IP) | `http://<host>:<port>` |
@@ -128,7 +129,8 @@
 | `model` | 模型。**未設=不帶 `--model`(CLI 帳號預設,可能較貴)**;測試一律顯式設便宜 model(差 ~8×) | 未設(不帶參數) |
 | `os_sandbox` | claude 的 macOS seatbelt 隔離(寫檔限 workspace) | `false` |
 | `sandbox` | codex 內建 `--sandbox`(read-only/workspace-write) | `workspace-write` |
-| `timeout_sec` | 單 attempt 硬逾時 | `300` |
+| `timeout_sec` | 單 attempt 硬逾時(到期=harness 殺行程→UNKNOWN;可配 `timeout_retry_max` 自動重跑) | `300` |
+| `timeout_retry_max` | 超時自動重跑上限(**覆蓋** `outer_loop.timeout_retry_max`;語意同該鍵) | 未設(用 global) |
 | `stall_seconds` | 卡死偵測:此秒數內事件流零輸出→killpg→下輪 resume(不耗 attempt)。**自訂必須 > 最長單一前景命令**(長 build 期間事件流完全靜默,實測);`0`=停用 | `3600` |
 | `extra_args` | 彈性附加參數(list),**原樣接在 command line 最後面** | `[]` |
 | `output_schema` | G1 結構化自評契約(agent 回 status/score/next;auto_close 自評來源) | `false` |
@@ -155,6 +157,7 @@
 | 開審批門 | profile `require_approval: true` + `approver` |
 | 無人值守自動關單 | profile `auto_close: on_success` |
 | 控花費 | profile `budget.*`(票/月)+ `outer_loop.budget`(全站) |
+| 超時自動重跑 | `outer_loop.timeout_retry_max`(profile `agent.timeout_retry_max` 覆蓋) |
 | 指定負責人門禁 | 票 description 頂部 `email:`(+全站 `admin_emails`) |
 | Jira 看板同步 | `source.status_sync` 五鍵 |
 | 任務簡報安全掃描 | `source.security_scan.command` |

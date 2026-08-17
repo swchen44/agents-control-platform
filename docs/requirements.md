@@ -95,6 +95,21 @@
 - **E3 強制驅逐(evict/killpg,W5.3)**:`POST /evict/<id>` → 即刻 killpg 釋放
   CPU/memory,不耗 attempt,下輪 native resume。**Why**:agent 卡住/要即時讓出資源;
   同步 poll 架構下唯 control 線程能即時。**它是異常處理**,應正名中文+記次數(W6.3)。
+- **timeout 自動重跑**(2026-08-17):attempt 超時(`agent.timeout_sec` 到期、
+  harness 殺行程→無 envelope)原一律 UNKNOWN 交人;`timeout_retry_max`(global
+  `outer_loop` 層,profile `agent.timeout_retry_max` 覆蓋;預設 0=關)允許
+  bounded 重跑——不耗 attempt、下輪憑預派 sid resume;per-ticket 累計不歸零,
+  用完落回 UNKNOWN。**Why**:timeout 是 harness 自己殺的、原因可證,與真
+  unknown(行程自己消失)不同——三態分類本體不動,真 unknown 照舊絕不自動重試
+  (v5 D3)。
+- **執行中可見性**(2026-08-17,參考外部 harness judge 規格):①heartbeat——
+  attempt 執行中每 30s 旁路唯讀 stat 輸出檔,harness log 印一行 content-free
+  進度(bytes/行數/最後事件型別/idle 秒;prompt 與模型輸出絕不落 log);
+  ②envelope/journal `progress` 診斷欄 + `timeout_kind` 輸出樣態分類
+  (`no_output_timeout`=從頭零輸出→查啟動/認證;`stalled_output_timeout`=
+  有輸出後停滯→查長工具呼叫/卡死)。**Why**:headless 跑著「不知道有沒有在
+  反應」;鐵律=進度是診斷不是健康 verdict,不據此 kill 或判分(kill 權仍只在
+  stall watchdog)。詳 `docs/design/observability.md`。
 - **retention 回收**(W3.3):終態保留 `retention_days`(預設 270)後刪 workspace,
   store/journal 留稽核。**Why**:工作區可拋、證據不可拋。
 
