@@ -65,7 +65,7 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
 | `assignee_changed` | `new`, `old` | `src/arcp/poller.py` |
 | `assignee_restored` | — | `src/arcp/commands.py` |
 | `attempt_crash_recovered` | `resume` | `src/arcp/dispatcher.py` |
-| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `raw`, `structured`, `tokens`, `truly_resumed` | `src/arcp/dispatcher.py` |
+| `attempt_finished` | `attempt`, `cost`, `envelope`, `error_kind`, `profile`, `progress`, `raw`, `structured`, `timeout_kind`, `tokens`, `truly_resumed` | `src/arcp/dispatcher.py` |
 | `attempt_skipped` | `pending`, `reason` | `src/arcp/dispatcher.py` |
 | `attempt_started` | `attempt`, `preassigned` | `src/arcp/dispatcher.py` |
 | `base_injected` | `base`, `dest` | `src/arcp/dispatcher.py` |
@@ -165,6 +165,14 @@ python3 -c "import json,collections; print(collections.Counter(json.loads(l)['ty
   (global 在 `outer_loop`,profile `agent.timeout_retry_max` 覆蓋;預設 0=關)。
   per-ticket 累計不歸零;用完 → `pending(reason=unknown)` 交人。頻繁出現=
   `timeout_sec` 設太短或任務真的太長,先看該票 events/envelope。
+- `attempt_finished` 的 `timeout_kind` / `progress`(診斷欄,**不是健康 verdict**):
+  `timeout_kind` 分輸出樣態——`no_output_timeout`=CLI 從頭零輸出(查啟動/認證/
+  command 覆寫方向)、`stalled_output_timeout`=有輸出後停滯(查長工具呼叫/卡死
+  方向)。`progress` = content-free 統計(raw_lines/raw_bytes/events/
+  first_output_after_sec/max_silence_sec/last_event/last_output_idle_sec),
+  絕不含 prompt 或模型輸出內容。另外 attempt 執行中 harness log 每 30s 印一行
+  `[hb] <ticket> aN raw=…B(+…) events=… last=… idle=…s elapsed=…s` 心跳
+  (旁路唯讀 stat 輸出檔,不動 child stdio)——看「還有沒有在動」用。
 
 **C. agent↔agent 交接(dispatcher/commands/hil)**:
 - `handoff`(`kind`/`to`/`from_profile`;`via=hil` 表人在 HIL 表單選的、`new_ticket`=跨票新票):

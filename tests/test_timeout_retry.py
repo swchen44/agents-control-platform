@@ -45,13 +45,13 @@ class FakeSource:
         self.comments.append((issue_id, text))
 
 
-def fake_run(error_kind):
+def fake_run(error_kind, timeout_kind=None):
     def _f(agent_cfg, ws, prompt, artifacts, attempt, resume_session_id=None,
            **kw):
         return AttemptResult(
             raw_outcome="unknown", session_id="s1", truly_resumed=False,
             cost_usd=0.01, error=None, events_path="", envelope_path="",
-            error_kind=error_kind)
+            error_kind=error_kind, timeout_kind=timeout_kind)
     return _f
 
 
@@ -70,8 +70,9 @@ def _profile(agent_extra=None):
                    max_attempts=2, on_unknown="pending")
 
 
-def _mk(global_max, agent_extra=None, error_kind="timeout"):
-    dmod.run_attempt = fake_run(error_kind)
+def _mk(global_max, agent_extra=None, error_kind="timeout",
+        timeout_kind=None):
+    dmod.run_attempt = fake_run(error_kind, timeout_kind)
     root = tempfile.mkdtemp()
     store = Store(os.path.join(root, "state"))
     src = FakeSource()
@@ -132,6 +133,15 @@ check("T5 真 unknown 不重跑:直接 UNKNOWN",
       sess.outcome == "UNKNOWN" and sess.timeout_retries == 0)
 check("T5 留言是行程消失(非超時)",
       any("行程消失" in t for _, t in src.comments))
+
+# T6:timeout_kind 樣態描述進留言(no_output → 啟動/認證方向提示)
+d, store, src = _mk(1, timeout_kind="no_output_timeout")
+d.handle(_ticket(), "p")
+check("T6 重跑留言帶樣態描述(從頭到尾無輸出)",
+      any("從頭到尾無輸出" in t for _, t in src.comments))
+d.handle(_ticket(), "p")
+check("T6 用完落 UNKNOWN 也帶樣態描述",
+      any("超時(CLI 從頭到尾無輸出" in t for _, t in src.comments))
 
 print("test-timeout-retry:", "PASS" if ok else "FAIL")
 sys.exit(0 if ok else 1)

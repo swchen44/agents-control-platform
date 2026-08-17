@@ -36,6 +36,12 @@ BASE_PROMPT = ("請先閱讀工作目錄裡的 TICKET.md,完成其中「描述�
 
 log = get_logger("dispatcher")
 
+# timeout 輸出樣態(inner_runner timeout_kind)→ 留言的人話描述
+_TIMEOUT_KIND_DESC = {
+    "no_output_timeout": "(CLI 從頭到尾無輸出——查啟動/認證方向)",
+    "stalled_output_timeout": "(有輸出後停滯——查長工具呼叫/卡死方向)",
+}
+
 
 def _grader(profile: Profile):
     parts = []
@@ -652,6 +658,8 @@ class Dispatcher:
                 "attempt_finished", ticket.id, ticket.key,
                 attempt=sess.attempts, raw=res.raw_outcome,
                 error_kind=res.error_kind,
+                timeout_kind=res.timeout_kind,   # 輸出樣態(診斷,非 verdict)
+                progress=res.progress,           # content-free 進度診斷
                 truly_resumed=res.truly_resumed,
                 structured=res.structured,               # G1:agent 自評(記錄)
                 envelope=res.envelope_path,
@@ -711,13 +719,15 @@ class Dispatcher:
             if res.raw_outcome == "unknown" and res.error_kind == "timeout":
                 retry_max = int(agent_cfg.get("timeout_retry_max",
                                               self.timeout_retry_max) or 0)
+                kind_note = _TIMEOUT_KIND_DESC.get(res.timeout_kind or "", "")
                 if sess.timeout_retries < retry_max:
                     sess.attempts -= 1
                     sess.timeout_retries += 1
                     self.store.upsert_session(sess)
                     self.source.add_comment(ticket.id, (
-                        f"[agent] attempt 超時(timeout_sec 到期,harness 殺"
-                        f"行程);自動重跑 {sess.timeout_retries}/{retry_max},"
+                        f"[agent] attempt 超時{kind_note}(timeout_sec 到期,"
+                        f"harness 殺行程);自動重跑 "
+                        f"{sess.timeout_retries}/{retry_max},"
                         f"下輪 resume 續跑。\n{_resume_hint(sess)}"))
                     events.append(self.store.journal(
                         "timeout_retry", ticket.id, ticket.key,
@@ -731,9 +741,11 @@ class Dispatcher:
                 sess.outcome, sess.pending_reason = "UNKNOWN", "unknown"
                 self.store.upsert_session(sess)
                 if res.error_kind == "timeout":
-                    cause = "attempt 超時" + (
-                        f"(timeout 重跑已用 {sess.timeout_retries} 次)"
-                        if sess.timeout_retries else "")
+                    cause = ("attempt 超時"
+                             + _TIMEOUT_KIND_DESC.get(res.timeout_kind or "",
+                                                      "")
+                             + (f"(timeout 重跑已用 {sess.timeout_retries} 次)"
+                                if sess.timeout_retries else ""))
                 else:
                     cause = "執行行程消失"
                 self.source.add_comment(ticket.id, (

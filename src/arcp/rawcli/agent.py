@@ -115,6 +115,13 @@ class RawCLIAgent:
         self._event_count = 0
         # memory 分類傳染:memory tool_use 的 id → 其 tool_result 也標 memory
         self._memory_tool_ids: set[str] = set()
+        # progress 診斷(content-free;envelope.progress / heartbeat 用):
+        # 只有 bytes/行數/事件型別/秒數,絕不含 prompt 或模型輸出內容
+        self._t0 = 0.0                           # run() 起跑時刻
+        self._raw_bytes = 0
+        self._first_output_at: float | None = None   # 首行 stream 時刻(None=從未輸出)
+        self._max_silence = 0.0                  # 相鄰輸出的最長間隔(秒)
+        self._last_type: str | None = None       # 最後 stream-json 頂層 type
 
     # -- command (ported from arcp_poc.drivers) ---------------------------- #
     def _build_command(self, prompt: str) -> list[str]:
@@ -173,7 +180,7 @@ class RawCLIAgent:
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL, text=True, bufsize=1,
             start_new_session=True)
-        self._last_progress = time.time()
+        self._t0 = self._last_progress = time.time()
         if self.fault_kill_on_file:
             threading.Thread(target=self._fault_kill, args=(proc, wd),
                              daemon=True).start()
@@ -193,12 +200,19 @@ class RawCLIAgent:
                 # "slow is legal" — model still producing. Only a TOOL running
                 # with zero output (e.g. a hung command) starves progress →
                 # stall. (Bug found: emitting-only reset killed live streaming.)
-                self._last_progress = time.time()
+                now = time.time()
+                self._max_silence = max(self._max_silence,
+                                        now - self._last_progress)
+                self._last_progress = now
+                if self._first_output_at is None:
+                    self._first_output_at = now
+                self._raw_bytes += len(line) + 1
                 try:
                     o = json.loads(line)
                 except json.JSONDecodeError:
                     continue
                 self._raw_count += 1
+                self._last_type = str(o.get("type") or "")
                 if raw_f:                     # full A-level fidelity preserved
                     raw_f.write(json.dumps(o, ensure_ascii=False) + "\n")
                 (self._ingest_codex if self.engine == "codex"
@@ -210,6 +224,32 @@ class RawCLIAgent:
 
         if self._final_session_id:
             self.session_id = self._final_session_id
+
+    def progress_snapshot(self) -> dict:
+        """content-free 進度診斷(envelope.progress;診斷用,不是健康 verdict
+        ——不得據此提早 kill 或自動判分)。"""
+        now = time.time()
+        return {
+            "raw_lines": self._raw_count,
+            "raw_bytes": self._raw_bytes,
+            "events": self._event_count,
+            "first_output_after_sec": (
+                round(self._first_output_at - self._t0, 1)
+                if self._first_output_at is not None else None),
+            "max_silence_sec": round(max(
+                self._max_silence, now - self._last_progress), 1),
+            "last_event": self._last_type,
+            "last_output_idle_sec": round(now - self._last_progress, 1),
+        }
+
+    def timeout_kind(self) -> str | None:
+        """stall/timeout 分類(對齊「輸出樣態」):從頭到尾零輸出=
+        no_output_timeout(啟動/認證問題方向);有輸出後停滯=
+        stalled_output_timeout(長工具呼叫/真卡方向)。非 stall 回 None。"""
+        if not self._stalled:
+            return None
+        return ("no_output_timeout" if self._first_output_at is None
+                else "stalled_output_timeout")
 
     # -- stall watchdog (N13, reset-on-progress) --------------------------- #
     def _stall_watchdog(self, proc) -> None:

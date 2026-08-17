@@ -29,7 +29,9 @@ def main() -> int:
                 "truly_resumed": False, "cost_usd": None, "tokens": None,
                 "error": None,
                 "error_kind": None,   # stalled | task | no-terminal | None
-                "structured": None}   # G1 agent 結構化自評
+                "structured": None,   # G1 agent 結構化自評
+                "progress": None,     # content-free 進度診斷(非健康 verdict)
+                "timeout_kind": None}  # no_output_timeout|stalled_output_timeout
 
     def capture(event: dict) -> None:      # W5.5:event 已是 dict(零 SDK)
         with open(job["events_path"], "a") as f:
@@ -72,6 +74,8 @@ def main() -> int:
         envelope["structured"] = agent._structured   # G1
         # error_kind (N13/N3): stalled → dispatcher resumes; no-terminal =
         # crash/kill; task = agent ran but reported error
+        envelope["progress"] = agent.progress_snapshot()  # 診斷,非 verdict
+        envelope["timeout_kind"] = agent.timeout_kind()   # stall 的輸出樣態分類
         if agent._stalled:
             envelope["error_kind"] = "stalled"
         elif agent._evicted:                     # E3:主動驅逐(非故障)

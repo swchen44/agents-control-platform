@@ -21,11 +21,21 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from dataclasses import dataclass
 
 from .contract import CONTRACT_SCHEMA
 from .isolation import resolve as resolve_isolation
+from .logutil import get_logger
 from .paths import find_script, repo_root
+
+log = get_logger("attempt")
+
+# heartbeat:attempt 執行中每 30s 旁路 stat 輸出檔印一行 content-free 進度
+# (bytes/行數/事件型別/idle 秒數;絕不落 prompt 或模型輸出內容)。旁路唯讀,
+# 不動 child 的 stdio 接法(避免 buffering/backpressure 改變 headless 語意)。
+_HB_INTERVAL_S = 30.0
 
 # runner 執行的工作區基準(venv 相對路徑 + subprocess cwd)= repo root。
 # 由 arcp.paths 定位,搬檔不破(W12.1 曾因 dirname² 指到 src/ 找不到 runner)。
@@ -48,9 +58,60 @@ class AttemptResult:
     error: str | None
     events_path: str
     envelope_path: str
-    error_kind: str | None = None  # infra | stalled | task | no-terminal (N3)
+    error_kind: str | None = None  # infra | stalled | task | no-terminal | timeout
     structured: dict | None = None  # G1 agent {reason,status,next}
     tokens: int | None = None      # budget:本 attempt 用的 token(input+output+cache)
+    timeout_kind: str | None = None  # no_output_timeout | stalled_output_timeout
+    progress: dict | None = None   # content-free 進度診斷(非健康 verdict)
+
+
+def _tail_last_event(events_path: str) -> tuple[int, str]:
+    """回 (事件行數, 最後事件 category)。content-free:只讀 metadata 欄。"""
+    n, last = 0, ""
+    try:
+        with open(events_path, encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                n += 1
+                tail = line
+        if n:
+            last = str(json.loads(tail).get("category") or "")
+    except (OSError, json.JSONDecodeError, UnboundLocalError):
+        pass
+    return n, last
+
+
+def _timeout_kind_from_disk(raw_path: str) -> str:
+    """harness timeout(runner 被殺、無 envelope)時從磁碟判輸出樣態:
+    raw 流有內容=有輸出後停滯;沒有=從頭零輸出(啟動/認證問題方向)。"""
+    try:
+        has_output = os.path.getsize(raw_path) > 0
+    except OSError:
+        has_output = False
+    return "stalled_output_timeout" if has_output else "no_output_timeout"
+
+
+def _heartbeat(stop: threading.Event, label: str,
+               raw_path: str, events_path: str) -> None:
+    """旁路唯讀監看輸出檔,每 _HB_INTERVAL_S 印一行 content-free 進度。
+    僅供人看 log 診斷「還有沒有在動」——不是健康 verdict,不據此 kill。"""
+    t0 = time.time()
+    prev = -1
+    while not stop.wait(_HB_INTERVAL_S):
+        try:
+            sz = os.path.getsize(raw_path)
+        except OSError:
+            sz = 0
+        try:
+            idle = time.time() - os.path.getmtime(raw_path)
+        except OSError:
+            idle = time.time() - t0
+        n, last = _tail_last_event(events_path)
+        log.info("[hb] %s raw=%dB(%+d) events=%d last=%s idle=%.0fs "
+                 "elapsed=%.0fs", label, sz, sz - max(prev, 0), n,
+                 last or "-", idle, time.time() - t0)
+        prev = sz
 
 
 def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
@@ -111,6 +172,13 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
     venv_python = (os.path.abspath(os.path.join(HERE, venv, "bin", "python"))
                    if venv else sys.executable)
     timeout = float(agent_cfg.get("timeout_sec", 300)) + 60  # server startup
+    raw_path = job["events_path"].replace(".events.jsonl", ".raw.jsonl")
+    label = (f"{os.path.basename(os.path.dirname(artifacts_dir))}"
+             f" a{attempt}")
+    hb_stop = threading.Event()
+    threading.Thread(target=_heartbeat, daemon=True,
+                     args=(hb_stop, label, raw_path,
+                           job["events_path"])).start()
     timed_out = False
     try:
         subprocess.run([venv_python, runner, job_path],
@@ -118,6 +186,8 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
                        stdin=subprocess.DEVNULL, capture_output=True)
     except subprocess.TimeoutExpired:
         timed_out = True  # classification below is envelope-driven, not rc-driven
+    finally:
+        hb_stop.set()
 
     envelope: dict = {}
     if os.path.exists(job["envelope_path"]):
@@ -135,8 +205,10 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
     # (行程自己消失)不同,標 error_kind=timeout 讓 dispatcher 依
     # timeout_retry_max 決定是否重跑(仍不能證明副作用,故 raw 維持 unknown)。
     error_kind = envelope.get("error_kind")
+    timeout_kind = envelope.get("timeout_kind")   # stall 時 runner 已分類
     if raw == "unknown" and timed_out and not error_kind:
         error_kind = "timeout"
+        timeout_kind = _timeout_kind_from_disk(raw_path)
     return AttemptResult(
         raw_outcome=raw,
         session_id=envelope.get("session_id"),
@@ -147,4 +219,6 @@ def run_attempt(agent_cfg: dict, ws: str, prompt: str, artifacts_dir: str,
         envelope_path=job["envelope_path"],
         error_kind=error_kind,
         structured=envelope.get("structured"),
-        tokens=envelope.get("tokens"))
+        tokens=envelope.get("tokens"),
+        timeout_kind=timeout_kind,
+        progress=envelope.get("progress"))
